@@ -1,43 +1,111 @@
-// src/ThreeScene.tsx
+// https://en.wikipedia.org/wiki/Tennis_racket_theorem
+
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
+import step from './FreeRotation';
 
 const ThreeScene: React.FC = () => {
-    const mountRef = useRef<HTMLDivElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        if (!containerRef.current)
+            return;
         // Create a basic scene
+        console.log("containerRef.current", containerRef.current);
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(
-            75,
-            window.innerWidth / window.innerHeight,
-            0.1,
-            1000
-        );
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+        const controls = new OrbitControls(camera, containerRef.current!);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setClearColor(0x000000, 0);
+        let requestID: number|null = null;
+        let lastTime: number|null = null;
 
-        // Set renderer size
-        renderer.setSize(400, 300);
+        const q = new THREE.Quaternion(1.0, 0.0, 0.0, 1).normalize();
 
         // Append renderer to the DOM
-        if (mountRef.current) {
-            mountRef.current.appendChild(renderer.domElement);
-        }
+        containerRef.current!.appendChild(renderer.domElement);
 
         // Add a basic cube
-        const geometry = new THREE.BoxGeometry(1, 1, 1);
-        const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-        const cube = new THREE.Mesh(geometry, material);
-        scene.add(cube);
+        // const geometry = new THREE.BoxGeometry(1, 1, 1);
+        // const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        // const cube = new THREE.Mesh(geometry, material);
+        // scene.add(cube);
 
-        camera.position.z = 5;
+        const light = new THREE.PointLight(0xffffff, 200, 0);
+        light.position.set(0, 50, 0);
+        scene.add(new THREE.AmbientLight(0xddeeff, 0.8));
+        scene.add(light);
+
+        camera.position.set(2, 3, 5);
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        const loader = new THREE.CubeTextureLoader();
+        const cubeTexture = loader.load([
+            '/posx.jpg',
+            '/negx.jpg',
+            '/negy.jpg',        // flipped!
+            '/posy.jpg',        // flipped!
+            '/posz.jpg',
+            '/negz.jpg',
+        ]);
+        cubeTexture.flipY = true;       // flipped!
+        scene.background = cubeTexture;
+
+        // Resize handler
+        const resizeRenderer = () => {
+            const { clientWidth, clientHeight } = containerRef.current!;
+            renderer.setSize(clientWidth, clientHeight);
+            camera.aspect = clientWidth / clientHeight;
+            camera.updateProjectionMatrix();
+        };
+
+        // Create a ResizeObserver to monitor the container's size
+        const resizeObserver = new ResizeObserver(() => {
+            resizeRenderer();
+        });
+        resizeObserver.observe(containerRef.current!);
+
+        // Initial resize
+        resizeRenderer();
+
+        // Load .mtl and .obj files
+        let loadedObj: THREE.Object3D|null = null;
+        const mtlLoader = new MTLLoader();
+        mtlLoader.load('dz.mtl', (materials: any) => {
+            materials.preload();
+
+            const objLoader = new OBJLoader();
+            objLoader.setMaterials(materials);
+            // console.log("materials", materials);
+
+            objLoader.load('dz.obj', (object: THREE.Object3D) => {
+                object.position.set(0, 0, 0);
+                // console.log("object", object);
+                scene.add(object);
+                loadedObj = object;
+            });
+        });
+
+        // const axesHelper = new THREE.AxesHelper(5);
+        // scene.add(axesHelper);
 
         // Animation loop
         const animate = () => {
-            requestAnimationFrame(animate);
+            requestID = requestAnimationFrame(animate);
 
-            cube.rotation.x += 0.01;
-            cube.rotation.y += 0.01;
+            const currentTime = performance.now();
+            const dt = lastTime ? Math.max(Math.min((currentTime-lastTime)/1000, 0.1), 0.0) : 0;
+            lastTime = currentTime;
+
+            if (loadedObj)
+                loadedObj.rotation.setFromQuaternion(q);
+
+            const STEPS = 1;
+            for (let k = 0; k < STEPS; k++)
+                q.copy(step(q, dt/STEPS));
 
             renderer.render(scene, camera);
         };
@@ -45,13 +113,18 @@ const ThreeScene: React.FC = () => {
 
         // Cleanup on unmount
         return () => {
-            if (mountRef.current) {
-                mountRef.current.removeChild(renderer.domElement);
-            }
+            if (containerRef.current)
+                resizeObserver.unobserve(containerRef.current);
+            containerRef.current?.removeChild(renderer.domElement);
+            controls.dispose();
+            if (requestID)
+                cancelAnimationFrame(requestID);
+            // Should dispose a lot more here: 
+            // https://threejs.org/docs/#manual/en/introduction/How-to-dispose-of-objects
         };
     }, []);
 
-    return (<div ref={mountRef} />);
+    return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 };
 
 export default ThreeScene;
