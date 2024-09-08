@@ -1,20 +1,14 @@
 import React, { Suspense } from 'react';
-import './App.css';
-import { Box, createTheme, Link, ThemeProvider, Typography } from '@mui/material';
+import { Box, Container, Link, Typography } from '@mui/material';
 const ThreeScene = React.lazy(() => import('./ThreeScene'));
-import CssBaseline from '@mui/material/CssBaseline';
 import Tex2SVG from "react-hook-mathjax";
-
-const darkTheme = createTheme({
-    palette: {
-        mode: 'dark',
-    },
-});
+import { Link as RouterLink } from 'react-router-dom';
+import { Link as MUILink } from '@mui/material';
+import './App.css';
 
 const App: React.FC = () => {
     return (
-        <ThemeProvider theme={darkTheme}>
-            <CssBaseline />
+        <Container maxWidth="xl">
             <Box display="flex" justifyContent="center" sx={{py: 2}}>
                 <Typography variant="h2">
                     Dzhanibekov effect
@@ -37,7 +31,10 @@ const App: React.FC = () => {
                     <Tex2SVG latex="q'(t)=\frac{1}{2}\omega*q(t)." />
                 </Typography>
             </Box>
-        </ThemeProvider>
+            <MUILink component={RouterLink} to="/" variant="body1" color="primary">
+                Back
+            </MUILink>
+        </Container>
     );
 };
 
