@@ -1,3 +1,6 @@
+/**
+ * Basic template for a three.js scene writing three.js setup in the React useEffect.
+ */
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
@@ -11,14 +14,14 @@ const ThreeScene: React.FC = () => {
         // Create a basic scene
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
-        const controls = new OrbitControls(camera, containerRef.current!);
+        const controls = new OrbitControls(camera, containerRef.current);
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setClearColor(0x000000, 0);
         let requestID: number|null = null;
         let lastTime: number|null = null;
 
         // Append renderer to the DOM
-        containerRef.current!.appendChild(renderer.domElement);
+        containerRef.current.appendChild(renderer.domElement);
 
         // Add a basic cube
         const geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -31,7 +34,7 @@ const ThreeScene: React.FC = () => {
         scene.add(new THREE.AmbientLight(0xddeeff, 0.8));
         scene.add(light);
 
-        camera.position.set(2, 3, 5);
+        camera.position.set(1, 1, 1.5);
         camera.lookAt(new THREE.Vector3(0, 0, 0));
 
         // Resize handler
@@ -43,14 +46,14 @@ const ThreeScene: React.FC = () => {
             camera.aspect = clientWidth / clientHeight;
             camera.updateProjectionMatrix();
         };
-        // Initial resize
-        resizeRenderer();
-
+        
         // Create a ResizeObserver to monitor the container's size
         const resizeObserver = new ResizeObserver(() => {
             resizeRenderer();
         });
         resizeObserver.observe(containerRef.current!);
+        // Initial resize
+        resizeRenderer();
 
         // const axesHelper = new THREE.AxesHelper(5);
         // scene.add(axesHelper);
