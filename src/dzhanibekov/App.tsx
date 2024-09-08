@@ -1,10 +1,9 @@
 import React, { Suspense } from 'react';
-import { Box, Container, Link, Typography } from '@mui/material';
-const ThreeScene = React.lazy(() => import('./ThreeScene'));
+import { Box, Container, Typography } from '@mui/material';
 import Tex2SVG from "react-hook-mathjax";
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
-import './App.css';
+const ThreeScene = React.lazy(() => import('./ThreeScene'));
 
 const App: React.FC = () => {
     return (
@@ -21,7 +20,8 @@ const App: React.FC = () => {
             </Box>
             <Box display="flex" justifyContent="center" sx={{py: 2}}>
                 <Typography>
-                    Compare with <Link href={"https://en.wikipedia.org/wiki/File:Dzhanibekov_effect.ogv"}>video</Link> on <Link href={"https://en.wikipedia.org/wiki/Tennis_racket_theorem"}>tennis racket theorem</Link> Wikipedia page.
+                    Compare with <MUILink href={"https://en.wikipedia.org/wiki/File:Dzhanibekov_effect.ogv"}>video</MUILink> 
+                    {" "}on <MUILink href={"https://en.wikipedia.org/wiki/Tennis_racket_theorem"}>tennis racket theorem</MUILink> Wikipedia page.
                 </Typography>
             </Box>
             <Box display="flex" justifyContent="center" sx={{py: 2}}>
@@ -38,4 +38,4 @@ const App: React.FC = () => {
     );
 };
 
-export default App;
+export { App };

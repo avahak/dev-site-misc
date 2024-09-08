@@ -8,6 +8,9 @@ const darkTheme = createTheme({
     palette: {
         mode: 'dark',
     },
+    typography: {
+        fontSize: 18,
+    }
 });
 
 createRoot(document.getElementById('root')!).render(

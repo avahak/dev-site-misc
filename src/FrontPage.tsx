@@ -10,8 +10,8 @@ const FrontPage = () => {
                     Dzhanibekov effect
                 </MUILink>
                 <br />
-                <MUILink component={RouterLink} to="/" variant="body1" color="primary">
-                    ...
+                <MUILink component={RouterLink} to="/particles" variant="body1" color="primary">
+                    Particles
                 </MUILink>
             </Box>
         </Container>
