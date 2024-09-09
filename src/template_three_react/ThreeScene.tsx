@@ -62,9 +62,11 @@ const ThreeScene: React.FC = () => {
         const animate = () => {
             requestID = requestAnimationFrame(animate);
 
-            const currentTime = performance.now();
-            const dt = lastTime ? Math.max(Math.min((currentTime-lastTime)/1000, 0.1), 0.0) : 0;
+            const currentTime = performance.now()/1000;
+            const dt = lastTime ? Math.max(Math.min(currentTime-lastTime, 0.1), 0.0) : 0;
             lastTime = currentTime;
+
+            cube?.rotateY(-0.1*dt);
 
             renderer.render(scene, camera);
         };

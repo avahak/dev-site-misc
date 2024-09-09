@@ -1,10 +1,8 @@
-/**
- * Basic template for a three.js scene decoupling three.js and React by writing
- * a standalone class to handle three.js.
- */
-import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { FboScene } from './FboScene';
+import vsString from './shaders/vertex.glsl?raw';
+import fsString from './shaders/fragment.glsl?raw';
 
 class Scene {
     container: HTMLDivElement;
@@ -16,6 +14,8 @@ class Scene {
     lastTime: number|null = null;
 
     cube: THREE.Mesh|null = null;
+    fboScene: FboScene;
+    material: THREE.ShaderMaterial|null = null;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -24,12 +24,14 @@ class Scene {
         this.renderer.setClearColor(0x000000, 0);
         container.appendChild(this.renderer.domElement);
 
+        this.fboScene = new FboScene(this.renderer);
         this.scene = this.setupScene();
         this.camera = this.setupCamera();
 
+
         this.setupResizeRenderer();
         this.resizeRenderer();
-
+        
         this.cleanUpTasks.push(() => { 
             if (this.animationRequestID)
                 cancelAnimationFrame(this.animationRequestID);
@@ -84,10 +86,11 @@ class Scene {
         const scene = new THREE.Scene();
 
         // Add a basic cube
-        const geometry = new THREE.BoxGeometry(1, 1, 1);
-        const material = new THREE.MeshNormalMaterial();
-        this.cube = new THREE.Mesh(geometry, material);
-        scene.add(this.cube);
+        const geometry = new THREE.IcosahedronGeometry(0.2, 1);
+        const material = new THREE.MeshNormalMaterial({ flatShading: true });
+        const cube = new THREE.Mesh(geometry, material);
+        scene.add(cube);
+        this.cube = cube;
 
         // const axesHelper = new THREE.AxesHelper(5);
         // scene.add(axesHelper);
@@ -96,6 +99,30 @@ class Scene {
         light.position.set(0, 50, 0);
         scene.add(new THREE.AmbientLight(0xddeeff, 0.8));
         scene.add(light);
+
+        const geom = new THREE.BufferGeometry();
+        const uvData = new Float32Array(this.fboScene.SIZE*this.fboScene.SIZE*2);
+        for (let j = 0; j < this.fboScene.SIZE; j++) {
+            for (let k = 0; k < this.fboScene.SIZE; k++) {
+                let index = j*this.fboScene.SIZE + k;
+                uvData[index*2 + 0] = j / this.fboScene.SIZE;
+                uvData[index*2 + 1] = k / this.fboScene.SIZE;
+            }
+        }
+        geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(this.fboScene.SIZE*this.fboScene.SIZE*3), 3));
+        geom.setAttribute("uv", new THREE.BufferAttribute(uvData, 2));
+        this.material = new THREE.ShaderMaterial({
+            uniforms: {
+                u_pos: { value: null },
+                time: { value: 0 }
+            },
+            vertexShader: vsString,
+            fragmentShader: fsString,
+            // blending: THREE.AdditiveBlending,
+            // depthWrite: false
+        });
+        const points = new THREE.Points(geom, this.material);
+        scene.add(points);
 
         return scene;
     }
@@ -113,28 +140,18 @@ class Scene {
     animate() {
         this.animationRequestID = requestAnimationFrame(this.animate);
 
-        const currentTime = performance.now()/1000;
+        const currentTime = performance.now() / 1000;
         const dt = this.lastTime ? Math.max(Math.min(currentTime-this.lastTime, 0.1), 0.0) : 0;
         this.lastTime = currentTime;
+        this.fboScene.material.uniforms.time.value = currentTime;
 
-        this.cube?.rotateY(0.1*dt);
+        this.cube!.rotateY(0.1*dt);
 
+        this.fboScene.step(this.renderer);
+        
+        this.material!.uniforms.u_pos.value = this.fboScene.fbo.texture;
         this.renderer.render(this.scene, this.camera);
     };
 }
 
-const SceneComponent: React.FC = () => {
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        console.log("useEffect: ", containerRef.current);
-        const scene = new Scene(containerRef.current!);
-        return () => {
-            scene.cleanUp();
-        };
-    }, []);
-
-    return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
-};
-
-export default SceneComponent;
+export { Scene };

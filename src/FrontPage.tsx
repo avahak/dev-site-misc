@@ -13,6 +13,10 @@ const FrontPage = () => {
                     Dzhanibekov effect
                 </MUILink>
                 <br />
+                <MUILink component={RouterLink} to="/particles" variant="body1" color="primary">
+                    Particles
+                </MUILink>
+                <br />
                 <MUILink component={RouterLink} to="/template_class" variant="body1" color="primary">
                     Template for Three.js (class)
                 </MUILink>
