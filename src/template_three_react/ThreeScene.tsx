@@ -39,6 +39,7 @@ const ThreeScene: React.FC = () => {
 
         // Resize handler
         const resizeRenderer = () => {
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             if (!containerRef?.current)
                 return;
             const { clientWidth, clientHeight } = containerRef.current;

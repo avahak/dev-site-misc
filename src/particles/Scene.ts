@@ -41,6 +41,7 @@ class Scene {
     }
 
     resizeRenderer() {
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         const { clientWidth, clientHeight } = this.container;
         this.renderer.setSize(clientWidth, clientHeight);
         if (this.camera instanceof THREE.PerspectiveCamera) {
