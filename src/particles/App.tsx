@@ -12,7 +12,7 @@ const App: React.FC = () => {
                     Particles
                 </Typography>
             </Box>
-            <Box style={{ width: "100%", height: "950px" }}>
+            <Box style={{ width: "100%", height: "700px" }}>
             <Suspense fallback={<Box display="flex" justifyContent="center"><Typography>Loading..</Typography></Box>}>
                 <SceneComponent />
             </Suspense>

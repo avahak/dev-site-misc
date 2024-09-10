@@ -114,7 +114,7 @@ class Scene {
         geom.setAttribute("uv", new THREE.BufferAttribute(uvData, 2));
         this.material = new THREE.ShaderMaterial({
             uniforms: {
-                u_pos: { value: null },
+                uPosition: { value: null },
                 time: { value: 0 }
             },
             vertexShader: vsString,
@@ -123,6 +123,7 @@ class Scene {
             // depthWrite: false
         });
         const points = new THREE.Points(geom, this.material);
+        points.frustumCulled = false;
         scene.add(points);
 
         return scene;
@@ -148,9 +149,10 @@ class Scene {
 
         this.cube!.rotateY(0.1*dt);
 
+        this.fboScene.setObjectPosition(this.cube!.position);
         this.fboScene.step(this.renderer);
         
-        this.material!.uniforms.u_pos.value = this.fboScene.fbo.texture;
+        this.material!.uniforms.uPosition.value = this.fboScene.fbos[this.fboScene.currentFboIndex].texture;
         this.renderer.render(this.scene, this.camera);
     };
 }

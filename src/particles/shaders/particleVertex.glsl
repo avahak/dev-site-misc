@@ -1,6 +1,5 @@
-// From three.js: position, uv, normal
+// From three.js: position, uv, normal, time, etc.
 
-uniform float time;
 varying vec2 vUv;
 varying vec3 vPosition;
 
