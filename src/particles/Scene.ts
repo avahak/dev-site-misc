@@ -87,7 +87,7 @@ class Scene {
         const scene = new THREE.Scene();
 
         // Add a basic cube
-        const geometry = new THREE.IcosahedronGeometry(0.2, 1);
+        const geometry = new THREE.IcosahedronGeometry(0.1, 1);
         const material = new THREE.MeshNormalMaterial({ flatShading: true });
         const cube = new THREE.Mesh(geometry, material);
         scene.add(cube);
@@ -148,6 +148,7 @@ class Scene {
         this.fboScene.material.uniforms.time.value = currentTime;
 
         this.cube!.rotateY(0.1*dt);
+        this.cube!.position.set(1.0*Math.cos(0.1*currentTime), 1.0*Math.sin(0.2*currentTime), 0.0);
 
         this.fboScene.setObjectPosition(this.cube!.position);
         this.fboScene.step(this.renderer);

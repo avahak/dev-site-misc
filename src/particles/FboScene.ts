@@ -7,7 +7,7 @@ class FboScene {
     camera: THREE.Camera;
     // cleanUpTasks: (() => void)[];
     material: THREE.ShaderMaterial;
-    SIZE: number = 256;
+    SIZE: number = 1024;
     initialPositionsTexture: THREE.DataTexture;
 
     fbos: THREE.WebGLRenderTarget[];
@@ -28,7 +28,7 @@ class FboScene {
                 let r = 0.5 + 0.4*Math.random();
                 initialPositions[index*4 + 0] = r*Math.cos(theta);
                 initialPositions[index*4 + 1] = r*Math.sin(theta);
-                initialPositions[index*4 + 2] = 0;
+                initialPositions[index*4 + 2] = Math.random()*0.1-0.05;
                 initialPositions[index*4 + 3] = 1;
             }
         }
