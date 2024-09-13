@@ -1,7 +1,12 @@
 // uPosition1 is prev positions, uPosition2 is current
 
 /*
-Idea: manage state in gl_FragCoord.w. How to code it?
+Steering forces:
+1) enforce |steering|=maxSpeed
+2) steering = steering-velocity
+3) enforce |steering|<=maxForce
+
+acceleration = sum(steering forces)
 */
 
 uniform vec3 uPositionObject;
@@ -58,18 +63,35 @@ float computeState(vec3 p0, vec3 p1, vec3 p2, float state) {
     return state;
 }
 
+vec3 computeSteering(vec3 vSteer, vec3 v, float maxSpeed, float maxForce) {
+    vec3 steering = maxSpeed*safeNormalize(vSteer);
+    steering = steering-v;
+    float len = length(steering);
+    if (len > 0.0) 
+        steering = steering*min(maxForce/len, 1.0);
+    return steering;
+}
+
 vec3 computeForce(vec3 p0, vec3 p1, vec3 p2, float state) {
     vec3 v02 = p2-p0;
     vec3 v = p2-p1;
-    vec3 F0 = safeNormalize(v)*(0.05-length(v)) - safeNormalize(v02);
+    vec3 vp = p2-uPositionObject;
+
+    float maxForce = 5.0;
+    float maxSpeedHome = min(0.02, 0.1*length(v02));
+    float maxSpeedOrbit = 0.1;
+    // float maxForceOrbit = min(5., 5.*length(v)/maxSpeedOrbit+0.00001);
+    float maxForceOrbit = 5.;
+
+    vec3 steeringHome = computeSteering(-v02, v, maxSpeedHome, maxForce);
+    vec3 steeringSpeedHome = computeSteering(v*(0.2-length(v)), v, maxSpeedHome, maxForce);
+
+    vec3 steeringOrbit = computeSteering(vp*(0.2-length(vp)), v, maxSpeedOrbit, maxForceOrbit);
+    vec3 steeringSpeedOrbit = computeSteering(v*(0.1-length(v)), v, maxSpeedOrbit, maxForceOrbit);
 
     if (state < 0.5)
-        return F0;
-
-    vec3 vp = p2-uPositionObject;
-    vec3 F1 = safeNormalize(v)*(0.05-length(v)) + safeNormalize(vp)*(0.2-length(vp));
-
-    return F1;
+        return steeringHome + steeringSpeedHome;
+    return steeringOrbit + steeringSpeedOrbit;
 }
 
 void main() {
