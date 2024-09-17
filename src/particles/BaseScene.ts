@@ -130,6 +130,7 @@ class BaseScene {
         points.frustumCulled = false;
         scene.add(points);
 
+        this.moveObjects(0.0);
         scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI/2.0);   // just for camera angles
 
         return scene;
@@ -148,17 +149,11 @@ class BaseScene {
     animate() {
         this.animationRequestID = requestAnimationFrame(this.animate);
 
-        // const currentTime = performance.now() / 1000;
-        // const dt = this.lastTime ? Math.max(Math.min(currentTime-this.lastTime, 0.1), 0.0) : 0;
-        // this.lastTime = currentTime;
         const currentTime = (this.lastTime ?? 0.0) + 0.01;
         this.lastTime = currentTime;
         this.fboScene.material.uniforms.time.value = currentTime;
 
-        this.objects.forEach((object, k) => {
-            object.rotateOnAxis(this.objectRotationVectors[k], 0.2);
-            object.position.set(1.0*Math.cos(k+0.1*currentTime), 1.0*Math.sin(2*k+0.2*currentTime), 0.2);
-        });
+        this.moveObjects(currentTime);
 
         this.fboScene.setObjectPositions();
         this.fboScene.step(this.renderer);
@@ -167,6 +162,13 @@ class BaseScene {
         this.renderer.render(this.scene, this.camera);
         console.log(this.camera.position);
     };
+
+    moveObjects(time: number) {
+        this.objects.forEach((object, k) => {
+            object.rotateOnAxis(this.objectRotationVectors[k], 0.2);
+            object.position.set(1.0*Math.cos(k+0.1*time), 1.0*Math.sin(2*k+0.2*time), 0.2);
+        });
+    }
 }
 
 export { BaseScene };
