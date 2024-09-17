@@ -60,7 +60,8 @@ float computeState(vec3 p0, vec3 p1, vec3 p2, float state) {
     float stateF;
     decodeIntAndFloat(state, stateI, stateF);
 
-    vec2 rand = random22(vUv + vec2(stateI, stateF));
+    // vec2 rand = random22(vUv + vec2(stateI, stateF));
+    vec2 rand = vec2(0.0, 0.0);
 
     if (stateI == -1)
         stateF = max(0.0, stateF-0.002);
