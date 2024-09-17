@@ -3,8 +3,9 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { FboScene } from './FboScene';
 import vsString from './shaders/vertex.glsl?raw';
 import fsString from './shaders/fragment.glsl?raw';
+import { NUM_OBJECTS, PARTICLE_TEXTURE_SIZE } from './config';
 
-class Scene {
+class BaseScene {
     container: HTMLDivElement;
     scene: THREE.Scene;
     camera: THREE.Camera;
@@ -13,7 +14,8 @@ class Scene {
     animationRequestID: number|null = null;
     lastTime: number|null = null;
 
-    cube: THREE.Mesh|null = null;
+    objects: THREE.Mesh[] = [];
+    objectRotationVectors: THREE.Vector3[] = [];
     fboScene: FboScene;
     material: THREE.ShaderMaterial|null = null;
 
@@ -24,13 +26,13 @@ class Scene {
         this.renderer.setClearColor(0x000000, 0);
         container.appendChild(this.renderer.domElement);
 
-        this.fboScene = new FboScene(this.renderer);
         this.scene = this.setupScene();
         this.camera = this.setupCamera();
-
-
+        
         this.setupResizeRenderer();
         this.resizeRenderer();
+
+        this.fboScene = new FboScene(this);
         
         this.cleanUpTasks.push(() => { 
             if (this.animationRequestID)
@@ -86,12 +88,14 @@ class Scene {
     setupScene() {
         const scene = new THREE.Scene();
 
-        // Add a basic cube
         const geometry = new THREE.IcosahedronGeometry(0.1, 1);
         const material = new THREE.MeshNormalMaterial({ flatShading: true });
-        const cube = new THREE.Mesh(geometry, material);
-        scene.add(cube);
-        this.cube = cube;
+        for (let k = 0; k < NUM_OBJECTS; k++) {
+            const object = new THREE.Mesh(geometry, material);
+            this.objects.push(object);
+            this.objectRotationVectors.push(new THREE.Vector3().randomDirection());
+            scene.add(object);
+        }
 
         // const axesHelper = new THREE.AxesHelper(5);
         // scene.add(axesHelper);
@@ -102,15 +106,15 @@ class Scene {
         scene.add(light);
 
         const geom = new THREE.BufferGeometry();
-        const uvData = new Float32Array(this.fboScene.SIZE*this.fboScene.SIZE*2);
-        for (let j = 0; j < this.fboScene.SIZE; j++) {
-            for (let k = 0; k < this.fboScene.SIZE; k++) {
-                let index = j*this.fboScene.SIZE + k;
-                uvData[index*2 + 0] = j / this.fboScene.SIZE;
-                uvData[index*2 + 1] = k / this.fboScene.SIZE;
+        const uvData = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*2);
+        for (let j = 0; j < PARTICLE_TEXTURE_SIZE; j++) {
+            for (let k = 0; k < PARTICLE_TEXTURE_SIZE; k++) {
+                let index = j*PARTICLE_TEXTURE_SIZE + k;
+                uvData[index*2 + 0] = j / PARTICLE_TEXTURE_SIZE;
+                uvData[index*2 + 1] = k / PARTICLE_TEXTURE_SIZE;
             }
         }
-        geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(this.fboScene.SIZE*this.fboScene.SIZE*3), 3));
+        geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*3), 3));
         geom.setAttribute("uv", new THREE.BufferAttribute(uvData, 2));
         this.material = new THREE.ShaderMaterial({
             uniforms: {
@@ -126,6 +130,8 @@ class Scene {
         points.frustumCulled = false;
         scene.add(points);
 
+        scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI/2.0);   // just for camera angles
+
         return scene;
     }
 
@@ -134,7 +140,7 @@ class Scene {
         const controls = new OrbitControls(camera, this.container);
         this.cleanUpTasks.push(() => controls.dispose());
 
-        camera.position.set(1, 1, 1.5);
+        camera.position.set(0, 1.0, 1.0);
         camera.lookAt(new THREE.Vector3(0, 0, 0));
         return camera;
     }
@@ -142,20 +148,25 @@ class Scene {
     animate() {
         this.animationRequestID = requestAnimationFrame(this.animate);
 
-        const currentTime = performance.now() / 1000;
-        const dt = this.lastTime ? Math.max(Math.min(currentTime-this.lastTime, 0.1), 0.0) : 0;
+        // const currentTime = performance.now() / 1000;
+        // const dt = this.lastTime ? Math.max(Math.min(currentTime-this.lastTime, 0.1), 0.0) : 0;
+        // this.lastTime = currentTime;
+        const currentTime = (this.lastTime ?? 0.0) + 0.01;
         this.lastTime = currentTime;
         this.fboScene.material.uniforms.time.value = currentTime;
 
-        this.cube!.rotateY(0.1*dt);
-        this.cube!.position.set(1.0*Math.cos(0.1*currentTime), 1.0*Math.sin(0.2*currentTime), 0.0);
+        this.objects.forEach((object, k) => {
+            object.rotateOnAxis(this.objectRotationVectors[k], 0.2);
+            object.position.set(1.0*Math.cos(k+0.1*currentTime), 1.0*Math.sin(2*k+0.2*currentTime), 0.2);
+        });
 
-        this.fboScene.setObjectPosition(this.cube!.position);
+        this.fboScene.setObjectPositions();
         this.fboScene.step(this.renderer);
         
         this.material!.uniforms.uPosition.value = this.fboScene.fbos[this.fboScene.currentFboIndex].texture;
         this.renderer.render(this.scene, this.camera);
+        console.log(this.camera.position);
     };
 }
 
-export { Scene };
+export { BaseScene };

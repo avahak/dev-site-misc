@@ -17,6 +17,10 @@ const FrontPage = () => {
                     Particles
                 </MUILink>
                 <br />
+                <MUILink component={RouterLink} to="/geo" variant="body1" color="primary">
+                    Geo
+                </MUILink>
+                <br />
                 <MUILink component={RouterLink} to="/template_class" variant="body1" color="primary">
                     Template for Three.js (class)
                 </MUILink>

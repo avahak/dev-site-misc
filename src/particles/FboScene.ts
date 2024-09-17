@@ -1,46 +1,49 @@
 import * as THREE from 'three';
 import vsString from './shaders/particleVertex.glsl?raw';
 import fsString from './shaders/particleFragment.glsl?raw';
+import { NUM_OBJECTS, PARTICLE_TEXTURE_SIZE } from './config';
+import { BaseScene } from './BaseScene';
 
 class FboScene {
+    baseScene: BaseScene;
     scene: THREE.Scene;
     camera: THREE.Camera;
     // cleanUpTasks: (() => void)[];
     material: THREE.ShaderMaterial;
-    SIZE: number = 1024;
     initialPositionsTexture: THREE.DataTexture;
 
     fbos: THREE.WebGLRenderTarget[];
     currentFboIndex: number;    // latest computed fbo index
 
-    constructor(renderer: THREE.WebGLRenderer) {
+    constructor(baseScene: BaseScene) {
+        this.baseScene = baseScene;
         this.scene = new THREE.Scene();
         this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
         this.camera.position.set(0, 0, 1);
         this.camera.lookAt(0, 0, 0);
 
         // just initial values!
-        const initialPositions = new Float32Array(this.SIZE*this.SIZE*4);
-        for (let j = 0; j < this.SIZE; j++) {
-            for (let k = 0; k < this.SIZE; k++) {
-                let index = j*this.SIZE + k;
+        const initialPositions = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*4);
+        for (let j = 0; j < PARTICLE_TEXTURE_SIZE; j++) {
+            for (let k = 0; k < PARTICLE_TEXTURE_SIZE; k++) {
+                let index = j*PARTICLE_TEXTURE_SIZE + k;
                 let theta = Math.random()*Math.PI*2;
-                let r = 0.5 + 0.4*Math.random();
+                let r = 0.3 + 0.7*Math.random();
                 initialPositions[index*4 + 0] = r*Math.cos(theta);
                 initialPositions[index*4 + 1] = r*Math.sin(theta);
                 initialPositions[index*4 + 2] = Math.random()*0.1-0.05;
-                initialPositions[index*4 + 3] = 1;
+                initialPositions[index*4 + 3] = -0.5;
             }
         }
 
-        this.initialPositionsTexture = new THREE.DataTexture(initialPositions, this.SIZE, this.SIZE, THREE.RGBAFormat, THREE.FloatType);
+        this.initialPositionsTexture = new THREE.DataTexture(initialPositions, PARTICLE_TEXTURE_SIZE, PARTICLE_TEXTURE_SIZE, THREE.RGBAFormat, THREE.FloatType);
         this.initialPositionsTexture.minFilter = THREE.NearestFilter;
         this.initialPositionsTexture.magFilter = THREE.NearestFilter;
         this.initialPositionsTexture.needsUpdate = true;
 
         this.material = new THREE.ShaderMaterial({
             uniforms: {
-                uPositionObject: { value: new THREE.Vector3(0, 0, 0) }, // NOTE: incorrect
+                uPositionObjects: { value: Array.from({ length: NUM_OBJECTS }, () => new THREE.Vector3(0, 0, 0)) }, // NOTE: incorrect
                 uPosition0: { value: this.initialPositionsTexture },
                 uPosition1: { value: this.initialPositionsTexture },
                 uPosition2: { value: this.initialPositionsTexture },
@@ -49,6 +52,7 @@ class FboScene {
             vertexShader: vsString,
             fragmentShader: fsString,
         });
+        this.setObjectPositions();
 
         const geometry = new THREE.PlaneGeometry(2, 2);
         const mesh = new THREE.Mesh(geometry, this.material);
@@ -58,15 +62,15 @@ class FboScene {
         for (let k = 0; k < 3; k++) {
             const rt = this.createRenderTarget();
             this.fbos.push(rt);
-            renderer.setRenderTarget(rt);
-            renderer.render(this.scene, this.camera);
+            this.baseScene.renderer.setRenderTarget(rt);
+            this.baseScene.renderer.render(this.scene, this.camera);
         }
         this.currentFboIndex = 2;       // fix later
-        renderer.setRenderTarget(null);
+        this.baseScene.renderer.setRenderTarget(null);
     }
 
     createRenderTarget() {
-        const renderTarget = new THREE.WebGLRenderTarget(this.SIZE, this.SIZE, {
+        const renderTarget = new THREE.WebGLRenderTarget(PARTICLE_TEXTURE_SIZE, PARTICLE_TEXTURE_SIZE, {
             minFilter: THREE.NearestFilter,
             magFilter: THREE.NearestFilter,
             format: THREE.RGBAFormat,
@@ -91,8 +95,9 @@ class FboScene {
         this.currentFboIndex = i1;
     }
 
-    setObjectPosition(p: THREE.Vector3) {
-        this.material.uniforms.uPositionObject.value = p;
+    setObjectPositions() {
+        for (let k = 0; k < NUM_OBJECTS; k++)
+            this.material.uniforms.uPositionObjects.value[k] = this.baseScene.objects[k].position;
     }
 }
 
