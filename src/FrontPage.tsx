@@ -1,6 +1,7 @@
 import { Box, Container, Typography } from "@mui/material";
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
+import { BUILD_TIMESTAMP } from "./buildInfo";
 
 const FrontPage = () => {
     return (<>
@@ -29,6 +30,7 @@ const FrontPage = () => {
                     Template for Three.js (React)
                 </MUILink>
             </Box>
+            <Typography variant="body2" color="textSecondary" sx={{mt: 10}}>{`Build: ${BUILD_TIMESTAMP}`}</Typography>
         </Container>
     </>);
 };

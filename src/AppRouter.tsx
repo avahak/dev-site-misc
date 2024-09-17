@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { App as DzhanibekovApp } from './dzhanibekov/App.tsx';
 import { App as ParticlesApp } from './particles/App.tsx';
 import { App as GeoApp } from './geo/App.tsx';
@@ -8,7 +8,7 @@ import { FrontPage } from './FrontPage.tsx';
 
 const AppRouter = () => {
     return (<>
-        <BrowserRouter basename='/dev-site-misc'>
+        <HashRouter>
             <Routes>
                 <Route path="/dzhanibekov" element={<DzhanibekovApp />} />
                 <Route path="/particles" element={<ParticlesApp />} />
@@ -17,7 +17,7 @@ const AppRouter = () => {
                 <Route path="/template_react" element={<ReactTemplateApp />} />
                 <Route path="/" element={<FrontPage />} />
             </Routes>
-        </BrowserRouter>
+        </HashRouter>
     </>);
 }
 
