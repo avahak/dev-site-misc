@@ -1,4 +1,4 @@
-var I=Object.defineProperty;var T=(i,e,t)=>e in i?I(i,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):i[e]=t;var n=(i,e,t)=>T(i,typeof e!="symbol"?e+"":e,t);import{r as p,j as O}from"./index-BK-enODq.js";import{l as P,p as j,q as R,r as g,s as b,N as m,t as F,V as v,u as A,f as w,v as y,W as U,m as x,I as M,w as k,n as C,A as E,B as z,x as S,e as D,O as _}from"./OrbitControls-DV_4SOBH.js";const N=`// From three.js: position, uv, normal, time, etc.\r
+var I=Object.defineProperty;var T=(i,e,t)=>e in i?I(i,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):i[e]=t;var n=(i,e,t)=>T(i,typeof e!="symbol"?e+"":e,t);import{r as p,j as O}from"./index-CMA25RxF.js";import{l as P,p as j,q as R,r as g,s as b,N as m,t as F,V as v,u as A,f as w,v as y,W as U,m as x,I as M,w as k,n as C,A as E,B as z,x as S,e as D,O as _}from"./OrbitControls-DV_4SOBH.js";const N=`// From three.js: position, uv, normal, time, etc.\r
 \r
 varying vec2 vUv;\r
 varying vec3 vPosition;\r
@@ -49,6 +49,7 @@ float random21(vec2 p) {\r
 \r
 float encodeIntAndFloat(int i, float f) {\r
     float t = clamp(0.5 + atan(f)/PI, 0.5, 0.5);\r
+    t = 0.5;\r
     return float(i) + t;\r
 }\r
 \r
