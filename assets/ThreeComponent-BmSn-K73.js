@@ -1,4 +1,4 @@
-var I=Object.defineProperty;var T=(i,e,t)=>e in i?I(i,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):i[e]=t;var n=(i,e,t)=>T(i,typeof e!="symbol"?e+"":e,t);import{r as p,j as O}from"./index-YKg0IOsH.js";import{l as P,p as j,q as R,r as g,s as b,N as u,t as F,V as m,u as A,f as w,v as y,W as U,m as x,I as M,w as k,n as C,A as _,B as E,x as S,e as z,O as D}from"./OrbitControls-DV_4SOBH.js";const N=`// From three.js: position, uv, normal, time, etc.\r
+var I=Object.defineProperty;var T=(i,e,t)=>e in i?I(i,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):i[e]=t;var n=(i,e,t)=>T(i,typeof e!="symbol"?e+"":e,t);import{r as p,j as O}from"./index-DT_n5Vn_.js";import{l as P,p as j,q as R,r as g,s as b,N as u,t as F,V as m,u as A,f as w,v as y,W as U,m as x,I as M,w as k,n as C,A as _,B as E,x as S,e as z,O as D}from"./OrbitControls-DV_4SOBH.js";const N=`// From three.js: position, uv, normal, time, etc.\r
 \r
 varying vec2 vUv;\r
 varying vec3 vPosition;\r
@@ -49,7 +49,7 @@ float random21(vec2 p) {\r
 \r
 float encodeIntAndFloat(int i, float f) {\r
     float f_bounded = (0.5 + atan(f)/PI);  \r
-    f_bounded = 0.5;\r
+    // f_bounded = 0.5;\r
     return float(i) + f_bounded;\r
 }\r
 \r
@@ -57,7 +57,7 @@ void decodeIntAndFloat(float encoded, out int i, out float f) {\r
     i = int(floor(encoded));\r
     float f_bounded = fract(encoded);\r
     f = tan(PI*(f_bounded - 0.5));  \r
-    f = 0.5;\r
+    // f = 0.5;\r
 }\r
 \r
 // float encodeIntAndFloat(int i, float f) {\r
@@ -168,7 +168,7 @@ void main() {\r
 \r
     gl_FragColor = vec4(newPos, state);\r
 }\r
-`,v=5,r=1024;class H{constructor(e){n(this,"baseScene");n(this,"scene");n(this,"camera");n(this,"material");n(this,"initialPositionsTexture");n(this,"fbos");n(this,"currentFboIndex");this.baseScene=e,this.scene=new P,this.camera=new j(-1,1,1,-1,.1,10),this.camera.position.set(0,0,1),this.camera.lookAt(0,0,0);const t=new Float32Array(r*r*4);for(let s=0;s<r;s++)for(let a=0;a<r;a++){let d=s*r+a,c=Math.random()*Math.PI*2,l=.3+.7*Math.random();t[d*4+0]=l*Math.cos(c),t[d*4+1]=l*Math.sin(c),t[d*4+2]=Math.random()*.1-.05,t[d*4+3]=-1}this.initialPositionsTexture=new R(t,r,r,g,b),this.initialPositionsTexture.minFilter=u,this.initialPositionsTexture.magFilter=u,this.initialPositionsTexture.needsUpdate=!0,this.material=new F({uniforms:{uPositionObjects:{value:Array.from({length:v},()=>new m(0,0,0))},uPosition0:{value:this.initialPositionsTexture},uPosition1:{value:this.initialPositionsTexture},uPosition2:{value:this.initialPositionsTexture},time:{value:0}},vertexShader:N,fragmentShader:B}),this.setObjectPositions();const o=new A(2,2),h=new w(o,this.material);this.scene.add(h),this.fbos=[];for(let s=0;s<3;s++){const a=this.createRenderTarget();this.fbos.push(a),this.baseScene.renderer.setRenderTarget(a),this.baseScene.renderer.render(this.scene,this.camera)}this.currentFboIndex=2,this.baseScene.renderer.setRenderTarget(null)}createRenderTarget(){return new y(r,r,{minFilter:u,magFilter:u,format:g,type:b})}step(e){const[t,o,h]=[this.currentFboIndex,(this.currentFboIndex+1)%3,(this.currentFboIndex+2)%3];this.material.uniforms.uPosition1.value=this.fbos[h].texture,this.material.uniforms.uPosition2.value=this.fbos[t].texture,e.setRenderTarget(this.fbos[o]),e.render(this.scene,this.camera),e.setRenderTarget(null),this.currentFboIndex=o}setObjectPositions(){for(let e=0;e<v;e++)this.material.uniforms.uPositionObjects.value[e]=this.baseScene.objects[e].position}}const V=`// From three.js: position, uv, normal\r
+`,v=5,r=1024;class H{constructor(e){n(this,"baseScene");n(this,"scene");n(this,"camera");n(this,"material");n(this,"initialPositionsTexture");n(this,"fbos");n(this,"currentFboIndex");this.baseScene=e,this.scene=new P,this.camera=new j(-1,1,1,-1,.1,10),this.camera.position.set(0,0,1),this.camera.lookAt(0,0,0);const t=new Float32Array(r*r*4);for(let s=0;s<r;s++)for(let a=0;a<r;a++){let d=s*r+a,c=Math.random()*Math.PI*2,l=.3+.7*Math.random();t[d*4+0]=l*Math.cos(c),t[d*4+1]=l*Math.sin(c),t[d*4+2]=Math.random()*.1-.05,t[d*4+3]=-.5}this.initialPositionsTexture=new R(t,r,r,g,b),this.initialPositionsTexture.minFilter=u,this.initialPositionsTexture.magFilter=u,this.initialPositionsTexture.needsUpdate=!0,this.material=new F({uniforms:{uPositionObjects:{value:Array.from({length:v},()=>new m(0,0,0))},uPosition0:{value:this.initialPositionsTexture},uPosition1:{value:this.initialPositionsTexture},uPosition2:{value:this.initialPositionsTexture},time:{value:0}},vertexShader:N,fragmentShader:B}),this.setObjectPositions();const o=new A(2,2),h=new w(o,this.material);this.scene.add(h),this.fbos=[];for(let s=0;s<3;s++){const a=this.createRenderTarget();this.fbos.push(a),this.baseScene.renderer.setRenderTarget(a),this.baseScene.renderer.render(this.scene,this.camera)}this.currentFboIndex=2,this.baseScene.renderer.setRenderTarget(null)}createRenderTarget(){return new y(r,r,{minFilter:u,magFilter:u,format:g,type:b})}step(e){const[t,o,h]=[this.currentFboIndex,(this.currentFboIndex+1)%3,(this.currentFboIndex+2)%3];this.material.uniforms.uPosition1.value=this.fbos[h].texture,this.material.uniforms.uPosition2.value=this.fbos[t].texture,e.setRenderTarget(this.fbos[o]),e.render(this.scene,this.camera),e.setRenderTarget(null),this.currentFboIndex=o}setObjectPositions(){for(let e=0;e<v;e++)this.material.uniforms.uPositionObjects.value[e]=this.baseScene.objects[e].position}}const V=`// From three.js: position, uv, normal\r
 \r
 uniform sampler2D uPosition;\r
 varying vec2 vUv;\r
