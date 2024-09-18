@@ -4,6 +4,7 @@ import { FboScene } from './FboScene';
 import vsString from './shaders/vertex.glsl?raw';
 import fsString from './shaders/fragment.glsl?raw';
 import { NUM_OBJECTS, PARTICLE_TEXTURE_SIZE } from './config';
+import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
 class BaseScene {
     container: HTMLDivElement;
@@ -13,6 +14,8 @@ class BaseScene {
     cleanUpTasks: (() => void)[];
     animationRequestID: number|null = null;
     lastTime: number|null = null;
+    gui: any;
+    isStopped: boolean = false;
 
     objects: THREE.Mesh[] = [];
     objectRotationVectors: THREE.Vector3[] = [];
@@ -33,6 +36,8 @@ class BaseScene {
         this.resizeRenderer();
 
         this.fboScene = new FboScene(this);
+
+        this.createGUI();
         
         this.cleanUpTasks.push(() => { 
             if (this.animationRequestID)
@@ -62,11 +67,31 @@ class BaseScene {
         this.resizeRenderer();
     }
 
+    createGUI() {
+        this.gui = new GUI();
+        const debugDialogButton = () => alert(this.fboScene.debugArray());
+        const animateButton = () => this.animateStep(false);
+        const toggleStop = () => { 
+            this.isStopped = !this.isStopped;
+        };
+        const myObject = {
+            debugDialogButton,
+            animateButton,
+            toggleStop,
+        };
+        this.gui.add(myObject, 'debugDialogButton').name("Show alphas");
+        this.gui.add(myObject, 'animateButton').name("Animate step");
+        this.gui.add(myObject, 'toggleStop').name("Toggle stop/play");
+        this.gui.close();
+    }
+
     cleanUp() {
         this.container.removeChild(this.renderer.domElement);
         for (const task of this.cleanUpTasks)
             task();
         this.renderer.dispose();
+
+        this.gui.destroy();
         // this.cleanUpTasks.push(() => {
         //     this.scene.traverse((object) => {
         //         if (object instanceof THREE.Mesh) {
@@ -149,18 +174,23 @@ class BaseScene {
     animate() {
         this.animationRequestID = requestAnimationFrame(this.animate);
 
-        const currentTime = (this.lastTime ?? 0.0) + 0.01;
+        this.animateStep(this.isStopped);
+    };
+
+    animateStep(isStopped: boolean) {
+        const currentTime = (this.lastTime ?? 0.0) + (isStopped ? 0.0 : 0.01);
         this.lastTime = currentTime;
         this.fboScene.material.uniforms.time.value = currentTime;
 
-        this.moveObjects(currentTime);
-
-        this.fboScene.setObjectPositions();
-        this.fboScene.step(this.renderer);
+        if (!isStopped) {
+            this.moveObjects(currentTime);
+            this.fboScene.setObjectPositions();
+            this.fboScene.step(this.renderer);
+        }
         
         this.material!.uniforms.uPosition.value = this.fboScene.fbos[this.fboScene.currentFboIndex].texture;
         this.renderer.render(this.scene, this.camera);
-    };
+    }
 
     moveObjects(time: number) {
         this.objects.forEach((object, k) => {

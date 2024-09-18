@@ -3,10 +3,9 @@ varying vec4 vPosition;
 
 #define PI 3.14159265359
 
-void decodeIntAndFloat(float encoded, out int i, out float f) {
-    i = int(floor(encoded));
-    float f_bounded = fract(encoded);
-    f = tan(PI*(f_bounded - 0.5));  
+float decodeFloat(float encoded) {
+    float t = fract(encoded);
+    return tan(PI*(t-0.5));
 }
 
 void main() {
@@ -16,11 +15,8 @@ void main() {
     if (dist > 0.5)
         discard;
 
-    // int stateI;
-    // float stateF;
-    // decodeIntAndFloat(vPosition.w, stateI, stateF);
-    // float t = mix(0.0, 1.0, stateF);
-    // vec4 color = mix(vec4(0.2, 0.2, 0.5, 1.), vec4(1.0, 0.5, 0.2, 1.), t);
-    // gl_FragColor = color;
-    gl_FragColor = vec4(1.0, 0.5, 0.2, 1.);
+    float stateF = decodeFloat(vPosition.w);
+    float t = mix(0.0, 1.0, stateF);
+    vec4 color = mix(vec4(0.2, 0.2, 0.5, 1.), vec4(1.0, 0.5, 0.2, 1.), t);
+    gl_FragColor = color;
 }

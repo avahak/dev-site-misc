@@ -44,7 +44,7 @@ class FboScene {
 
         this.material = new THREE.ShaderMaterial({
             uniforms: {
-                uPositionObjects: { value: Array.from({ length: NUM_OBJECTS }, () => new THREE.Vector3(0, 0, 0)) }, // NOTE: incorrect
+                uPositionObjects: { value: this.baseScene.objects.map((object) => object.position) },
                 uPosition0: { value: this.initialPositionsTexture },
                 uPosition1: { value: this.initialPositionsTexture },
                 uPosition2: { value: this.initialPositionsTexture },
@@ -53,7 +53,6 @@ class FboScene {
             vertexShader: vsString,
             fragmentShader: fsString,
         });
-        this.setObjectPositions();
 
         const geometry = new THREE.PlaneGeometry(2, 2);
         const mesh = new THREE.Mesh(geometry, this.material);
@@ -66,7 +65,7 @@ class FboScene {
             this.baseScene.renderer.setRenderTarget(rt);
             this.baseScene.renderer.render(this.scene, this.camera);
         }
-        this.currentFboIndex = 2;       // fix later
+        this.currentFboIndex = 0;
         this.baseScene.renderer.setRenderTarget(null);
     }
 
@@ -78,6 +77,22 @@ class FboScene {
             type: THREE.FloatType
         });
         return renderTarget;
+    }
+
+    /**
+     * Returns a sample of the alpha values in this.fbos[0].
+     */
+    debugArray() {
+        const pixelBuffer = new Float32Array(PARTICLE_TEXTURE_SIZE * PARTICLE_TEXTURE_SIZE * 4);
+
+        // Read the pixel values into the array
+        this.baseScene.renderer.readRenderTargetPixels(
+            this.fbos[0], 0, 0, PARTICLE_TEXTURE_SIZE, PARTICLE_TEXTURE_SIZE, pixelBuffer);
+        // Pick some random alpha values
+        return [...pixelBuffer.filter((_, index) => index%4 == 3)]
+            .sort(() => Math.random()-0.5)
+            .slice(0, 20)
+            .sort((a, b) => a-b);
     }
 
     step(renderer: THREE.WebGLRenderer) {
