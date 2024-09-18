@@ -1,4 +1,4 @@
-var I=Object.defineProperty;var T=(i,e,t)=>e in i?I(i,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):i[e]=t;var n=(i,e,t)=>T(i,typeof e!="symbol"?e+"":e,t);import{r as p,j as O}from"./index-DT_n5Vn_.js";import{l as P,p as j,q as R,r as g,s as b,N as u,t as F,V as m,u as A,f as w,v as y,W as U,m as x,I as M,w as k,n as C,A as _,B as E,x as S,e as z,O as D}from"./OrbitControls-DV_4SOBH.js";const N=`// From three.js: position, uv, normal, time, etc.\r
+var I=Object.defineProperty;var T=(i,e,t)=>e in i?I(i,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):i[e]=t;var n=(i,e,t)=>T(i,typeof e!="symbol"?e+"":e,t);import{r as p,j as O}from"./index-B4UnG3KU.js";import{l as P,p as j,q as R,r as g,s as b,N as u,t as F,V as m,u as A,f as w,v as y,W as U,m as x,I as M,w as k,n as C,A as _,B as E,x as S,e as z,O as D}from"./OrbitControls-DV_4SOBH.js";const N=`// From three.js: position, uv, normal, time, etc.\r
 \r
 varying vec2 vUv;\r
 varying vec3 vPosition;\r
@@ -48,16 +48,16 @@ float random21(vec2 p) {\r
 }\r
 \r
 float encodeIntAndFloat(int i, float f) {\r
-    float f_bounded = (0.5 + atan(f)/PI);  \r
-    // f_bounded = 0.5;\r
-    return float(i) + f_bounded;\r
+    // float f_bounded = 0.5 + atan(f)/PI;\r
+    // return float(i) + f_bounded;\r
+    return float(i) + f;\r
 }\r
 \r
 void decodeIntAndFloat(float encoded, out int i, out float f) {\r
     i = int(floor(encoded));\r
-    float f_bounded = fract(encoded);\r
-    f = tan(PI*(f_bounded - 0.5));  \r
-    // f = 0.5;\r
+    // float f_bounded = fract(encoded);\r
+    // f = tan(PI*(f_bounded - 0.5));\r
+    f = fract(encoded);\r
 }\r
 \r
 // float encodeIntAndFloat(int i, float f) {\r
@@ -184,11 +184,11 @@ varying vec4 vPosition;\r
 \r
 #define PI 3.14159265359\r
 \r
-void decodeIntAndFloat(float encoded, out int i, out float f) {\r
-    i = int(floor(encoded));\r
-    float f_bounded = fract(encoded);\r
-    f = tan(PI*(f_bounded - 0.5));  \r
-}\r
+// void decodeIntAndFloat(float encoded, out int i, out float f) {\r
+//     i = int(floor(encoded));\r
+//     float f_bounded = fract(encoded);\r
+//     f = tan(PI*(f_bounded - 0.5));  \r
+// }\r
 \r
 void main() {\r
     vec2 offset = gl_PointCoord - vec2(0.5, 0.5);\r
