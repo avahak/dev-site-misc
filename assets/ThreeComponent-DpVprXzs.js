@@ -1,4 +1,4 @@
-var I=Object.defineProperty;var T=(i,e,t)=>e in i?I(i,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):i[e]=t;var n=(i,e,t)=>T(i,typeof e!="symbol"?e+"":e,t);import{r as p,j as O}from"./index-Bo7VU5aq.js";import{l as P,p as j,q as R,r as g,s as b,N as m,t as F,V as v,u as A,f as w,v as y,W as U,m as x,I as M,w as k,n as C,A as E,B as z,x as S,e as D,O as _}from"./OrbitControls-DV_4SOBH.js";const N=`// From three.js: position, uv, normal, time, etc.\r
+var I=Object.defineProperty;var T=(i,e,t)=>e in i?I(i,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):i[e]=t;var n=(i,e,t)=>T(i,typeof e!="symbol"?e+"":e,t);import{r as p,j as O}from"./index-Daodjw3c.js";import{l as P,p as j,q as R,r as g,s as b,N as m,t as F,V as v,u as A,f as w,v as y,W as U,m as x,I as M,w as k,n as C,A as E,B as z,x as S,e as D,O as _}from"./OrbitControls-DV_4SOBH.js";const N=`// From three.js: position, uv, normal, time, etc.\r
 \r
 varying vec2 vUv;\r
 varying vec3 vPosition;\r
@@ -47,25 +47,25 @@ float random21(vec2 p) {\r
     return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453123);\r
 }\r
 \r
-// float encodeIntAndFloat(int i, float f) {\r
-//     float t = clamp(0.5 + atan(f)/PI, 0.5, 0.5);\r
-//     return float(i) + t;\r
-// }\r
-\r
-// void decodeIntAndFloat(float encoded, out int i, out float f) {\r
-//     i = int(floor(encoded));\r
-//     float t = fract(encoded);\r
-//     f = clamp(tan(PI*(t-0.5)), 0.0, 0.0);\r
-// }\r
-\r
 float encodeIntAndFloat(int i, float f) {\r
-    return float(i) + 0.5;\r
+    float t = clamp(0.5 + atan(f)/PI, 0.5, 0.5);\r
+    return float(i) + t;\r
 }\r
 \r
 void decodeIntAndFloat(float encoded, out int i, out float f) {\r
     i = int(floor(encoded));\r
-    f = 0.0;\r
+    float t = fract(encoded);\r
+    f = clamp(tan(PI*(t-0.5)), 0.0, 0.0);\r
 }\r
+\r
+// float encodeIntAndFloat(int i, float f) {\r
+//     return float(i) + 0.5;\r
+// }\r
+\r
+// void decodeIntAndFloat(float encoded, out int i, out float f) {\r
+//     i = int(floor(encoded));\r
+//     f = 0.0;\r
+// }\r
 \r
 vec3 safeNormalize(vec3 v) {\r
     float d = length(v);\r
