@@ -36,15 +36,24 @@ float random21(vec2 p) {
     return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453123);
 }
 
+// float encodeIntAndFloat(int i, float f) {
+//     float f_bounded = (0.5 + atan(f)/PI);  
+//     return float(i) + f_bounded;
+// }
+
+// void decodeIntAndFloat(float encoded, out int i, out float f) {
+//     i = int(floor(encoded));
+//     float f_bounded = fract(encoded);
+//     f = tan(PI*(f_bounded - 0.5));  
+// }
+
 float encodeIntAndFloat(int i, float f) {
-    float f_bounded = (0.5 + atan(f)/PI);  
-    return float(i) + f_bounded;
+    return (float(i)+1.0)/10.0;
 }
 
 void decodeIntAndFloat(float encoded, out int i, out float f) {
-    i = int(floor(encoded));
-    float f_bounded = fract(encoded);
-    f = tan(PI*(f_bounded - 0.5));  
+    i = int(round(10.0*encoded-1.0));
+    f = 0.0;
 }
 
 vec3 safeNormalize(vec3 v) {

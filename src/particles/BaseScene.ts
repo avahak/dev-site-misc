@@ -160,7 +160,6 @@ class BaseScene {
         
         this.material!.uniforms.uPosition.value = this.fboScene.fbos[this.fboScene.currentFboIndex].texture;
         this.renderer.render(this.scene, this.camera);
-        console.log(this.camera.position);
     };
 
     moveObjects(time: number) {
