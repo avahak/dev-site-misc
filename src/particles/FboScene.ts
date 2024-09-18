@@ -33,7 +33,7 @@ class FboScene {
                 initialPositions[index*4 + 1] = r*Math.sin(theta);
                 initialPositions[index*4 + 2] = Math.random()*0.1-0.05;
                 initialPositions[index*4 + 3] = -0.5;
-                initialPositions[index*4 + 3] = 0.0;
+                // initialPositions[index*4 + 3] = 0.0;
             }
         }
 

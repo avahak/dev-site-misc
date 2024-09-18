@@ -4,6 +4,8 @@
 vPosition.w is state, which encodes (stateI,stateF), where stateI is int
 and stateF is lower precision float. stateI is -1 if particle is attached to home position,
 and >=0 when the particle is attached to objects[stateI].
+
+NOTE! Didnt work on mobile (low precision?) so dropped stateF.
 */
 
 /*
@@ -36,25 +38,25 @@ float random21(vec2 p) {
     return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453123);
 }
 
-// float encodeIntAndFloat(int i, float f) {
-//     float f_bounded = (0.5 + atan(f)/PI);  
-//     return float(i) + f_bounded;
-// }
-
-// void decodeIntAndFloat(float encoded, out int i, out float f) {
-//     i = int(floor(encoded));
-//     float f_bounded = fract(encoded);
-//     f = tan(PI*(f_bounded - 0.5));  
-// }
-
 float encodeIntAndFloat(int i, float f) {
-    return (float(i)+1.0)/10.0;
+    float f_bounded = (0.5 + atan(f)/PI);  
+    return float(i) + f_bounded;
 }
 
 void decodeIntAndFloat(float encoded, out int i, out float f) {
-    i = int(round(10.0*encoded-1.0));
-    f = 0.0;
+    i = int(floor(encoded));
+    float f_bounded = fract(encoded);
+    f = tan(PI*(f_bounded - 0.5));  
 }
+
+// float encodeIntAndFloat(int i, float f) {
+//     return (float(i)+1.0)/10.0;
+// }
+
+// void decodeIntAndFloat(float encoded, out int i, out float f) {
+//     i = int(round(10.0*encoded-1.0));
+//     f = 0.0;
+// }
 
 vec3 safeNormalize(vec3 v) {
     float d = length(v);
@@ -71,10 +73,10 @@ float computeState(vec3 p0, vec3 p1, vec3 p2, float state) {
 
     vec2 rand = random22(vUv + vec2(stateI, stateF));
 
-    if (stateI == -1)
-        stateF = max(0.0, stateF-0.002);
-    if (stateI >= 0)
-        stateF = min(1.0, stateF+0.005);
+    // if (stateI == -1)
+    //     stateF = max(0.0, stateF-0.002);
+    // if (stateI >= 0)
+    //     stateF = min(1.0, stateF+0.005);
 
     int newStateI = stateI;
 
