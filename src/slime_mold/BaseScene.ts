@@ -112,19 +112,19 @@ class BaseScene {
         const scene = new THREE.Scene();
 
         const geom = new THREE.BufferGeometry();
-        const uvData = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*2);
+        const posData = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*3);
         for (let j = 0; j < PARTICLE_TEXTURE_SIZE; j++) {
             for (let k = 0; k < PARTICLE_TEXTURE_SIZE; k++) {
                 let index = j*PARTICLE_TEXTURE_SIZE + k;
-                uvData[index*2 + 0] = j / PARTICLE_TEXTURE_SIZE;
-                uvData[index*2 + 1] = k / PARTICLE_TEXTURE_SIZE;
+                posData[index*3 + 0] = j / PARTICLE_TEXTURE_SIZE;
+                posData[index*3 + 1] = k / PARTICLE_TEXTURE_SIZE;
+                posData[index*3 + 2] = 0.0;
             }
         }
-        geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*3), 3));
-        geom.setAttribute("uv", new THREE.BufferAttribute(uvData, 2));
+        geom.setAttribute("position", new THREE.BufferAttribute(posData, 3));
         this.shaderMaterialPoints = new THREE.ShaderMaterial({
             uniforms: {
-                uPosition: { value: null },
+                particleMap: { value: null },
                 time: { value: 0 }
             },
             vertexShader: vsStringPoints,
@@ -174,7 +174,7 @@ class BaseScene {
             this.particleScene.step(this.renderer);
         }
         
-        this.shaderMaterialPoints!.uniforms.uPosition.value = this.particleScene.fbos[this.particleScene.currentFboIndex].texture;
+        this.shaderMaterialPoints!.uniforms.particleMap.value = this.particleScene.fbos[this.particleScene.currentFboIndex].texture;
 
         const [i0, i1] = [this.currentFboIndex, (this.currentFboIndex+1)%2];
         this.shaderMaterialTrail!.uniforms.trailMap.value = this.fbos[i0].texture;

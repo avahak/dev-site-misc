@@ -1,12 +1,8 @@
-// From three.js: position, uv, normal
-
-uniform sampler2D uPosition;
-varying vec2 vUv;
-varying vec4 vPosition;
+uniform sampler2D particleMap;
+varying vec4 vParticle;
 
 void main() {
-    vPosition = texture2D(uPosition, uv);
-    vUv = uv;
-    gl_PointSize = vPosition.w > 1.0 ? 1.0 : 1.0;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(vPosition.xyz, 1.);
+    vParticle = texture2D(particleMap, position.xy);
+    gl_PointSize = vParticle.w > 1.0 ? 1.0 : 1.0;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(vParticle.xyz, 1.);
 }

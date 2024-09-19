@@ -1,6 +1,5 @@
 uniform sampler2D uPosition;
 varying vec2 vUv;
-varying vec3 vPosition;
 
 #define PI 3.14159265359
 

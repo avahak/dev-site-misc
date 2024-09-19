@@ -4,8 +4,6 @@
 vPosition.w is state, which encodes (stateI,stateF), where stateI is int
 and stateF is lower precision float. stateI is -1 if particle is attached to home position,
 and >=0 when the particle is attached to objects[stateI].
-
-NOTE! Didnt work on mobile (low precision?) so dropped stateF.
 */
 
 /*
@@ -20,11 +18,10 @@ acceleration = sum(steering forces)
 #define NUM_OBJECTS 5       // NOTE! This has to be same as in config.ts
 
 uniform vec3 uPositionObjects[NUM_OBJECTS];
-uniform sampler2D uPosition0;
-uniform sampler2D uPosition1;
-uniform sampler2D uPosition2;
+uniform sampler2D uPosition0;   // initial positions for particles
+uniform sampler2D uPosition1;   // particles previous positions
+uniform sampler2D uPosition2;   // current particle positions
 varying vec2 vUv;
-varying vec3 vPosition; // same as uPosition2, clean up at some point
 
 #define PI 3.14159265359
 

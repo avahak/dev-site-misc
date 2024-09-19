@@ -1,5 +1,4 @@
-varying vec2 vUv;
-varying vec4 vPosition;
+varying vec4 vParticle;
 
 #define PI 3.14159265359
 
@@ -15,7 +14,7 @@ void main() {
     if (dist > 0.5)
         discard;
 
-    float stateF = decodeFloat(vPosition.w);
+    float stateF = decodeFloat(vParticle.w);
     float t = mix(0.0, 1.0, stateF);
     vec4 color = mix(vec4(0.2, 0.2, 0.5, 1.), vec4(1.0, 0.5, 0.2, 1.), t);
     gl_FragColor = color;
