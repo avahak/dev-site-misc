@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 import vsString from './shaders/particleVertex.glsl?raw';
 import fsString from './shaders/particleFragment.glsl?raw';
-import { NUM_OBJECTS, PARTICLE_TEXTURE_SIZE } from './config';
+import { PARTICLE_TEXTURE_SIZE } from './config';
 import { BaseScene } from './BaseScene';
 
-class FboScene {
+class ParticleScene {
     baseScene: BaseScene;
     scene: THREE.Scene;
     camera: THREE.Camera;
     // cleanUpTasks: (() => void)[];
-    material: THREE.ShaderMaterial;
+    shaderMaterial: THREE.ShaderMaterial;
     initialPositionsTexture: THREE.DataTexture;
 
     fbos: THREE.WebGLRenderTarget[];
@@ -31,9 +31,8 @@ class FboScene {
                 let r = 0.3 + 0.7*Math.random();
                 initialPositions[index*4 + 0] = r*Math.cos(theta);
                 initialPositions[index*4 + 1] = r*Math.sin(theta);
-                initialPositions[index*4 + 2] = Math.random()*0.1-0.05;
-                initialPositions[index*4 + 3] = -0.5;
-                // initialPositions[index*4 + 3] = 0.0;
+                initialPositions[index*4 + 2] = Math.random()*2.0*Math.PI;
+                initialPositions[index*4 + 3] = 0.0;
             }
         }
 
@@ -42,12 +41,10 @@ class FboScene {
         this.initialPositionsTexture.magFilter = THREE.NearestFilter;
         this.initialPositionsTexture.needsUpdate = true;
 
-        this.material = new THREE.ShaderMaterial({
+        this.shaderMaterial = new THREE.ShaderMaterial({
             uniforms: {
-                uPositionObjects: { value: this.baseScene.objects.map((object) => object.position) },
-                uPosition0: { value: this.initialPositionsTexture },
-                uPosition1: { value: this.initialPositionsTexture },
-                uPosition2: { value: this.initialPositionsTexture },
+                // uPosition: (x,y) is position, z is angle, w is free for other use
+                uPosition: { value: this.initialPositionsTexture },
                 time: { value: 0 }
             },
             vertexShader: vsString,
@@ -55,11 +52,11 @@ class FboScene {
         });
 
         const geometry = new THREE.PlaneGeometry(2, 2);
-        const mesh = new THREE.Mesh(geometry, this.material);
+        const mesh = new THREE.Mesh(geometry, this.shaderMaterial);
         this.scene.add(mesh);
 
         this.fbos = [];
-        for (let k = 0; k < 3; k++) {
+        for (let k = 0; k < 2; k++) {
             const rt = this.createRenderTarget();
             this.fbos.push(rt);
             this.baseScene.renderer.setRenderTarget(rt);
@@ -79,30 +76,11 @@ class FboScene {
         return renderTarget;
     }
 
-    /**
-     * Returns a sample of the alpha values in this.fbos[0].
-     */
-    debugArray() {
-        const pixelBuffer = new Float32Array(PARTICLE_TEXTURE_SIZE * PARTICLE_TEXTURE_SIZE * 4);
-
-        // Read the pixel values into the array
-        this.baseScene.renderer.readRenderTargetPixels(
-            this.fbos[0], 0, 0, PARTICLE_TEXTURE_SIZE, PARTICLE_TEXTURE_SIZE, pixelBuffer);
-        // Pick some random alpha values
-        return [...pixelBuffer.filter((_, index) => index%4 == 3)]
-            .sort(() => Math.random()-0.5)
-            .slice(0, 20)
-            .sort((a, b) => a-b);
-    }
-
     step(renderer: THREE.WebGLRenderer) {
         // Take texture from fbo2 and write into fbo.
-        const [ i0, i1, i2 ] = [this.currentFboIndex, (this.currentFboIndex+1)%3, (this.currentFboIndex+2)%3];
-        // Now this.fbos index i0 is latest computed positions, i2 is last positions,
-        // and we want to fill up positions at i1:
+        const [i0, i1] = [this.currentFboIndex, (this.currentFboIndex+1)%2];
 
-        this.material.uniforms.uPosition1.value = this.fbos[i2].texture;
-        this.material.uniforms.uPosition2.value = this.fbos[i0].texture;
+        this.shaderMaterial.uniforms.uPosition.value = this.fbos[i0].texture;
 
         renderer.setRenderTarget(this.fbos[i1]);
         renderer.render(this.scene, this.camera);
@@ -110,11 +88,6 @@ class FboScene {
         
         this.currentFboIndex = i1;
     }
-
-    setObjectPositions() {
-        for (let k = 0; k < NUM_OBJECTS; k++)
-            this.material.uniforms.uPositionObjects.value[k] = this.baseScene.objects[k].position;
-    }
 }
 
-export { FboScene };
+export { ParticleScene };

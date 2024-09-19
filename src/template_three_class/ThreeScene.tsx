@@ -21,7 +21,9 @@ class Scene {
         this.container = container;
         this.cleanUpTasks = [];
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        this.renderer.setClearColor(0x000000, 0);
+        // this.renderer.setClearColor(0x000000, 0);
+        this.renderer.autoClear = false;
+        // this.renderer.clearColor();
         container.appendChild(this.renderer.domElement);
 
         this.scene = this.setupScene();

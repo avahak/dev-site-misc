@@ -1,0 +1,1 @@
+export const PARTICLE_TEXTURE_SIZE = 128;  // number of particles is this squared

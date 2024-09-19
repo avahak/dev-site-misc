@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { FboScene } from './FboScene';
+import { ParticleScene } from './ParticleScene';
 import vsString from './shaders/vertex.glsl?raw';
 import fsString from './shaders/fragment.glsl?raw';
 import { NUM_OBJECTS, PARTICLE_TEXTURE_SIZE } from './config';
@@ -19,8 +19,8 @@ class BaseScene {
 
     objects: THREE.Mesh[] = [];
     objectRotationVectors: THREE.Vector3[] = [];
-    fboScene: FboScene;
-    material: THREE.ShaderMaterial|null = null;
+    particleScene: ParticleScene;
+    shaderMaterial: THREE.ShaderMaterial|null = null;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -35,7 +35,7 @@ class BaseScene {
         this.setupResizeRenderer();
         this.resizeRenderer();
 
-        this.fboScene = new FboScene(this);
+        this.particleScene = new ParticleScene(this);
 
         this.createGUI();
         
@@ -69,7 +69,7 @@ class BaseScene {
 
     createGUI() {
         this.gui = new GUI();
-        const debugDialogButton = () => alert(this.fboScene.debugArray());
+        const debugDialogButton = () => alert(this.particleScene.debugArray());
         const animateButton = () => this.animateStep(false);
         const toggleStop = () => { 
             this.isStopped = !this.isStopped;
@@ -114,9 +114,9 @@ class BaseScene {
         const scene = new THREE.Scene();
 
         const geometry = new THREE.IcosahedronGeometry(0.1, 1);
-        const material = new THREE.MeshNormalMaterial({ flatShading: true });
+        const shaderMaterial = new THREE.MeshNormalMaterial({ flatShading: true });
         for (let k = 0; k < NUM_OBJECTS; k++) {
-            const object = new THREE.Mesh(geometry, material);
+            const object = new THREE.Mesh(geometry, shaderMaterial);
             this.objects.push(object);
             this.objectRotationVectors.push(new THREE.Vector3().randomDirection());
             scene.add(object);
@@ -141,7 +141,7 @@ class BaseScene {
         }
         geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*3), 3));
         geom.setAttribute("uv", new THREE.BufferAttribute(uvData, 2));
-        this.material = new THREE.ShaderMaterial({
+        this.shaderMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 uPosition: { value: null },
                 time: { value: 0 }
@@ -151,7 +151,7 @@ class BaseScene {
             // blending: THREE.AdditiveBlending,
             // depthWrite: false
         });
-        const points = new THREE.Points(geom, this.material);
+        const points = new THREE.Points(geom, this.shaderMaterial);
         points.frustumCulled = false;
         scene.add(points);
 
@@ -180,15 +180,15 @@ class BaseScene {
     animateStep(isStopped: boolean) {
         const currentTime = (this.lastTime ?? 0.0) + (isStopped ? 0.0 : 0.01);
         this.lastTime = currentTime;
-        this.fboScene.material.uniforms.time.value = currentTime;
+        this.particleScene.shaderMaterial.uniforms.time.value = currentTime;
 
         if (!isStopped) {
             this.moveObjects(currentTime);
-            this.fboScene.setObjectPositions();
-            this.fboScene.step(this.renderer);
+            this.particleScene.setObjectPositions();
+            this.particleScene.step(this.renderer);
         }
         
-        this.material!.uniforms.uPosition.value = this.fboScene.fbos[this.fboScene.currentFboIndex].texture;
+        this.shaderMaterial!.uniforms.uPosition.value = this.particleScene.fbos[this.particleScene.currentFboIndex].texture;
         this.renderer.render(this.scene, this.camera);
     }
 

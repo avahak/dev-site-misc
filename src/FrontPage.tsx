@@ -18,6 +18,10 @@ const FrontPage = () => {
                     Particles
                 </MUILink>
                 <br />
+                <MUILink component={RouterLink} to="/slime_mold" variant="body1" color="primary">
+                    Slime mold
+                </MUILink>
+                <br />
                 <MUILink component={RouterLink} to="/geo" variant="body1" color="primary">
                     Geo
                 </MUILink>
