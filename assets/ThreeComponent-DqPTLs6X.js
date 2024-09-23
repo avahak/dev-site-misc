@@ -1,4 +1,4 @@
-var y=Object.defineProperty;var z=(i,e,r)=>e in i?y(i,e,{enumerable:!0,configurable:!0,writable:!0,value:r}):i[e]=r;var t=(i,e,r)=>z(i,typeof e!="symbol"?e+"":e,r);import{r as x,j as A}from"./index-CRJxIpEE.js";import{l as P,O as f,p as I,q as m,r as g,N as h,s as b,t as M,f as R,u as F,R as S,W as k,B as D,w as q,x as w,e as C,i as T}from"./three.module-BxuQ6Me3.js";const U=`varying vec2 vUv;\r
+var y=Object.defineProperty;var z=(i,e,r)=>e in i?y(i,e,{enumerable:!0,configurable:!0,writable:!0,value:r}):i[e]=r;var t=(i,e,r)=>z(i,typeof e!="symbol"?e+"":e,r);import{r as x,j as A}from"./index-FK1fruWa.js";import{l as P,O as f,p as I,q as m,r as g,N as h,s as b,t as M,f as R,u as F,R as S,W as k,B as D,w as q,x as w,e as C,i as T}from"./three.module-BxuQ6Me3.js";const U=`varying vec2 vUv;\r
 \r
 void main() {\r
     vUv = uv;\r
@@ -41,8 +41,9 @@ vec2 wrap(vec2 p) {\r
 }\r
 \r
 vec4 newPosition(vec4 p) {\r
-    float a = 1.1;\r
+    float a = 1.2;\r
     float b = 0.01;\r
+    float c = 0.7;\r
     float speed = 0.01;\r
     float sensorAngle = 45.0/180.0*3.14159;\r
     float turningAngle = 15.0/180.0*3.14159;\r
@@ -72,7 +73,7 @@ vec4 newPosition(vec4 p) {\r
     float b1 = brightness(trail1);\r
     float b2 = brightness(trail2);\r
 \r
-    if ((b0 > a*b1+b) && (b0 > a*b2+b))\r
+    if ((b0 > a*b1+b) && (b0 > a*b2+b) && (b0 < c))\r
         return q0;\r
     if ((b0 <= a*b1+b) && (b0 <= a*b2+b)) {\r
         if (random21(p.xy+vec2(time)) > 0.5)\r
