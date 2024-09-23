@@ -36,8 +36,9 @@ vec2 wrap(vec2 p) {
 }
 
 vec4 newPosition(vec4 p) {
-    float a = 1.1;
+    float a = 1.2;
     float b = 0.01;
+    float c = 0.7;
     float speed = 0.01;
     float sensorAngle = 45.0/180.0*3.14159;
     float turningAngle = 15.0/180.0*3.14159;
@@ -67,7 +68,7 @@ vec4 newPosition(vec4 p) {
     float b1 = brightness(trail1);
     float b2 = brightness(trail2);
 
-    if ((b0 > a*b1+b) && (b0 > a*b2+b))
+    if ((b0 > a*b1+b) && (b0 > a*b2+b) && (b0 < c))
         return q0;
     if ((b0 <= a*b1+b) && (b0 <= a*b2+b)) {
         if (random21(p.xy+vec2(time)) > 0.5)
