@@ -5,6 +5,6 @@ varying vec4 vParticle;
 
 void main() {
     vParticle = texture2D(particleMap, position.xy);
-    gl_PointSize = 4.;
+    gl_PointSize = 3.;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(vParticle.xy, 0.5, 1.);
 }

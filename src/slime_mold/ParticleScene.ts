@@ -71,6 +71,8 @@ class ParticleScene {
         const renderTarget = new THREE.WebGLRenderTarget(PARTICLE_TEXTURE_SIZE, PARTICLE_TEXTURE_SIZE, {
             minFilter: THREE.NearestFilter,
             magFilter: THREE.NearestFilter,
+            wrapS: THREE.RepeatWrapping,
+            wrapT: THREE.RepeatWrapping,
             format: THREE.RGBAFormat,
             type: THREE.FloatType
         });

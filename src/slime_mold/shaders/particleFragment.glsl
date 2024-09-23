@@ -1,10 +1,3 @@
-/*
-020 no change
-202 turn randomly 
-012 turn right
-210 turn left 
-*/
-
 uniform sampler2D trailMap;
 uniform sampler2D uPosition;
 uniform vec2 resolution;    // dimensions of trailMap
@@ -37,40 +30,35 @@ float brightness(vec4 color) {
 }
 
 vec2 wrap(vec2 p) {
-    // maybe easier with mod
     float aspect = resolution.x/resolution.y;
-    // vec2 q = p;
     vec2 q = vec2(mod(p.x+aspect, 2.*aspect)-aspect, mod(p.y+1., 2.)-1.);
-    // q.x = mod(q.x+aspect, 2.*aspect)-aspect;
-    // q.y = mod(q.x+1., 2.)-1.;
-    // if (q.x > aspect)
-    //     q.x -= aspect;
-    // if (q.x < -aspect)
-    //     q.x += aspect;
-    // if (q.y > 1.)
-    //     q.y -= 1.;
-    // if (q.y < -1.)
-    //     q.y += 1.;
     return q;
 }
 
 vec4 newPosition(vec4 p) {
-    float d = 0.02;
-    float sensorAngle = 0.2;
+    float a = 1.1;
+    float b = 0.01;
+    float speed = 0.01;
+    float sensorAngle = 45.0/180.0*3.14159;
+    float turningAngle = 15.0/180.0*3.14159;
+    float sensorDist = 2.0*speed;
     float aspect = resolution.x/resolution.y;
     vec2 res = 2.*vec2(aspect, 1.);
     vec2 offset = vec2(0.5);
 
-    vec2 v0 = vec2(cos(p.z), sin(p.z));
-    vec2 v1 = vec2(cos(p.z+sensorAngle), sin(p.z+sensorAngle));
-    vec2 v2 = vec2(cos(p.z-sensorAngle), sin(p.z-sensorAngle));
+    vec2 v0 = p.xy + sensorDist*vec2(cos(p.z), sin(p.z));
+    vec2 v1 = p.xy + sensorDist*vec2(cos(p.z+sensorAngle), sin(p.z+sensorAngle));
+    vec2 v2 = p.xy + sensorDist*vec2(cos(p.z-sensorAngle), sin(p.z-sensorAngle));
+    vec2 w0 = p.xy + speed*vec2(cos(p.z), sin(p.z));
+    vec2 w1 = p.xy + speed*vec2(cos(p.z+turningAngle), sin(p.z+turningAngle));
+    vec2 w2 = p.xy + speed*vec2(cos(p.z-turningAngle), sin(p.z-turningAngle));
 
-    vec4 q0 = vec4(p.xy + d*v0, p.z, p.w);
-    vec4 q1 = vec4(p.xy + d*v1, p.z+sensorAngle, p.w);
-    vec4 q2 = vec4(p.xy + d*v2, p.z-sensorAngle, p.w);
-    vec2 uv0 = wrap(p.xy + d*v0)/res + offset;
-    vec2 uv1 = wrap(p.xy + d*v1)/res + offset;
-    vec2 uv2 = wrap(p.xy + d*v2)/res + offset;
+    vec4 q0 = vec4(w0, p.z, p.w);
+    vec4 q1 = vec4(w1, p.z+turningAngle, p.w);
+    vec4 q2 = vec4(w2, p.z-turningAngle, p.w);
+    vec2 uv0 = v0/res + offset;
+    vec2 uv1 = v1/res + offset;
+    vec2 uv2 = v2/res + offset;
 
     vec4 trail0 = texture2D(trailMap, uv0);
     vec4 trail1 = texture2D(trailMap, uv1);
@@ -79,21 +67,20 @@ vec4 newPosition(vec4 p) {
     float b1 = brightness(trail1);
     float b2 = brightness(trail2);
 
-    if ((b0 > b1) && (b0 > b2))
+    if ((b0 > a*b1+b) && (b0 > a*b2+b))
         return q0;
-    if ((b0 <= b1) && (b0 <= b2)) {
+    if ((b0 <= a*b1+b) && (b0 <= a*b2+b)) {
         if (random21(p.xy+vec2(time)) > 0.5)
             return q1;
         return q2;
     }
-    if ((b0 <= b1) && (b0 > b2))
-        return q1;
-    return q2;
+    if (b1 < b2)
+        return q2;
+    return q1;
 }
 
 void main() {
     vec4 p = texture2D(uPosition, vUv);
-    vec4 q = newPosition(p);
-    q.xy = wrap(q.xy);
-    gl_FragColor = q;
+    vec4 q = newPosition(vec4(wrap(p.xy), p.zw));
+    gl_FragColor = vec4(wrap(q.xy), q.zw);
 }

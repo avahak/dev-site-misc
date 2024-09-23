@@ -133,7 +133,8 @@ class BaseScene {
             vertexShader: vsStringPoints,
             fragmentShader: fsStringPoints,
             blending: THREE.AdditiveBlending,
-            depthWrite: false
+            depthWrite: false,
+            depthTest: false,
         });
         const points = new THREE.Points(geom, this.shaderMaterialPoints);
         points.frustumCulled = false;

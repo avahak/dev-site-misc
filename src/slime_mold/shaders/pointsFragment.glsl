@@ -9,5 +9,5 @@ void main() {
     if (dist > 0.5)
         discard;
 
-    gl_FragColor = vec4(0.2, 0.5, 1., 0.001);
+    gl_FragColor = vec4(0.2, 0.5, 1., 0.02);
 }
