@@ -22,7 +22,6 @@ class ParticleScene {
         this.camera.position.set(0, 0, 1);
         this.camera.lookAt(0, 0, 0);
 
-        // just initial values!
         const initialPositions = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*4);
         for (let j = 0; j < PARTICLE_TEXTURE_SIZE; j++) {
             for (let k = 0; k < PARTICLE_TEXTURE_SIZE; k++) {
@@ -45,6 +44,8 @@ class ParticleScene {
             uniforms: {
                 // uPosition: (x,y) is position, z is angle, w is free for other use
                 uPosition: { value: this.initialPositionsTexture },
+                trailMap: { value: this.baseScene.fbos[0].texture },
+                resolution: { value: this.baseScene.getResolution() },
                 time: { value: 0 }
             },
             vertexShader: vsString,

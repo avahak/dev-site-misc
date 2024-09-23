@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { ParticleScene } from './ParticleScene';
 import vsStringPoints from './shaders/pointsVertex.glsl?raw';
 import fsStringPoints from './shaders/pointsFragment.glsl?raw';
@@ -62,12 +61,16 @@ class BaseScene {
         console.log(`Resize! (${clientWidth}, ${clientHeight})`);
         const aspect = clientWidth / clientHeight;
         if (this.camera instanceof THREE.OrthographicCamera) {
-            const frustumHeight = this.camera.top - this.camera.bottom;
-            this.camera.left = -frustumHeight*aspect/2;
-            this.camera.right = frustumHeight*aspect/2;
+            this.camera.top = 1;
+            this.camera.bottom = -1;
+            this.camera.left = -aspect;
+            this.camera.right = aspect;
             this.camera.updateProjectionMatrix();
         }
         this.setupFbos();
+        this.shaderMaterialTrail!.uniforms.resolution.value = this.getResolution();
+        if (this.particleScene)
+            this.particleScene.shaderMaterial!.uniforms.resolution.value = this.getResolution();
     }
 
     setupResizeRenderer() {
@@ -129,16 +132,22 @@ class BaseScene {
             },
             vertexShader: vsStringPoints,
             fragmentShader: fsStringPoints,
-            // blending: THREE.AdditiveBlending,
-            // depthWrite: false
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
         });
         const points = new THREE.Points(geom, this.shaderMaterialPoints);
         points.frustumCulled = false;
         scene.add(points);
 
+        const gaussianOffsets = [[-1.0, 1.0], [0.0, 1.0], [1.0, 1.0], [-1.0, 0.0], [0.0, 0.0], [1.0, 0.0], [-1.0, -1.0], [0.0, -1.0], [1.0, -1.0]];
+        const gaussianKernel = [1.0/16.0, 2.0/16.0, 1.0/16.0, 2.0/16.0, 4.0/16.0, 2.0/16.0, 1.0/16.0, 2.0/16.0, 1.0/16.0];
+
         this.shaderMaterialTrail = new THREE.ShaderMaterial({
             uniforms: {
                 trailMap: { value: null },
+                resolution: { value: null },
+                gaussianOffsets: { value: gaussianOffsets.map(v => new THREE.Vector2(v[0], v[1])) },
+                gaussianKernel: { value: gaussianKernel },
                 time: { value: 0 }
             },
             vertexShader: vsStringTrail,
@@ -160,6 +169,11 @@ class BaseScene {
         return camera;
     }
 
+    getResolution() {
+        const { clientWidth, clientHeight } = this.container;
+        return new THREE.Vector2(clientWidth, clientHeight);
+    }
+
     animate() {
         this.animationRequestID = requestAnimationFrame(this.animate);
         this.animateStep(this.isStopped);
@@ -168,15 +182,15 @@ class BaseScene {
     animateStep(isStopped: boolean) {
         const currentTime = (this.lastTime ?? 0.0) + (isStopped ? 0.0 : 0.01);
         this.lastTime = currentTime;
-        this.particleScene.shaderMaterial.uniforms.time.value = currentTime;
-
-        if (!isStopped) {
-            this.particleScene.step(this.renderer);
-        }
-        
-        this.shaderMaterialPoints!.uniforms.particleMap.value = this.particleScene.fbos[this.particleScene.currentFboIndex].texture;
 
         const [i0, i1] = [this.currentFboIndex, (this.currentFboIndex+1)%2];
+
+        this.particleScene.shaderMaterial.uniforms.time.value = currentTime;
+        this.particleScene.shaderMaterial.uniforms.trailMap.value = this.fbos[i0].texture;
+        if (!isStopped)
+            this.particleScene.step(this.renderer);
+        
+        this.shaderMaterialPoints!.uniforms.particleMap.value = this.particleScene.fbos[this.particleScene.currentFboIndex].texture;
         this.shaderMaterialTrail!.uniforms.trailMap.value = this.fbos[i0].texture;
         this.renderer.setRenderTarget(this.fbos[i1]);
         this.renderer.render(this.scene, this.camera);
