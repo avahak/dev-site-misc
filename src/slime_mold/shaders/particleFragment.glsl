@@ -38,13 +38,15 @@ vec2 wrap(vec2 p) {
 
 vec4 newPosition(vec4 p) {
     // NOTE! effects depend largely on resolution!
+    // PROBLEM: massive straight transport lines should not be part of the solution.
     // int state = int(floor(p.w));
     float energy = clamp(p.w-0.01, 0.0, 1.0);
     float a = 1.2*0.0+1.1;
+    // float b = energy*energy*energy*0.2;
     float b = 0.01;
     float c = 1.0;
     float speed = pow(10.0, mix(-3.0, -2.0, energy));
-    float angle = 20.0;
+    float angle = 15.0;
     float meandering = mix(1.0, 0.5, energy*energy)*0.0+1.0;    // with this we never blow up
     float sensorAngle = angle/180.0*3.14159;
     float turningAngle = meandering*angle/180.0*3.14159;

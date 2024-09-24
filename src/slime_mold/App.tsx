@@ -9,7 +9,7 @@ const App: React.FC = () => {
         <Container maxWidth="xl">
             <Box display="flex" justifyContent="center" sx={{py: 2}}>
                 <Typography variant="h2">
-                    Slime mold variant
+                    Slime mold particles
                 </Typography>
             </Box>
             <Box style={{ width: "100%", height: "80vh" }}>

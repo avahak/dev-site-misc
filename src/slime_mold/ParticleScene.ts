@@ -27,7 +27,7 @@ class ParticleScene {
             for (let k = 0; k < PARTICLE_TEXTURE_SIZE; k++) {
                 let index = j*PARTICLE_TEXTURE_SIZE + k;
                 let theta = Math.random()*Math.PI*2;
-                let r = 0.3 + 0.7*Math.random();
+                let r = 0.5 + 0.1*Math.random();
                 initialPositions[index*4 + 0] = r*Math.cos(theta);
                 initialPositions[index*4 + 1] = r*Math.sin(theta);
                 initialPositions[index*4 + 2] = Math.random()*2.0*Math.PI;
