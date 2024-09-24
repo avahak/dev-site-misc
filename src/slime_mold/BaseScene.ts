@@ -140,15 +140,16 @@ class BaseScene {
         points.frustumCulled = false;
         scene.add(points);
 
-        const gaussianOffsets = [[-1.0, 1.0], [0.0, 1.0], [1.0, 1.0], [-1.0, 0.0], [0.0, 0.0], [1.0, 0.0], [-1.0, -1.0], [0.0, -1.0], [1.0, -1.0]];
-        const gaussianKernel = [1.0/16.0, 2.0/16.0, 1.0/16.0, 2.0/16.0, 4.0/16.0, 2.0/16.0, 1.0/16.0, 2.0/16.0, 1.0/16.0];
+        const kernelOffsets = [[-1.0, 1.0], [0.0, 1.0], [1.0, 1.0], [-1.0, 0.0], [0.0, 0.0], [1.0, 0.0], [-1.0, -1.0], [0.0, -1.0], [1.0, -1.0]];
+        // const gaussianWeights = [1.0/16.0, 2.0/16.0, 1.0/16.0, 2.0/16.0, 4.0/16.0, 2.0/16.0, 1.0/16.0, 2.0/16.0, 1.0/16.0];
+        const meanWeights = new Array(9).fill(1.0/9.0);
 
         this.shaderMaterialTrail = new THREE.ShaderMaterial({
             uniforms: {
                 trailMap: { value: null },
                 resolution: { value: null },
-                gaussianOffsets: { value: gaussianOffsets.map(v => new THREE.Vector2(v[0], v[1])) },
-                gaussianKernel: { value: gaussianKernel },
+                kernelOffsets: { value: kernelOffsets.map(v => new THREE.Vector2(v[0], v[1])) },
+                kernelWeights: { value: meanWeights },
                 time: { value: 0 }
             },
             vertexShader: vsStringTrail,

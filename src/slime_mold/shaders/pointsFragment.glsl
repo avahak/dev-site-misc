@@ -9,5 +9,19 @@ void main() {
     if (dist > 0.5)
         discard;
 
-    gl_FragColor = vec4(0.2, 0.5, 1., 0.02);
+    float energy = clamp(vParticle.w, 0.0, 1.0);
+    vec4 col1 = vec4(0.2, 0.5, 1., 0.1);
+    vec4 col2 = vec4(1., 0.5, 0.2, 0.1);
+    gl_FragColor = mix(col1, col2, energy);
+
+    // vec4 col1 = vec4(0.2, 0.5, 1., 1.0);
+    // vec4 col2 = vec4(1., 0.5, 0.2, 0.02);
+    // vec4 col3 = vec4(0.5, 1., 0.2, 0.02);
+    // int state = int(floor(vParticle.w));
+    // if (state == 0)
+    //     gl_FragColor = col1;
+    // else if (state == 1)
+    //     gl_FragColor = col2;
+    // else 
+    //     gl_FragColor = col3;
 }

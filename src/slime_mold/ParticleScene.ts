@@ -31,7 +31,7 @@ class ParticleScene {
                 initialPositions[index*4 + 0] = r*Math.cos(theta);
                 initialPositions[index*4 + 1] = r*Math.sin(theta);
                 initialPositions[index*4 + 2] = Math.random()*2.0*Math.PI;
-                initialPositions[index*4 + 3] = 0.0;
+                initialPositions[index*4 + 3] = 0.5;//+Math.floor(Math.random()*3);
             }
         }
 
