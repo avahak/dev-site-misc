@@ -14,10 +14,10 @@ const darkTheme = createTheme({
 });
 
 createRoot(document.getElementById('root')!).render(
-    <StrictMode>
+    // <StrictMode>
         <ThemeProvider theme={darkTheme}>
             <CssBaseline />
             <AppRouter />
         </ThemeProvider>
-    </StrictMode>
+    // </StrictMode>
 );

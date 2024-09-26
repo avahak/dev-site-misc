@@ -12,7 +12,7 @@ const App: React.FC = () => {
                     d3.js testing
                 </Typography>
             </Box>
-            <Box style={{ width: "100%", height: "600px" }}>
+            <Box style={{ width: "100%", height: "80vh" }}>
             <Suspense fallback={<Box display="flex" justifyContent="center"><Typography>Loading..</Typography></Box>}>
                 <GeoComponent />
             </Suspense>

@@ -37,12 +37,12 @@ const ThreeScene: React.FC = () => {
 
         const loader = new THREE.CubeTextureLoader();
         const cubeTexture = loader.load([
-            '/dev-site-misc/posx.jpg',
-            '/dev-site-misc/negx.jpg',
-            '/dev-site-misc/negy.jpg',        // flipped!
-            '/dev-site-misc/posy.jpg',        // flipped!
-            '/dev-site-misc/posz.jpg',
-            '/dev-site-misc/negz.jpg',
+            '/dev-site-misc/dzhanibekov/posx.jpg',
+            '/dev-site-misc/dzhanibekov/negx.jpg',
+            '/dev-site-misc/dzhanibekov/negy.jpg',        // flipped!
+            '/dev-site-misc/dzhanibekov/posy.jpg',        // flipped!
+            '/dev-site-misc/dzhanibekov/posz.jpg',
+            '/dev-site-misc/dzhanibekov/negz.jpg',
         ]);
         cubeTexture.flipY = true;       // flipped!
         scene.background = cubeTexture;
@@ -68,13 +68,13 @@ const ThreeScene: React.FC = () => {
         // Load .mtl and .obj files
         let loadedObj: THREE.Object3D|null = null;
         const mtlLoader = new MTLLoader();
-        mtlLoader.load('/dev-site-misc/dz.mtl', (materials: any) => {
+        mtlLoader.load('/dev-site-misc/dzhanibekov/dz.mtl', (materials: any) => {
             materials.preload();
 
             const objLoader = new OBJLoader();
             objLoader.setMaterials(materials);
 
-            objLoader.load('/dev-site-misc/dz.obj', (object: THREE.Object3D) => {
+            objLoader.load('/dev-site-misc/dzhanibekov/dz.obj', (object: THREE.Object3D) => {
                 object.position.set(0, 0, 0);
                 scene.add(object);
                 loadedObj = object;
