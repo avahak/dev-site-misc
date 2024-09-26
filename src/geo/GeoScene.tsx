@@ -4,8 +4,8 @@
  * maps: https://www.naturalearthdata.com/
  */
 
-import { Box, Button, Paper, Typography } from "@mui/material";
 import * as d3 from "d3";
+import { Box, debounce, Paper, Typography } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 
 type CountryInfo = {
@@ -25,6 +25,50 @@ function formatPopulation(pop: number) {
     if (pop > 1000)
         return `${(pop/1000).toFixed(1)}K`;
     return `${pop}`;
+}
+
+/**
+ * A custom hook that debounces a callback function, delaying its execution 
+ * until after a specified delay period since the last invocation.
+ * The resulting function can be cancelled if needed.
+ */
+function useDebounce<T extends (...args: any[]) => void>(cb: T, delay: number) {
+    const timer = useRef<NodeJS.Timeout>();
+    const lastCall = useRef<number>(0);
+  
+    const debouncedFunction = (...args: Parameters<T>) => {
+        const now = performance.now();
+        clearTimeout(timer.current);
+
+        if (now > lastCall.current+delay) {
+            // Call immediately
+            lastCall.current = now;
+            cb(...args);
+            return;
+        }
+        timer.current = setTimeout(() => {
+            cb(...args);
+        }, delay);
+    };
+
+    /**
+     * Cancels the pending execution of the debounced function.
+     * Returns true if cancellation occurred, false if no execution was pending.
+     */
+    debouncedFunction.cancel = () => {
+        if (timer.current) {
+            clearTimeout(timer.current);
+            timer.current = undefined;
+            return true;
+        }
+        return false;
+    };
+
+    useEffect(() => {
+        return () => clearTimeout(timer.current);
+    }, []);
+  
+    return debouncedFunction as (T & { cancel: () => boolean; });
 }
 
 const CountryCard: React.FC<{ countryInfo: CountryInfo|null }> = ({countryInfo}) => {
@@ -52,7 +96,7 @@ const CountryCard: React.FC<{ countryInfo: CountryInfo|null }> = ({countryInfo})
             </Typography>
             {countryInfo &&
             <Box maxWidth="200px" sx={{mt: 2}}>
-                <img width="100%" src={`dev-site-misc/geo/flags/${countryInfo.iso_a2_eh.toLowerCase()}.svg`}></img>
+                <img width="100%" src={`/dev-site-misc/geo/flags/${countryInfo.iso_a2_eh.toLowerCase()}.svg`}></img>
             </Box>
             }
             </Paper>
@@ -131,7 +175,7 @@ const GeoScene: React.FC = () => {
         svg.call(drag as any);
     };
 
-    const handleMouseover = (e: MouseEvent, d: any) => {
+    const handleMouseover = useDebounce((e: MouseEvent, d: any) => {
         d3.select(e.target as HTMLElement)
             .attr('fill', '#ff4400')
             .attr('stroke', 'white');
@@ -146,9 +190,10 @@ const GeoScene: React.FC = () => {
             iso_a2_eh: d.properties.iso_a2_eh,      // ISO 3166-1 alpha-2 ???
         };
         setCountryInfo(countryInfo);
-    }
+    }, 100);
 
-    const handleMouseout = (e: MouseEvent, d: any) => {
+    const handleMouseout = (e: MouseEvent, _d: any) => {
+        handleMouseover.cancel();
         d3.select(e.target as HTMLElement)
             .attr('fill', '#369')
             .attr('stroke', 'white');
