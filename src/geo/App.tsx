@@ -2,7 +2,7 @@ import React, { Suspense } from 'react';
 import { Box, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
-const GeoComponent = React.lazy(() => import('./GeoScene').then(module => ({ default: module.GeoScene })));
+const GeoComponent = React.lazy(() => import('./GeoSceneCanvas').then(module => ({ default: module.GeoScene })));
 
 const App: React.FC = () => {
     return (
@@ -12,10 +12,10 @@ const App: React.FC = () => {
                     d3.js testing
                 </Typography>
             </Box>
-            <Box style={{ width: "100%", height: "80vh" }}>
-            <Suspense fallback={<Box display="flex" justifyContent="center"><Typography>Loading..</Typography></Box>}>
-                <GeoComponent />
-            </Suspense>
+            <Box style={{ width: "100%", height: "70vh" }}>
+                <Suspense fallback={<Box display="flex" justifyContent="center"><Typography>Loading..</Typography></Box>}>
+                    <GeoComponent />
+                </Suspense>
             </Box>
             <MUILink component={RouterLink} to="/" variant="body1" color="primary">
                 Back
