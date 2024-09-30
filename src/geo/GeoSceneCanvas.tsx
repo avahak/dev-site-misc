@@ -4,7 +4,6 @@
  * maps: https://www.naturalearthdata.com/
  */
 
-import * as d3 from "d3";
 import { Box, Paper, Typography } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { GeoCanvas } from "./GeoCanvas";
@@ -49,6 +48,7 @@ function useDebounce<T extends (...args: any[]) => void>(cb: T, delay: number) {
         }
         timer.current = setTimeout(() => {
             cb(...args);
+            timer.current = undefined;
         }, delay);
     };
 
@@ -125,6 +125,11 @@ const GeoScene: React.FC = () => {
     };
 
     const handleFeatureSelect = useDebounce((d: any) => {
+        if (!d) {
+            setCountryInfo(null);
+            return;
+        }
+
         let countryInfo: CountryInfo = {
             name: d.properties.name,
             name_en: d.properties.name_en,

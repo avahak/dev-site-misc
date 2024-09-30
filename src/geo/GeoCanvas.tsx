@@ -29,7 +29,7 @@ const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => 
             return;
 
         let projection = d3.geoOrthographic()
-            .scale(400)
+            .scale(300)
             .rotate(rotationRef.current)
             .translate([canvas.width/2, canvas.height/2]);
 
@@ -66,7 +66,7 @@ const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => 
             return;
 
         let projection = d3.geoOrthographic()
-            .scale(400)
+            .scale(300)
             .rotate(rotationRef.current)
             .translate([canvas.width/2, canvas.height/2]);
         let geoGen = d3.geoPath().projection(projection).context(context);
@@ -91,7 +91,7 @@ const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => 
             return;
 
         let projection = d3.geoOrthographic()
-            .scale(400)
+            .scale(300)
             .rotate(rotationRef.current)
             .translate([canvas.width/2, canvas.height/2]);
         let geoGen = d3.geoPath().projection(projection).context(context);
@@ -114,9 +114,11 @@ const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => 
             if (!canvas) 
                 return { x: 0, y: 0 };
             const rect = canvas.getBoundingClientRect();
-            if ('touches' in e && e.touches.length > 0) {
-                const touch = e.touches[0];
-                return { x: touch.clientX-rect.left, y: touch.clientY-rect.top };
+            if ('touches' in e) {
+                if (e.touches.length > 0)
+                    return { x: e.touches[0].clientX-rect.left, y: e.touches[0].clientY-rect.top };
+                else
+                    return { x: mouseState.current.lastPosition.x, y: mouseState.current.lastPosition.y };
             }
             return { x: (e as MouseEvent).clientX-rect.left, y: (e as MouseEvent).clientY-rect.top };
         };
@@ -175,12 +177,9 @@ const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => 
                 console.log("Left-click detected at", x, y);
                 // drawCircle(x, y, 10);
                 const feature = getFeatureAt(x, y);
-                if (feature) {
-                    selectedFeature.current = feature.properties.name;
-                    featureSelectCallback(feature);
-                    draw();
-                } else 
-                    console.log("No feature found.")
+                selectedFeature.current = feature ? feature.properties.name : null;
+                featureSelectCallback(feature);
+                draw();
             }
 
             mouseState.current.isPressed = false;
