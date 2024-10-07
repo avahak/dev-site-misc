@@ -9,7 +9,7 @@ const darkTheme = createTheme({
         mode: 'dark',
     },
     typography: {
-        fontSize: 16,
+        fontSize: 14,
     }
 });
 

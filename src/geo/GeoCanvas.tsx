@@ -6,6 +6,8 @@
 
 import * as d3 from "d3";
 import { useEffect, useRef } from "react";
+import { ProjectionType } from "./ProjectionSelector";
+import { clamp } from "../tools";
 
 interface MouseState {
     isPressed: boolean;
@@ -13,12 +15,32 @@ interface MouseState {
     lastPosition: { x: number; y: number };
 }
 
-const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => void }> = ({ data, featureSelectCallback }) => {
+function getProjection(projectionType: ProjectionType, rotation: [number, number, number], canvasWidth: number, canvasHeight: number): d3.GeoProjection {
+    if (projectionType === "Mercator") {
+        return d3.geoMercator()
+            .scale(150)
+            .rotate(rotation)
+            .translate([canvasWidth/2, canvasHeight/2]);
+    } else {
+        // Orthographic
+        return d3.geoOrthographic()
+            .scale(Math.min(canvasWidth/2, canvasHeight/2))
+            .rotate(rotation)
+            .translate([canvasWidth/2, canvasHeight/2]);
+    }
+}
+
+const GeoCanvas: React.FC<{ projectionType: ProjectionType, data: any, featureSelectCallback: (feature: any) => void }> = ({ projectionType, data, featureSelectCallback }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const mouseState = useRef<MouseState>({ isPressed: false, isMoved: false, lastPosition: { x: 0, y: 0} })
     const rotationRef = useRef<[number, number, number]>([-24.9, -60.2, 0]);
     const selectedFeature = useRef<string>("");
+
+    const clampRotation = (rot: [number, number, number]): [number, number, number] => {
+        let limit1 = projectionType === "Orthographic" ? 90 : 0;
+        return [rot[0], clamp(rot[1], -limit1, limit1), clamp(rot[2], 0, 0)];
+    };
 
     const getFeatureAt = (x: number, y: number) => {
         if (!canvasRef.current || !data)
@@ -28,12 +50,20 @@ const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => 
         if (!context)
             return;
 
-        let projection = d3.geoOrthographic()
-            .scale(300)
-            .rotate(rotationRef.current)
-            .translate([canvas.width/2, canvas.height/2]);
+        let projection = getProjection(projectionType, rotationRef.current, canvas.width, canvas.height);
 
-        const lonlat: [number, number] = projection.invert ? projection.invert([x, y])! : [0, 0];
+        const lonlat: [number, number]|null = projection.invert ? projection.invert([x, y]) : [0, 0];
+        if (!lonlat)
+            return null;
+
+        // Check that inverse projection is correct - it has to project back to (x,y)
+        const p2 = projection(lonlat);
+        if (!p2)
+            return null;
+        const reProjectionError = Math.sqrt((p2[0]-x)*(p2[0]-x) + (p2[1]-y)*(p2[1]-y));
+        if (reProjectionError > 1.0)
+            return null;
+
         for (const d of data.features) {
             if (d3.geoContains(d, lonlat))
                 return d;
@@ -65,10 +95,7 @@ const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => 
         if (!context)
             return;
 
-        let projection = d3.geoOrthographic()
-            .scale(300)
-            .rotate(rotationRef.current)
-            .translate([canvas.width/2, canvas.height/2]);
+        let projection = getProjection(projectionType, rotationRef.current, canvas.width, canvas.height);
         let geoGen = d3.geoPath().projection(projection).context(context);
 
         data.features.forEach((d: any) => {
@@ -90,10 +117,7 @@ const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => 
         if (!context)
             return;
 
-        let projection = d3.geoOrthographic()
-            .scale(300)
-            .rotate(rotationRef.current)
-            .translate([canvas.width/2, canvas.height/2]);
+        let projection = getProjection(projectionType, rotationRef.current, canvas.width, canvas.height);
         let geoGen = d3.geoPath().projection(projection).context(context);
         let graticule = d3.geoGraticule10();
 
@@ -103,6 +127,30 @@ const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => 
         context.lineWidth = 1;
         context.stroke();
     };
+
+    // handle resizing
+    useEffect(() => {
+        if (!containerRef.current)
+            return;
+        const resizeObserver = new ResizeObserver(() => {
+            if (!containerRef.current || !canvasRef.current)
+                return;
+            const { clientWidth, clientHeight } = containerRef.current;
+            canvasRef.current.width = clientWidth;
+            canvasRef.current.height = clientHeight;
+            draw();
+            // console.log("GeoCanvas useEffect", clientWidth, clientHeight);
+        });
+        resizeObserver.observe(containerRef.current);
+        return () => {
+            if (containerRef.current)
+                resizeObserver.unobserve(containerRef.current)
+        };
+    }, [data, projectionType]);
+
+    useEffect(() => {
+        rotationRef.current = clampRotation(rotationRef.current);
+    }, [projectionType]);
 
     useEffect(() => {
         if (!containerRef.current || !canvasRef.current)
@@ -122,22 +170,6 @@ const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => 
             }
             return { x: (e as MouseEvent).clientX-rect.left, y: (e as MouseEvent).clientY-rect.top };
         };
-    
-        // const handleClick = (e: MouseEvent) => {
-        //     console.log("handleClick");
-        //     // button 0 is left click
-        //     console.log(mouseState);
-        //     if (e.button === 0 && !mouseState.current.isMoved) {
-        //         const { x, y } = getPosition(e);
-        //         console.log("Left-click detected at", x, y);
-        //         // drawCircle(x, y, 10);
-        //         const feature = getFeatureAt(x, y);
-        //         if (feature)
-        //             featureSelectCallback(feature);
-        //         else 
-        //             console.log("No feature found.")
-        //     }
-        // };
     
         // Drag start: mouse down / touch start
         const handleStartDrag = (e: MouseEvent | TouchEvent) => {
@@ -162,14 +194,14 @@ const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => 
             if (('touches' in e && e.touches.length > 0) 
                     || (e instanceof MouseEvent && e.button === 0)) {
                 const rot = rotationRef.current;
-                rotationRef.current = [rot[0]+dx/2, Math.max(Math.min(rot[1]-dy/2, 90), -90), rot[2]];
+                rotationRef.current = clampRotation([rot[0]+dx/2, rot[1]-dy/2, rot[2]]);
                 draw();
             }
         };
     
         // Drag end: mouse up / touch end
         const handleEndDrag = (e: MouseEvent | TouchEvent) => {
-            // e.preventDefault();
+            e.preventDefault();
             console.log("handleEndDrag");
 
             if (!mouseState.current.isMoved && (!(e instanceof MouseEvent) || e.button === 0)) {
@@ -185,45 +217,27 @@ const GeoCanvas: React.FC<{ data: any, featureSelectCallback: (feature: any) => 
             mouseState.current.isPressed = false;
             mouseState.current.isMoved = false;
         };
+
+        draw();
     
         // Add listeners
         canvas.addEventListener("mousedown", handleStartDrag);
         window.addEventListener("mousemove", handleMove);
-        window.addEventListener("mouseup", handleEndDrag);
+        canvas.addEventListener("mouseup", handleEndDrag);
         canvas.addEventListener("touchstart", handleStartDrag);
         window.addEventListener("touchmove", handleMove);
-        window.addEventListener("touchend", handleEndDrag);
+        canvas.addEventListener("touchend", handleEndDrag);
     
         // Cleanup event listeners on component unmount
         return () => {
             canvas.removeEventListener("mousedown", handleStartDrag);
             window.removeEventListener("mousemove", handleMove);
-            window.removeEventListener("mouseup", handleEndDrag);
+            canvas.removeEventListener("mouseup", handleEndDrag);
             canvas.removeEventListener("touchstart", handleStartDrag);
             window.removeEventListener("touchmove", handleMove);
-            window.removeEventListener("touchend", handleEndDrag);
+            canvas.removeEventListener("touchend", handleEndDrag);
         };
-    }, [data]);
-
-    // handle resizing
-    useEffect(() => {
-        if (!containerRef.current)
-            return;
-        const resizeObserver = new ResizeObserver(() => {
-            if (!containerRef.current || !canvasRef.current)
-                return;
-            const { clientWidth, clientHeight } = containerRef.current;
-            canvasRef.current.width = clientWidth;
-            canvasRef.current.height = clientHeight;
-            draw();
-            console.log("GeoCanvas useEffect", clientWidth, clientHeight);
-        });
-        resizeObserver.observe(containerRef.current);
-        return () => {
-            if (containerRef.current)
-                resizeObserver.unobserve(containerRef.current)
-        };
-    }, [data]);
+    }, [data, projectionType]);
 
     // useEffect(() => {
     //     // console.log("GeoCanvas");
