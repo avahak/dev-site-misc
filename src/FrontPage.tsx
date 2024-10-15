@@ -26,6 +26,10 @@ const FrontPage = () => {
                     Geo
                 </MUILink>
                 <br />
+                <MUILink component={RouterLink} to="/fractals" variant="body1" color="primary">
+                    Fractals
+                </MUILink>
+                <br />
                 <MUILink component={RouterLink} to="/template_class" variant="body1" color="primary">
                     Template for Three.js (class)
                 </MUILink>

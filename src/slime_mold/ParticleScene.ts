@@ -80,7 +80,6 @@ class ParticleScene {
     }
 
     step(renderer: THREE.WebGLRenderer) {
-        // Take texture from fbo2 and write into fbo.
         const [i0, i1] = [this.currentFboIndex, (this.currentFboIndex+1)%2];
 
         this.shaderMaterial.uniforms.uPosition.value = this.fbos[i0].texture;

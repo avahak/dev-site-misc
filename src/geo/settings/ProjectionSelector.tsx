@@ -1,5 +1,5 @@
 import { FormControl, InputLabel, MenuItem, Select, SelectChangeEvent } from "@mui/material";
-import { ProjectionType } from "./geoTypes";
+import { ProjectionType } from "../geoTypes";
 
 const ProjectionSelector: React.FC<{ projectionType: ProjectionType, setProjectionType: (projectionType: ProjectionType) => void }> = ({ projectionType, setProjectionType }) => {
     const onChange = (event: SelectChangeEvent) => {

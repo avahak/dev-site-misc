@@ -6,8 +6,8 @@
 
 import * as d3 from "d3";
 import { useEffect, useRef } from "react";
-import { ProjectionType } from "./ProjectionSelector";
 import { clamp } from "../tools";
+import { ProjectionType } from "./geoTypes";
 
 interface MouseState {
     isPressed: boolean;

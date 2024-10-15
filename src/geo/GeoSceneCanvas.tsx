@@ -8,9 +8,7 @@ import { Box } from "@mui/material";
 import { useEffect, useState } from "react";
 import { GeoCanvas } from "./GeoCanvas";
 import { useDebounce } from "../tools";
-import { ProjectionType } from "./ProjectionSelector";
-import { CountryCard } from "./CountryCard";
-import { CountryInfo } from "./geoTypes";
+import { CountryInfo, ProjectionType } from "./geoTypes";
 
 const GeoScene: React.FC<{ projectionType: ProjectionType, setCountryInfo: (country: CountryInfo|null) => void }> = ({ projectionType, setCountryInfo }) => {
     const [geoJson, setGeoJson] = useState<any>(null);
