@@ -1,29 +1,38 @@
 import * as THREE from 'three';
-import vsMandelFbo from './shaders/vsMandelFbo.glsl?raw';
-import fsMandelFbo from './shaders/fsMandelFbo.glsl?raw';
+import vsMandelbrot from './shaders/vsMandelbrot.glsl?raw';
+import fsMandelbrot from './shaders/fsMandelbrot.glsl?raw';
+import vsAccumulator from './shaders/vsAccumulator.glsl?raw';
+import fsAccumulator from './shaders/fsAccumulator.glsl?raw';
+import { WorkOrder, WorkProgress } from './types';
 
 class MandelbrotScene {
     container: HTMLDivElement;
-    scene: THREE.Scene;
-    camera: THREE.Camera;
+    camera!: THREE.Camera;
 
-    fbos: THREE.WebGLRenderTarget[] = [];
-    currentFboIndex: number = 0;    // latest computed fbo index
+    fbosMandelbrot: THREE.WebGLRenderTarget[] = [];
+    fbosAccumulator: THREE.WebGLRenderTarget[] = [];
+    currentFboIndexMandelbrot: number = 0;    // latest computed fbo index
+    currentFboIndexAccumulator: number = 0;    // latest computed fbo index
     disposeFbos: () => void;
 
-    shader: THREE.ShaderMaterial|null = null;
+    sceneMandelbrot!: THREE.Scene;
+    sceneAccumulator!: THREE.Scene;
+    shaderMandelbrot!: THREE.ShaderMaterial;
+    shaderAccumulator!: THREE.ShaderMaterial;
 
-    zoomCenter: [number, number] = [-0.747088, 0.1];
-    zoomScale: number = 0.005;
-// TODO FIX ANTIALIASING WITH SOMETHING OTHER THAN 4*! HOW?
+    workProgress: WorkProgress|null = null;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
 
-        this.scene = this.setupScene();
-        this.camera = this.setupCamera();
+        this.setupMandelbrotScene();
+        this.setupAccumulatorScene();
+        this.setupCamera();
         
-        this.disposeFbos = () => this.fbos.forEach((fbo) => fbo.dispose());
+        this.disposeFbos = () => {
+            this.fbosMandelbrot.forEach((fbo) => fbo.dispose());
+            this.fbosAccumulator.forEach((fbo) => fbo.dispose());
+        };
 
         this.resize();
     }
@@ -39,20 +48,24 @@ class MandelbrotScene {
             this.camera.updateProjectionMatrix();
         }
         this.setupFbos();
-        this.shader!.uniforms.resolution.value = this.getResolution();
-        this.setViewBox(this.zoomCenter, this.zoomScale);
+        this.shaderMandelbrot.uniforms.resolution.value = this.getResolution();
+        this.shaderAccumulator.uniforms.resolution.value = this.getResolution();
+        this.setViewBoxUniforms();
     }
 
     setupFbos() {
         this.disposeFbos();
-        this.currentFboIndex = 0;
+        this.currentFboIndexMandelbrot = 0;
+        this.currentFboIndexAccumulator = 0;
         for (let k = 0; k < 2; k++)
-            this.fbos.push(this.createRenderTarget());
+            this.fbosMandelbrot.push(this.createRenderTarget());
+        for (let k = 0; k < 2; k++)
+            this.fbosAccumulator.push(this.createRenderTarget());
     }
 
     createRenderTarget() {
         const { clientWidth, clientHeight } = this.container;
-        const renderTarget = new THREE.WebGLRenderTarget(4*clientWidth, 4*clientHeight, {
+        const renderTarget = new THREE.WebGLRenderTarget(clientWidth, clientHeight, {
             minFilter: THREE.NearestFilter,
             magFilter: THREE.NearestFilter,
             wrapS: THREE.RepeatWrapping,
@@ -63,34 +76,47 @@ class MandelbrotScene {
         return renderTarget;
     }
 
-    setupScene() {
-        const scene = new THREE.Scene();
+    setupMandelbrotScene() {
+        this.sceneMandelbrot = new THREE.Scene();
 
-        this.shader = new THREE.ShaderMaterial({
+        this.shaderMandelbrot = new THREE.ShaderMaterial({
             uniforms: {
                 box: { value: null },
+                subpixelOffset: { value: null },
                 mandelMap: { value: null },         // texture for iteration state
                 resolution: { value: null },
                 restart: { value: 1 },
-                time: { value: 0 }
             },
-            vertexShader: vsMandelFbo,
-            fragmentShader: fsMandelFbo,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
+            vertexShader: vsMandelbrot,
+            fragmentShader: fsMandelbrot,
         });
         const geometry = new THREE.PlaneGeometry(2, 2);
-        const mesh = new THREE.Mesh(geometry, this.shader);
-        scene.add(mesh);
+        const mesh = new THREE.Mesh(geometry, this.shaderMandelbrot);
+        this.sceneMandelbrot.add(mesh);
+    }
 
-        return scene;
+    setupAccumulatorScene() {
+        this.sceneAccumulator = new THREE.Scene();
+
+        this.shaderAccumulator = new THREE.ShaderMaterial({
+            uniforms: {
+                mandelMap: { value: null },
+                accumulatorMap: { value: null },
+                resolution: { value: null },
+                restart: { value: 1 },
+            },
+            vertexShader: vsAccumulator,
+            fragmentShader: fsAccumulator,
+        });
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        const mesh = new THREE.Mesh(geometry, this.shaderAccumulator);
+        this.sceneAccumulator.add(mesh);
     }
 
     setupCamera() {
-        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
-        camera.position.set(0, 0, 1);
-        camera.lookAt(0, 0, 0);
-        return camera;
+        this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
+        this.camera.position.set(0, 0, 1);
+        this.camera.lookAt(0, 0, 0);
     }
 
     getResolution() {
@@ -98,34 +124,93 @@ class MandelbrotScene {
         return new THREE.Vector2(clientWidth, clientHeight);
     }
 
-    setViewBox(zoomCenter: [number, number], zoomScale: number) {
-        this.zoomCenter = [...zoomCenter];
-        this.zoomScale = zoomScale;
+    private setViewBoxUniforms() {
+        if (!this.workProgress)
+            return;
 
         const { clientWidth, clientHeight } = this.container;
         const aspect = clientWidth/clientHeight;
 
-        this.shader!.uniforms.box.value = [
-            zoomCenter[0]-aspect*zoomScale, 
-            zoomCenter[1]-zoomScale,
-            zoomCenter[0]+aspect*zoomScale, 
-            zoomCenter[1]+zoomScale];
-
-        this.shader!.uniforms.restart.value = 1;
+        this.shaderMandelbrot.uniforms.box.value = [
+            this.workProgress.zoomCenter[0]-aspect*this.workProgress.zoomScale, 
+            this.workProgress.zoomCenter[1]-this.workProgress.zoomScale,
+            this.workProgress.zoomCenter[0]+aspect*this.workProgress.zoomScale, 
+            this.workProgress.zoomCenter[1]+this.workProgress.zoomScale];
     }
 
-    animateStep(renderer: THREE.WebGLRenderer, currentTime: number) {
-        const [i0, i1] = [this.currentFboIndex, (this.currentFboIndex+1)%2];
+    assignWork(workOrder: WorkOrder) {
+        this.workProgress = { 
+            ...workOrder, 
+            currentIteration: 0, 
+            currentSample: 0, 
+            isComplete: false 
+        };
+        this.setViewBoxUniforms();
+    }
 
-        this.shader!.uniforms.mandelMap.value = this.fbos[i0].texture;
+    getCurrentMandelbrotFboTexture() {
+        return this.fbosMandelbrot[this.currentFboIndexMandelbrot].texture;
+    }
 
-        renderer.setRenderTarget(this.fbos[i1]);
-        renderer.render(this.scene, this.camera);
+    getCurrentAccumulatorFboTexture() {
+        return this.fbosAccumulator[this.currentFboIndexAccumulator].texture;
+    }
+
+    getSubpixelOffset(sample: number, samplesPerAxis: number): [number, number] {
+        const x = (sample%samplesPerAxis) / samplesPerAxis;
+        const y = Math.floor(sample/samplesPerAxis) / samplesPerAxis;
+        return [x+0.5/samplesPerAxis, y+0.5/samplesPerAxis];
+    }
+
+    iterateMandelbrot(renderer: THREE.WebGLRenderer, restart: boolean, subpixelOffset: [number, number]) {
+        const [i0, i1] = [this.currentFboIndexMandelbrot, (this.currentFboIndexMandelbrot+1)%2];
+
+        this.shaderMandelbrot.uniforms.mandelMap.value = this.fbosMandelbrot[i0].texture;
+        this.shaderMandelbrot.uniforms.subpixelOffset.value = subpixelOffset;
+        this.shaderMandelbrot.uniforms.restart.value = restart ? 1 : 0;
+
+        renderer.setRenderTarget(this.fbosMandelbrot[i1]);
+        renderer.render(this.sceneMandelbrot, this.camera);
         renderer.setRenderTarget(null);
 
-        this.currentFboIndex = i1;
+        this.currentFboIndexMandelbrot = i1;
+    }
 
-        this.shader!.uniforms.restart.value = 0;
+    accumulateSample(renderer: THREE.WebGLRenderer, restart: boolean) {
+        const [i0, i1] = [this.currentFboIndexAccumulator, (this.currentFboIndexAccumulator+1)%2];
+
+        this.shaderAccumulator.uniforms.mandelMap.value = this.getCurrentMandelbrotFboTexture();
+        this.shaderAccumulator.uniforms.accumulatorMap.value = this.fbosAccumulator[i0].texture;
+        this.shaderAccumulator.uniforms.restart.value = restart ? 1 : 0;
+
+        renderer.setRenderTarget(this.fbosAccumulator[i1]);
+        renderer.render(this.sceneAccumulator, this.camera);
+        renderer.setRenderTarget(null);
+
+        this.currentFboIndexAccumulator = i1;
+    }
+
+    /**
+     * Returns true when work finishes.
+     */
+    step(renderer: THREE.WebGLRenderer): boolean {
+        if (!this.workProgress || this.workProgress.isComplete)
+            return false;
+
+        const offset = this.getSubpixelOffset(this.workProgress.currentSample, this.workProgress.samplesPerAxis);
+        this.iterateMandelbrot(renderer, this.workProgress.currentIteration === 0, offset);
+        this.workProgress.currentIteration++;
+
+        if (this.workProgress.currentIteration >= this.workProgress.iterations) {
+            this.accumulateSample(renderer, this.workProgress.currentSample === 0);
+            this.workProgress.currentIteration = 0;
+            this.workProgress.currentSample++;
+        }
+        if (this.workProgress.currentSample >= this.workProgress.samplesPerAxis*this.workProgress.samplesPerAxis) {
+            this.workProgress.isComplete = true;
+            return true;
+        }
+        return false;
     }
 }
 

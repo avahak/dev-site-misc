@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import vsString from './shaders/particleVertex.glsl?raw';
 import fsString from './shaders/particleFragment.glsl?raw';
 import { PARTICLE_TEXTURE_SIZE } from './config';
-import { BaseScene } from './BaseScene';
+import { BaseScene } from './baseScene';
 
 class ParticleScene {
     baseScene: BaseScene;

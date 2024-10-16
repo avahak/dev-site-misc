@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { ScreenScene } from './ScreenScene';
+import { ScreenScene } from './screenScene';
+import { PointerControls } from './pointerControls';
 
 const SceneComponent: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -7,8 +8,10 @@ const SceneComponent: React.FC = () => {
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
         const scene = new ScreenScene(containerRef.current!);
+        const controls = new PointerControls(containerRef.current!, scene);
         return () => {
             scene.cleanUp();
+            controls.cleanup();
         };
     }, []);
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { ParticleScene } from './ParticleScene';
+import { ParticleScene } from './particleScene';
 import vsString from './shaders/vertex.glsl?raw';
 import fsString from './shaders/fragment.glsl?raw';
 import { NUM_OBJECTS, PARTICLE_TEXTURE_SIZE } from './config';

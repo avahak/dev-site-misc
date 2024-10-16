@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ParticleScene } from './ParticleScene';
+import { ParticleScene } from './particleScene';
 import vsStringPoints from './shaders/pointsVertex.glsl?raw';
 import fsStringPoints from './shaders/pointsFragment.glsl?raw';
 import vsStringTrail from './shaders/trailVertex.glsl?raw';
