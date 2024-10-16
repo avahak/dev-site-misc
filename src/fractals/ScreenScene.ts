@@ -4,6 +4,11 @@ import fsScreen from './shaders/fsScreen.glsl?raw';
 import { MandelbrotScene } from './mandelbrotScene';
 import { WorkOrder } from './types';
 
+/**
+ * Minimum scale beyond which we run into precision issues with GLSL.
+ */
+const MIN_SCALE = 0.00005;
+
 class ScreenScene {
     container: HTMLDivElement;
     scene: THREE.Scene;
@@ -160,7 +165,8 @@ class ScreenScene {
         const res = this.getResolution();
         const aspect = res.x / res.y;
         this.zoomCenter = [this.zoomCenter[0]-this.zoomScale*2.0*aspect*dx/res.x, this.zoomCenter[1]+this.zoomScale*2.0*dy/res.y];
-        this.zoomScale = this.zoomScale*scale;
+        this.zoomScale = Math.max(this.zoomScale*scale, MIN_SCALE);
+        console.log(this.zoomScale);
         this.resetMandelbrotStage();
     }
 
