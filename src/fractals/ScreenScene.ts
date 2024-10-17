@@ -164,20 +164,20 @@ class ScreenScene {
             zoomCenter: this.zoomCenter, 
             zoomScale: this.zoomScale, 
             iterations: [1, 32][this.mandelbrotStage], 
-            samplesPerAxis: [1, 7][this.mandelbrotStage], 
+            samplesPerAxis: [1, 5][this.mandelbrotStage], 
         };
         this.mandelbrotScene.assignWork(workOrder);
         this.mandelbrotStage++;
     }
 
     progressJuliaStage() {
-        if (this.juliaStage >= 4)
+        if (this.juliaStage >= 2)
             return;
         const workOrder: JuliaWorkOrder = { 
             c: this.z0,
             zoomScale: this.zoomScale, 
-            iterations: [1, 16][this.juliaStage], 
-            samplesPerAxis: [1, 7][this.juliaStage], 
+            iterations: [1, 32][this.juliaStage], 
+            samplesPerAxis: [1, 5][this.juliaStage], 
         };
         this.juliaScene.assignWork(workOrder);
         this.juliaStage++;

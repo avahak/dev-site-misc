@@ -17,6 +17,8 @@ class PointerControls {
         this.container = container;
         this.handler = handler;
 
+        this.container.style.touchAction = 'none';
+
         this.container.addEventListener('pointerdown', this.onPointerDown);
         window.addEventListener('pointermove', this.onPointerMove);
         this.container.addEventListener('pointerup', this.onPointerUp);

@@ -17,10 +17,10 @@ vec4 getColor(vec2 uv) {
     float rz2 = z.x*z.x + z.y*z.y;
     float rw2 = w.x*w.x + w.y*w.y;
 
-    if (rz2 < 100.0)
+    if (rz2 < 1.0e3)
         return vec4(0.0, 0.0, 1.0, 1.0);        // 0
-    if (rw2 > 1.0e24)
-        return vec4(0.0, 0.0, 1.0, 1.0);        // -1
+    if (rw2 > 1.0e20)
+        return vec4(1.0, 0.0, 1.0, 1.0);        // -1
 
     float d = sqrt(rz2/rw2)*log(rz2);
 

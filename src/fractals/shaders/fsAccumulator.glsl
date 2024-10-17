@@ -27,22 +27,8 @@ vec4 getColor(vec2 uv) {
     if (r2 < 4.0)
         return vec4(0.0, 0.0, 0.0, 1.0);
 
-    return vec4(hsv2rgb(vec3(fract(log(1.0+iter)), 1.0, 1.0)), 1.0);
+    return vec4(hsv2rgb(vec3(fract(0.5*log(1.0+iter)), 0.9, 0.7)), 1.0);
 }
-
-// void main() {
-//     vec4 color = vec4(0.0);
-//     for (int k1 = 0; k1 < 4; k1++)
-//         for (int k2 = 0; k2 < 4; k2++)
-//             color = color + getColor(vUv+vec2(float(k1)/4.0, float(k2)/4.0)/resolution)/16.0;
-
-//     float aspect = resolution.x / resolution.y;
-//     float t = length((vUv-vec2(0.5))*vec2(aspect, 1.0));
-//     if (t < 0.05 && t > 0.048)
-//         color = vec4(1.0, 1.0, 1.0, 1.0);
-
-//     gl_FragColor = color;
-// }
 
 void main() {
     vec4 accOld = restart == 1 ? vec4(0.0) : texture2D(accumulatorMap, vUv);
