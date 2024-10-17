@@ -1,8 +1,9 @@
-interface PointerInputHandler {
-    pointerInput: (dx: number, dy: number, scale: number, angle: number) => void;
+interface PointerHandler {
+    pointerInput?: (dx: number, dy: number, scale: number, angle: number) => void;
+    pointerMove?: (x: number, y: number, left: number, top: number, isInside: boolean) => void;
 };
 
-type WorkOrder = {
+type MandelbrotWorkOrder = {
     zoomCenter: [number, number];
     zoomScale: number;
 
@@ -10,10 +11,22 @@ type WorkOrder = {
     iterations: number;
 };
 
-type WorkProgress = WorkOrder & {
+type JuliaWorkOrder = {
+    c: [number, number];
+    zoomScale: number;
+
+    samplesPerAxis: number;
+    iterations: number;
+};
+
+type Progress = {
     currentIteration: number;
     currentSample: number;      // goes to samplesPerAxis^2
     isComplete: boolean;
 };
 
-export type { PointerInputHandler, WorkOrder, WorkProgress };
+type MandelbrotWorkProgress = MandelbrotWorkOrder & Progress;
+type JuliaWorkProgress = JuliaWorkOrder & Progress;
+
+export type { PointerHandler, MandelbrotWorkOrder, JuliaWorkOrder, 
+    MandelbrotWorkProgress, JuliaWorkProgress };

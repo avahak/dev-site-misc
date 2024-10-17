@@ -2,23 +2,23 @@
  * NOTE! Mostly ChatGPT code, not tested
  */
 
-import { PointerInputHandler } from "./types";
+import { PointerHandler } from "./types";
 
 class PointerControls {
     private container: HTMLElement;
-    private handler: PointerInputHandler;
+    private handler: PointerHandler;
 
     private pointers: Map<number, { x: number, y: number }> = new Map();
     private initialDistance: number | null = null;
     private initialAngle: number | null = null;
     private lastMidpoint: { x: number, y: number } | null = null;
 
-    constructor(container: HTMLElement, handler: PointerInputHandler) {
+    constructor(container: HTMLElement, handler: PointerHandler) {
         this.container = container;
         this.handler = handler;
 
         this.container.addEventListener('pointerdown', this.onPointerDown);
-        this.container.addEventListener('pointermove', this.onPointerMove);
+        window.addEventListener('pointermove', this.onPointerMove);
         this.container.addEventListener('pointerup', this.onPointerUp);
         this.container.addEventListener('pointercancel', this.onPointerUp);
 
@@ -38,6 +38,12 @@ class PointerControls {
     };
 
     private onPointerMove = (event: PointerEvent) => {
+        if (this.handler.pointerMove) {
+            const rect = this.container.getBoundingClientRect();
+            const inside = event.clientX >= rect.left && event.clientY >= rect.top && event.clientX <= rect.right && event.clientY <= rect.bottom;
+            this.handler.pointerMove(event.clientX-rect.left, event.clientY-rect.top, rect.left, rect.top, inside);
+        }
+
         if (!this.pointers.has(event.pointerId)) 
             return;
 
@@ -47,7 +53,8 @@ class PointerControls {
             const dx = event.clientX - pointer.x;
             const dy = event.clientY - pointer.y;
 
-            this.handler.pointerInput(dx, dy, 1, 0);
+            if (this.handler.pointerInput)
+                this.handler.pointerInput(dx, dy, 1, 0);
         } else if (this.pointers.size === 2) {
             // Two pointer move -> Zoom, Rotate, Translate
             const [p1, p2] = Array.from(this.pointers.values());
@@ -61,7 +68,8 @@ class PointerControls {
                 const dx = newMidpoint.x - this.lastMidpoint.x;
                 const dy = newMidpoint.y - this.lastMidpoint.y;
 
-                this.handler.pointerInput(dx, dy, scale, angle);
+                if (this.handler.pointerInput)
+                    this.handler.pointerInput(dx, dy, scale, angle);
                 this.lastMidpoint = newMidpoint;
             }
         }
@@ -84,7 +92,8 @@ class PointerControls {
 
         const scale = event.deltaY < 0 ? 1.0/1.2 : 1.2;
 
-        this.handler.pointerInput(0, 0, scale, 0);
+        if (this.handler.pointerInput)
+            this.handler.pointerInput(0, 0, scale, 0);
     };
 
     private getDistance(p1: { x: number, y: number }, p2: { x: number, y: number }): number {
@@ -106,7 +115,7 @@ class PointerControls {
 
     public cleanup() {
         this.container.removeEventListener('pointerdown', this.onPointerDown);
-        this.container.removeEventListener('pointermove', this.onPointerMove);
+        window.removeEventListener('pointermove', this.onPointerMove);
         this.container.removeEventListener('pointerup', this.onPointerUp);
         this.container.removeEventListener('pointercancel', this.onPointerUp);
         this.container.removeEventListener('wheel', this.onWheel);

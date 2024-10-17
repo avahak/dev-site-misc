@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import vsScreen from './shaders/vsScreen.glsl?raw';
+import vsGeneric from './shaders/vsGeneric.glsl?raw';
 import fsScreen from './shaders/fsScreen.glsl?raw';
 import { MandelbrotScene } from './mandelbrotScene';
-import { WorkOrder } from './types';
+import { JuliaWorkOrder, MandelbrotWorkOrder } from './types';
+import { JuliaScene } from './juliaScene';
 
 /**
- * Minimum scale beyond which we run into precision issues with GLSL.
+ * Minimum scale beyond which we run into precision issues with GLSL highp float.
  */
 const MIN_SCALE = 0.00005;
 
@@ -22,8 +23,13 @@ class ScreenScene {
     mandelbrotScene: MandelbrotScene;
     mandelbrotStage!: number;
 
+    juliaScene: JuliaScene;
+    juliaStage!: number;
+    showJulia: boolean = false;
+
     shader: THREE.ShaderMaterial|null = null;
 
+    z0: [number, number] = [-0.5, 0.0];
     zoomCenter: [number, number] = [-0.5, 0.0];
     zoomScale: number = 1.0;
 
@@ -44,6 +50,9 @@ class ScreenScene {
         this.mandelbrotScene = new MandelbrotScene(container);
         this.resetMandelbrotStage();
 
+        this.juliaScene = new JuliaScene(container);
+        this.resetJuliaStage();
+
         this.setupResizeRenderer();
         this.resizeRenderer();
 
@@ -53,8 +62,6 @@ class ScreenScene {
         });
         this.animate = this.animate.bind(this);
         this.animate();
-
-        this.handleInputs();
     }
 
     resizeRenderer() {
@@ -85,10 +92,6 @@ class ScreenScene {
         this.resizeRenderer();
     }
 
-    handleInputs() {
-        // clicks etc.
-    }
-
     cleanUp() {
         this.container.removeChild(this.renderer.domElement);
         for (const task of this.cleanUpTasks)
@@ -101,11 +104,13 @@ class ScreenScene {
 
         this.shader = new THREE.ShaderMaterial({
             uniforms: {
-                accumulatorMap: { value: null },
+                accumulatorMap1: { value: null },
+                accumulatorMap2: { value: null },
                 resolution: { value: null },
+                showJulia: { value: 0 },
                 time: { value: 0 }
             },
-            vertexShader: vsScreen,
+            vertexShader: vsGeneric,
             fragmentShader: fsScreen,
         });
         const geometry = new THREE.PlaneGeometry(2, 2);
@@ -147,17 +152,35 @@ class ScreenScene {
         this.progressMandelbrotStage();
     }
 
+    resetJuliaStage() {
+        this.juliaStage = 0;
+        this.progressJuliaStage();
+    }
+
     progressMandelbrotStage() {
-        if (this.mandelbrotStage >= 5)
+        if (this.mandelbrotStage >= 2)
             return;
-        const workOrder: WorkOrder = { 
+        const workOrder: MandelbrotWorkOrder = { 
             zoomCenter: this.zoomCenter, 
             zoomScale: this.zoomScale, 
-            iterations: [5, 20, 30, 50, 50][this.mandelbrotStage], 
-            samplesPerAxis: [1, 1, 2, 4, 10][this.mandelbrotStage], 
+            iterations: [1, 32][this.mandelbrotStage], 
+            samplesPerAxis: [1, 7][this.mandelbrotStage], 
         };
         this.mandelbrotScene.assignWork(workOrder);
         this.mandelbrotStage++;
+    }
+
+    progressJuliaStage() {
+        if (this.juliaStage >= 4)
+            return;
+        const workOrder: JuliaWorkOrder = { 
+            c: this.z0,
+            zoomScale: this.zoomScale, 
+            iterations: [1, 16][this.juliaStage], 
+            samplesPerAxis: [1, 7][this.juliaStage], 
+        };
+        this.juliaScene.assignWork(workOrder);
+        this.juliaStage++;
     }
 
     pointerInput(dx: number, dy: number, scale: number, angle: number) {
@@ -166,8 +189,18 @@ class ScreenScene {
         const aspect = res.x / res.y;
         this.zoomCenter = [this.zoomCenter[0]-this.zoomScale*2.0*aspect*dx/res.x, this.zoomCenter[1]+this.zoomScale*2.0*dy/res.y];
         this.zoomScale = Math.max(this.zoomScale*scale, MIN_SCALE);
-        console.log(this.zoomScale);
         this.resetMandelbrotStage();
+    }
+
+    pointerMove(x: number, y: number, left: number, top: number, isInside: boolean) {
+        this.showJulia = isInside;
+        if (!isInside)
+            return;
+        const res = this.getResolution();
+        const aspect = res.x / res.y;
+        const w = [aspect*(x/res.x-0.5), y/res.y-0.5];
+        this.z0 = [this.zoomCenter[0]+2.0*this.zoomScale*w[0], this.zoomCenter[1]-2.0*this.zoomScale*w[1]];
+        this.resetJuliaStage();
     }
 
     animate() {
@@ -179,10 +212,10 @@ class ScreenScene {
         const currentTime = (this.lastTime ?? 0.0) + (isStopped ? 0.0 : 0.01);
         this.lastTime = currentTime;
 
-        const isDone = this.mandelbrotScene.step(this.renderer);
-        if (isDone) {
-            this.shader!.uniforms.accumulatorMap.value = this.mandelbrotScene.getCurrentAccumulatorFboTexture();
-            this.renderer.render(this.scene, this.camera);
+        const isMandelbrotDone = this.mandelbrotScene.step(this.renderer);
+        if (isMandelbrotDone) {
+            // this.shader!.uniforms.accumulatorMap.value = this.mandelbrotScene.getCurrentAccumulatorFboTexture();
+            // this.renderer.render(this.scene, this.camera);
 
             // console.log(`Stage ${this.mandelbrotStage} done`);
             // if (this.mandelbrotStage > 0)
@@ -190,6 +223,18 @@ class ScreenScene {
 
             this.progressMandelbrotStage();
         }
+
+        const isJuliaDone = this.juliaScene.step(this.renderer);
+        if (isJuliaDone) {
+            // this.shader!.uniforms.accumulatorMap.value = this.juliaScene.getCurrentAccumulatorFboTexture();
+            // this.renderer.render(this.scene, this.camera);
+            this.progressJuliaStage();
+        }
+
+        this.shader!.uniforms.accumulatorMap1.value = this.mandelbrotScene.getCurrentAccumulatorFboTexture();
+        this.shader!.uniforms.accumulatorMap2.value = this.juliaScene.getCurrentAccumulatorFboTexture();
+        this.shader!.uniforms.showJulia.value = this.showJulia ? 1 : 0;
+        this.renderer.render(this.scene, this.camera);
     }
 }
 

@@ -11,20 +11,27 @@ varying vec2 vUv;
 #define PI 3.14159265359
 
 void main() {
-    vec4 tex = (restart == 1) ? vec4(0.0, 0.0, 0.0, 1.0) : texture2D(mandelMap, vUv);
+    vec4 tex = (restart == 1) ? vec4(0.0, 0.0, 0.0, 0.0) : texture2D(mandelMap, vUv);
 
     vec2 cSubpixelOffset = subpixelOffset / resolution * vec2(box.z-box.x, box.w-box.y);
     vec2 c = vec2(mix(box.x, box.z, vUv.x), mix(box.y, box.w, vUv.y)) + cSubpixelOffset;
     vec2 z = tex.xy;
-    float iter = tex.z;
+    vec2 w = tex.zw;
 
     int k;
-    for (k = 0; (k < 1000) && (z.x*z.x + z.y*z.y < 100.0); k++) {
-        float temp = 2.0*z.x*z.y + c.y;
+    float temp;
+    for (k = 0; (k < 100) && (z.x*z.x + z.y*z.y < 100.0); k++) {
+
+        if (w.x*w.x + w.y*w.y < 1.0e24) {
+            temp = 2.0*z.x*w.y + 2.0*z.y*w.x;
+            w.x = 2.0*z.x*w.x - 2.0*z.y*w.y + 1.0;
+            w.y = temp;
+        }
+
+        temp = 2.0*z.x*z.y + c.y;
         z.x = z.x*z.x - z.y*z.y + c.x;
         z.y = temp;
     }
-    iter = iter + float(k);
 
-    gl_FragColor = vec4(z, iter, 1.0);
+    gl_FragColor = vec4(z, w);
 }
