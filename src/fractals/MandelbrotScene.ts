@@ -41,11 +41,12 @@ class MandelbrotScene {
     resize() {
         const { clientWidth, clientHeight } = this.container;
         const aspect = clientWidth / clientHeight;
+        const [dx, dy] = [aspect > 1.0 ? aspect : 1.0, aspect > 1.0 ? 1.0 : 1.0/aspect];
         if (this.camera instanceof THREE.OrthographicCamera) {
-            this.camera.top = 1;
-            this.camera.bottom = -1;
-            this.camera.left = -aspect;
-            this.camera.right = aspect;
+            this.camera.top = dy;
+            this.camera.bottom = -dy;
+            this.camera.left = -dx;
+            this.camera.right = dx;
             this.camera.updateProjectionMatrix();
         }
         this.setupFbos();
@@ -134,12 +135,13 @@ class MandelbrotScene {
 
         const { clientWidth, clientHeight } = this.container;
         const aspect = clientWidth/clientHeight;
+        const [dx, dy] = [aspect > 1.0 ? aspect : 1.0, aspect > 1.0 ? 1.0 : 1.0/aspect];
 
         this.shaderMandelbrot.uniforms.box.value = [
-            this.workProgress.zoomCenter[0]-aspect*this.workProgress.zoomScale, 
-            this.workProgress.zoomCenter[1]-this.workProgress.zoomScale,
-            this.workProgress.zoomCenter[0]+aspect*this.workProgress.zoomScale, 
-            this.workProgress.zoomCenter[1]+this.workProgress.zoomScale];
+            this.workProgress.zoomCenter[0]-dx*this.workProgress.zoomScale, 
+            this.workProgress.zoomCenter[1]-dy*this.workProgress.zoomScale,
+            this.workProgress.zoomCenter[0]+dx*this.workProgress.zoomScale, 
+            this.workProgress.zoomCenter[1]+dy*this.workProgress.zoomScale];
     }
 
     assignWork(workOrder: MandelbrotWorkOrder) {
