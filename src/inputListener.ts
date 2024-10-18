@@ -32,7 +32,7 @@ function isInside(rect: DOMRect, x: number, y: number): boolean {
 }
 
 /**
- * NOTE! Warning: lot of ChatGPT code here
+ * Warning: some ChatGPT code here.
  */
 class InputListener {
     private container: HTMLElement;
@@ -47,6 +47,7 @@ class InputListener {
         this.container = container;
         this.mapper = mapper;
 
+        // Needed to prevent default touch behaviors such as scrolling and zooming
         this.container.style.touchAction = 'none';
 
         this.container.addEventListener('pointerdown', this.onPointerDown);
@@ -54,12 +55,18 @@ class InputListener {
         this.container.addEventListener('pointerup', this.onPointerUp);
         this.container.addEventListener('pointercancel', this.onPointerUp);
         this.container.addEventListener('wheel', this.onWheel);
+        this.container.addEventListener('contextmenu', this.onContextmenu);
 
         document.addEventListener('keydown', this.onKeydown);
         document.addEventListener('keyup', this.onKeyup);
     }
 
+    private onContextmenu = (event: MouseEvent) => {
+        event.preventDefault();
+    };
+
     private onPointerDown = (event: PointerEvent) => {
+        event.preventDefault();
         const rect = this.container.getBoundingClientRect();
         this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
@@ -78,6 +85,7 @@ class InputListener {
     };
 
     private onPointerMove = (event: PointerEvent) => {
+        event.preventDefault();
         const rect = this.container.getBoundingClientRect();
         if (event.pointerType === 'mouse') {
             if (this.mapper.mouse?.move) {
@@ -123,6 +131,7 @@ class InputListener {
     };
 
     private onPointerUp = (event: PointerEvent) => {
+        event.preventDefault();
         const rect = this.container.getBoundingClientRect();
         this.pointers.delete(event.pointerId);
 
@@ -140,6 +149,7 @@ class InputListener {
     };
 
     private onWheel = (event: WheelEvent) => {
+        event.preventDefault();
         const rect = this.container.getBoundingClientRect();
         if (this.mapper.mouse?.wheel) {
             const delta = event.deltaY < 0 ? 1.0 / 1.2 : 1.2;
@@ -180,6 +190,7 @@ class InputListener {
         this.container.removeEventListener('pointerup', this.onPointerUp);
         this.container.removeEventListener('pointercancel', this.onPointerUp);
         this.container.removeEventListener('wheel', this.onWheel);
+        this.container.removeEventListener('contextmenu', this.onContextmenu);
 
         document.removeEventListener('keydown', this.onKeydown);
         document.removeEventListener('keyup', this.onKeyup);

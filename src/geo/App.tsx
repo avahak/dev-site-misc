@@ -2,11 +2,10 @@ import React, { Suspense, useState } from 'react';
 import { Box, Container, Typography, useMediaQuery } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
-import { ProjectionSelector } from './settings/ProjectionSelector';
 import { CountryInfo, Settings } from './geoTypes';
 import { CountryCard } from './CountryCard';
 import HandymanIcon from '@mui/icons-material/Handyman';
-import { CircularButton } from './CircularButton';
+import { CircularButton } from '../CircularButton';
 import { SettingsComponent } from './settings/SettingsComponent';
 const GeoComponent = React.lazy(() => import('./GeoSceneCanvas').then(module => ({ default: module.GeoScene })));
 

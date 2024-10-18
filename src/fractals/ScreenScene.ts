@@ -4,6 +4,7 @@ import fsScreen from './shaders/fsScreen.glsl?raw';
 import { MandelbrotScene } from './mandelbrotScene';
 import { JuliaWorkOrder, MandelbrotWorkOrder } from './types';
 import { JuliaScene } from './juliaScene';
+import { drawAxis } from './axis';
 
 /**
  * Minimum scale beyond which we run into precision issues with GLSL highp float.
@@ -35,12 +36,24 @@ class ScreenScene {
     zoomCenter: [number, number] = [-0.5, 0.0];
     zoomScale: number = 1.0;
 
+    overlayCanvas: HTMLCanvasElement;
+
     constructor(container: HTMLDivElement) {
         this.container = container;
         this.cleanUpTasks = [];
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         this.renderer.setClearColor(0x000000, 0);
         container.appendChild(this.renderer.domElement);
+
+        // Create the canvas overlay
+        this.overlayCanvas = document.createElement('canvas');
+        this.overlayCanvas.style.position = 'absolute';
+        this.overlayCanvas.style.top = '0';
+        this.overlayCanvas.style.left = '0';
+        this.overlayCanvas.style.width = '100%';
+        this.overlayCanvas.style.height = '100%';
+        this.overlayCanvas.style.pointerEvents = 'none';
+        container.appendChild(this.overlayCanvas);
 
         // TODO remove?
         const gl = this.renderer.getContext();
@@ -69,6 +82,8 @@ class ScreenScene {
     resizeRenderer() {
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         const { clientWidth, clientHeight } = this.container;
+        this.overlayCanvas.width = clientWidth;
+        this.overlayCanvas.height = clientHeight;
         this.renderer.setSize(clientWidth, clientHeight);
         console.log(`Resize! (${clientWidth}, ${clientHeight})`);
         const aspect = clientWidth / clientHeight;
@@ -83,6 +98,8 @@ class ScreenScene {
         this.shader!.uniforms.resolution.value = this.getResolution();
         this.mandelbrotScene?.resize();
         this.resetMandelbrotStage();
+        this.juliaScene?.resize();
+        this.resetJuliaStage();
     }
 
     setupResizeRenderer() {
@@ -232,6 +249,12 @@ class ScreenScene {
         this.shader!.uniforms.showJulia.value = this.showJulia ? 1 : 0;
         this.shader!.uniforms.showMandelbrot.value = this.showMandelbrot ? 1 : 0;
         this.renderer.render(this.scene, this.camera);
+
+        const context = this.overlayCanvas.getContext('2d');
+        if (context) {
+            const res = this.getResolution();
+            drawAxis(context, res.x, res.y);
+        }
     }
 }
 

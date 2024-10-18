@@ -1,8 +1,8 @@
 import React from 'react';
-import { Button } from '@mui/material';
+import { Button, Typography } from '@mui/material';
 import { SvgIconComponent } from '@mui/icons-material';
 
-const CircularButton: React.FC<{ Icon: SvgIconComponent, onClick: () => void, ariaLabel?: string }> = ({ Icon, onClick, ariaLabel }) => {
+const CircularButton: React.FC<{ Icon: SvgIconComponent|string, onClick: () => void, ariaLabel?: string }> = ({ Icon, onClick, ariaLabel }) => {
     return (
         <Button
             onClick={onClick}
@@ -20,12 +20,17 @@ const CircularButton: React.FC<{ Icon: SvgIconComponent, onClick: () => void, ar
                 },
             }}
         >
+            {typeof(Icon) === "string" ? 
+            <Typography fontSize={45} color="#fff">
+                {Icon}
+            </Typography> 
+            :
             <Icon
                 sx={{
                     color: '#fff', // Icon color
                     fontSize: 45,  // Icon size
                 }} 
-            />
+            />}
         </Button>
     );
 };
