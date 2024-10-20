@@ -56,8 +56,7 @@ function drawAxis(params: AxisParams) {
     else
         params.context.fillRect(offBase-1, 0, 2, params.height);
     for (let k = kMin; k <= kMax; k++) {
-        let t = k*interval;
-        t = Math.round(t*1e12)/1e12;
+        let t = roundNumber(k*interval);
 
         let pos = getPos(t);
 
@@ -74,8 +73,7 @@ function drawAxis(params: AxisParams) {
             params.context.fillText(`${t}`, offBase-15, pos);
 
         for (let k2 = 1; k2 < ticks; k2++) {
-            let t2 = (k+k2/ticks)*interval;
-            t2 = Math.round(t2*1e12)/1e12;
+            let t2 = roundNumber((k+k2/ticks)*interval);
             const pos2 = getPos(t2);
             params.context.shadowColor = 'transparent';
             if (params.orientation === "horizontal")
