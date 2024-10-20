@@ -5,23 +5,6 @@ import vsString from './shaders/vertex.glsl?raw';
 import fsString from './shaders/fragment.glsl?raw';
 import { NUM_OBJECTS, PARTICLE_TEXTURE_SIZE } from './config';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-import scandinaviaJson from '../../public/geo/custom_50.geo.json?raw';
-
-console.log(scandinaviaJson);
-
-const loadData = async () => {
-    console.log("loadData()");
-    try {
-        const response = await fetch(`/dev-site-misc/geo/custom_50.geo.json`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch JSON file');
-        }
-        const data = await response.json();
-        console.log(data);
-    } catch (error) {
-        console.error('Error loading JSON:', error);
-    }
-};
 
 class BaseScene {
     container: HTMLDivElement;
@@ -39,8 +22,11 @@ class BaseScene {
     particleScene: ParticleScene;
     shaderMaterial: THREE.ShaderMaterial|null = null;
 
-    constructor(container: HTMLDivElement) {
+    scandinavia: any;
+
+    constructor(container: HTMLDivElement, scandinavia: any) {
         this.container = container;
+        this.scandinavia = scandinavia;
         this.cleanUpTasks = [];
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         this.renderer.setClearColor(0x000000, 0);
@@ -55,6 +41,8 @@ class BaseScene {
         this.particleScene = new ParticleScene(this);
 
         this.createGUI();
+
+        console.log(scandinavia);
         
         this.cleanUpTasks.push(() => { 
             if (this.animationRequestID)
