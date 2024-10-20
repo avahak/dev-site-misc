@@ -3,6 +3,8 @@ import { App as DzhanibekovApp } from './dzhanibekov/App.tsx';
 import { App as ParticlesApp } from './particles/App.tsx';
 import { App as SlimeMoldApp } from './slime_mold/App.tsx';
 import { App as GeoApp } from './geo/App.tsx';
+import { App as GeoParticlesApp } from './geo_particles/App.tsx';
+import { App as RegionJsonApp } from './region_json/App.tsx';
 import { App as FractalApp } from './fractals/App.tsx';
 import { App as ClassTemplateApp } from './template_three_class/App.tsx';
 import { App as ReactTemplateApp } from './template_three_react/App.tsx';
@@ -16,6 +18,8 @@ const AppRouter = () => {
                 <Route path="/particles" element={<ParticlesApp />} />
                 <Route path="/slime_mold" element={<SlimeMoldApp />} />
                 <Route path="/geo" element={<GeoApp />} />
+                <Route path="/geo_particles" element={<GeoParticlesApp />} />
+                <Route path="/region_json" element={<RegionJsonApp />} />
                 <Route path="/fractals" element={<FractalApp />} />
                 <Route path="/template_class" element={<ClassTemplateApp />} />
                 <Route path="/template_react" element={<ReactTemplateApp />} />

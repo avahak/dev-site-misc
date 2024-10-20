@@ -9,6 +9,9 @@ const FrontPage = () => {
             <Typography variant="h2" textAlign="center" sx={{py: 2}}>
                 In progress...
             </Typography>
+            <Typography variant="h6">
+                Pages
+            </Typography>
             <Box sx={{p: 2}}>
                 <MUILink component={RouterLink} to="/dzhanibekov" variant="body1" color="primary">
                     Dzhanibekov effect
@@ -26,8 +29,20 @@ const FrontPage = () => {
                     Geo
                 </MUILink>
                 <br />
+                <MUILink component={RouterLink} to="/geo_particles" variant="body1" color="primary">
+                    Geo Particles
+                </MUILink>
+                <br />
                 <MUILink component={RouterLink} to="/fractals" variant="body1" color="primary">
                     Fractals
+                </MUILink>
+            </Box>
+            <Typography variant="h6">
+                Helpers (ignore these)
+            </Typography>
+            <Box sx={{p: 2}}>
+                <MUILink component={RouterLink} to="/region_json" variant="body1" color="primary">
+                    Region JSON
                 </MUILink>
                 <br />
                 <MUILink component={RouterLink} to="/template_class" variant="body1" color="primary">

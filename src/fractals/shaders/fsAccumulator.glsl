@@ -21,10 +21,10 @@ vec4 getColor(vec2 uv) {
     vec2 z = tex.xy;
     float iter = tex.z;
 
-    float r2 = z.x*z.x + z.y*z.y;
-    iter = iter - log(log(r2)/log(100.0))/log(2.0);
+    float r = length(z);
+    iter = iter - log(log(r)/log(100.0))/log(2.0);
 
-    if (r2 < 4.0)
+    if (r < 2.0)
         return vec4(0.0, 0.0, 0.0, 1.0);
 
     return vec4(hsv2rgb(vec3(fract(0.5*log(1.0+iter)), 0.9, 0.7)), 1.0);
