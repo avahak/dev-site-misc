@@ -32,7 +32,7 @@ class ScreenScene {
 
     shader: THREE.ShaderMaterial|null = null;
 
-    z0: [number, number] = [-0.5, 0.0];
+    z0: [number, number] = [-0.74993, 0.02667];
     zoomCenter: [number, number] = [-0.5, 0.0];
     zoomScale: number = 1.0;
 
