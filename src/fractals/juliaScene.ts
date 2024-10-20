@@ -39,7 +39,7 @@ class JuliaScene {
     resize() {
         const { clientWidth, clientHeight } = this.container;
         const aspect = clientWidth / clientHeight;
-        const [dx, dy] = [aspect > 1.0 ? aspect : 1.0, aspect > 1.0 ? 1.0 : 1.0/aspect];
+        const [dx, dy] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5/aspect];
         if (this.camera instanceof THREE.OrthographicCamera) {
             this.camera.top = dy;
             this.camera.bottom = -dy;
@@ -131,7 +131,7 @@ class JuliaScene {
 
         const { clientWidth, clientHeight } = this.container;
         const aspect = clientWidth/clientHeight;
-        const [dx, dy] = [aspect > 1.0 ? aspect : 1.0, aspect > 1.0 ? 1.0 : 1.0/aspect];
+        const [dx, dy] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5/aspect];
 
         this.shaderJulia.uniforms.box.value = [-dx, -dy, dx, dy];
     }

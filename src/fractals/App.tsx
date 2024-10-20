@@ -10,7 +10,7 @@ const App: React.FC = () => {
     const [showJulia, setShowJulia] = useState<boolean>(true);
 
     return (
-        <Container maxWidth="xl">
+        <Container maxWidth="lg">
             <Box display="flex" justifyContent="center" sx={{py: 2}}>
                 <Typography variant="h2">
                     Mandelbrot, Julia

@@ -23,6 +23,8 @@ class MandelbrotScene {
 
     workProgress: MandelbrotWorkProgress|null = null;
 
+    box!: number[];
+
     constructor(container: HTMLDivElement) {
         this.container = container;
 
@@ -41,7 +43,7 @@ class MandelbrotScene {
     resize() {
         const { clientWidth, clientHeight } = this.container;
         const aspect = clientWidth / clientHeight;
-        const [dx, dy] = [aspect > 1.0 ? aspect : 1.0, aspect > 1.0 ? 1.0 : 1.0/aspect];
+        const [dx, dy] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5/aspect];
         if (this.camera instanceof THREE.OrthographicCamera) {
             this.camera.top = dy;
             this.camera.bottom = -dy;
@@ -135,13 +137,15 @@ class MandelbrotScene {
 
         const { clientWidth, clientHeight } = this.container;
         const aspect = clientWidth/clientHeight;
-        const [dx, dy] = [aspect > 1.0 ? aspect : 1.0, aspect > 1.0 ? 1.0 : 1.0/aspect];
+        const [dx, dy] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5/aspect];
 
-        this.shaderMandelbrot.uniforms.box.value = [
+        this.box = [
             this.workProgress.zoomCenter[0]-dx*this.workProgress.zoomScale, 
             this.workProgress.zoomCenter[1]-dy*this.workProgress.zoomScale,
             this.workProgress.zoomCenter[0]+dx*this.workProgress.zoomScale, 
-            this.workProgress.zoomCenter[1]+dy*this.workProgress.zoomScale];
+            this.workProgress.zoomCenter[1]+dy*this.workProgress.zoomScale
+        ];
+        this.shaderMandelbrot.uniforms.box.value = this.box;
     }
 
     assignWork(workOrder: MandelbrotWorkOrder) {

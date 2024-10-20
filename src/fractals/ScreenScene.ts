@@ -4,7 +4,7 @@ import fsScreen from './shaders/fsScreen.glsl?raw';
 import { MandelbrotScene } from './mandelbrotScene';
 import { JuliaWorkOrder, MandelbrotWorkOrder } from './types';
 import { JuliaScene } from './juliaScene';
-import { drawAxis } from './axis';
+import { drawAxis, roundNumber } from './axis';
 
 /**
  * Minimum scale beyond which we run into precision issues with GLSL highp float.
@@ -80,14 +80,14 @@ class ScreenScene {
     }
 
     resizeRenderer() {
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
         const { clientWidth, clientHeight } = this.container;
         this.overlayCanvas.width = clientWidth;
         this.overlayCanvas.height = clientHeight;
         this.renderer.setSize(clientWidth, clientHeight);
         console.log(`Resize! (${clientWidth}, ${clientHeight})`);
         const aspect = clientWidth / clientHeight;
-        const [dx, dy] = [aspect > 1.0 ? aspect : 1.0, aspect > 1.0 ? 1.0 : 1.0/aspect];
+        const [dx, dy] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5/aspect];
         if (this.camera instanceof THREE.OrthographicCamera) {
             this.camera.top = dy;
             this.camera.bottom = -dy;
@@ -208,7 +208,7 @@ class ScreenScene {
         // console.log(dx, dy, scale, angle);
         const res = this.getResolution();
         const aspect = res.x / res.y;
-        const [adx, ady] = [aspect > 1.0 ? aspect : 1.0, aspect > 1.0 ? 1.0 : 1.0/aspect];
+        const [adx, ady] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5/aspect];
         this.zoomCenter = [this.zoomCenter[0]-this.zoomScale*2.0*adx*dx/res.x, this.zoomCenter[1]+this.zoomScale*2.0*ady*dy/res.y];
         this.zoomScale = Math.max(this.zoomScale*scale, MIN_SCALE);
         this.resetMandelbrotStage();
@@ -217,8 +217,8 @@ class ScreenScene {
     pointerMove(x: number, y: number) {
         const res = this.getResolution();
         const aspect = res.x / res.y;
-        const [adx, ady] = [aspect > 1.0 ? aspect : 1.0, aspect > 1.0 ? 1.0 : 1.0/aspect];
-        const w = [adx*(x/res.x-0.5), ady*y/res.y-0.5];
+        const [adx, ady] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5/aspect];
+        const w = [adx*(x/res.x-0.5), ady*(y/res.y-0.5)];
         this.z0 = [this.zoomCenter[0]+2.0*this.zoomScale*w[0], this.zoomCenter[1]-2.0*this.zoomScale*w[1]];
         this.resetJuliaStage();
     }
@@ -253,7 +253,35 @@ class ScreenScene {
         const context = this.overlayCanvas.getContext('2d');
         if (context) {
             const res = this.getResolution();
-            drawAxis(context, res.x, res.y);
+            context.clearRect(0, 0, res.x, res.y);
+            if (this.showMandelbrot) {
+                drawAxis({ 
+                    context, 
+                    width: res.x, 
+                    height: res.y, 
+                    tMin: this.mandelbrotScene.box[0],
+                    tMax: this.mandelbrotScene.box[2],
+                    orientation: "horizontal",
+                    color: this.showJulia ? "rgba(100, 100, 100, 1.0)" : "white",
+                });
+                drawAxis({ 
+                    context, 
+                    width: res.x, 
+                    height: res.y, 
+                    tMin: this.mandelbrotScene.box[1],
+                    tMax: this.mandelbrotScene.box[3],
+                    orientation: "vertical",
+                    color: this.showJulia ? "rgba(100, 100, 100, 1.0)" : "white",
+                });
+            }
+            if (this.showJulia) {
+                context.strokeStyle = 'white';
+                context.fillStyle = 'white';
+                context.font = '12px Arial';
+                context.textAlign = 'right';
+                context.textBaseline = 'top';
+                context.fillText(`Julia z0 = (${roundNumber(this.z0[0])}, ${roundNumber(this.z0[1])})`, res.x-50, 10);
+            }
         }
     }
 }
