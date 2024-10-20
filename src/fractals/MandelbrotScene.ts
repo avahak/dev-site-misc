@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import vsGeneric from './shaders/vsGeneric.glsl?raw';
 import fsMandelbrot from './shaders/fsMandelbrot.glsl?raw';
 import fsAccumulator from './shaders/fsAccumulator.glsl?raw';
-// import fsDemM from './shaders/fsDemM.glsl?raw';
-// import fsAccDemM from './shaders/fsAccDemM.glsl?raw';
-import { MandelbrotWorkOrder, MandelbrotWorkProgress } from './types';
+import fsDemM from './shaders/fsDemM.glsl?raw';
+import fsAccDemM from './shaders/fsAccDemM.glsl?raw';
+import { MandelbrotMode, MandelbrotWorkOrder, MandelbrotWorkProgress } from './types';
 
 class MandelbrotScene {
     container: HTMLDivElement;
@@ -19,7 +19,15 @@ class MandelbrotScene {
     sceneMandelbrot!: THREE.Scene;
     sceneAccumulator!: THREE.Scene;
     shaderMandelbrot!: THREE.ShaderMaterial;
+    shaderMandelbrot1!: THREE.ShaderMaterial;
+    shaderMandelbrot2!: THREE.ShaderMaterial;
     shaderAccumulator!: THREE.ShaderMaterial;
+    shaderAccumulator1!: THREE.ShaderMaterial;
+    shaderAccumulator2!: THREE.ShaderMaterial;
+    meshMandelbrot!: THREE.Mesh;
+    meshAccumulator!: THREE.Mesh;
+
+    mandelbrotMode: MandelbrotMode = "basic";
 
     workProgress: MandelbrotWorkProgress|null = null;
 
@@ -83,7 +91,7 @@ class MandelbrotScene {
     setupMandelbrotScene() {
         this.sceneMandelbrot = new THREE.Scene();
 
-        this.shaderMandelbrot = new THREE.ShaderMaterial({
+        this.shaderMandelbrot1 = new THREE.ShaderMaterial({
             uniforms: {
                 box: { value: null },
                 subpixelOffset: { value: null },
@@ -93,17 +101,28 @@ class MandelbrotScene {
             },
             vertexShader: vsGeneric,
             fragmentShader: fsMandelbrot,
-            // fragmentShader: fsDemM,
         });
+        this.shaderMandelbrot2 = new THREE.ShaderMaterial({
+            uniforms: {
+                box: { value: null },
+                subpixelOffset: { value: null },
+                mandelMap: { value: null },         // texture for iteration state
+                resolution: { value: null },
+                restart: { value: 1 },
+            },
+            vertexShader: vsGeneric,
+            fragmentShader: fsDemM,
+        });
+        this.shaderMandelbrot = this.shaderMandelbrot1;
         const geometry = new THREE.PlaneGeometry(2, 2);
-        const mesh = new THREE.Mesh(geometry, this.shaderMandelbrot);
-        this.sceneMandelbrot.add(mesh);
+        this.meshMandelbrot = new THREE.Mesh(geometry, this.shaderMandelbrot);
+        this.sceneMandelbrot.add(this.meshMandelbrot);
     }
 
     setupAccumulatorScene() {
         this.sceneAccumulator = new THREE.Scene();
 
-        this.shaderAccumulator = new THREE.ShaderMaterial({
+        this.shaderAccumulator1 = new THREE.ShaderMaterial({
             uniforms: {
                 mandelMap: { value: null },
                 accumulatorMap: { value: null },
@@ -113,11 +132,22 @@ class MandelbrotScene {
             },
             vertexShader: vsGeneric,
             fragmentShader: fsAccumulator,
-            // fragmentShader: fsAccDemM,
         });
+        this.shaderAccumulator2 = new THREE.ShaderMaterial({
+            uniforms: {
+                mandelMap: { value: null },
+                accumulatorMap: { value: null },
+                resolution: { value: null },
+                scale: { value: null },
+                restart: { value: 1 },
+            },
+            vertexShader: vsGeneric,
+            fragmentShader: fsAccDemM,
+        });
+        this.shaderAccumulator = this.shaderAccumulator1;
         const geometry = new THREE.PlaneGeometry(2, 2);
-        const mesh = new THREE.Mesh(geometry, this.shaderAccumulator);
-        this.sceneAccumulator.add(mesh);
+        this.meshAccumulator = new THREE.Mesh(geometry, this.shaderAccumulator);
+        this.sceneAccumulator.add(this.meshAccumulator);
     }
 
     setupCamera() {
@@ -146,6 +176,20 @@ class MandelbrotScene {
             this.workProgress.zoomCenter[1]+dy*this.workProgress.zoomScale
         ];
         this.shaderMandelbrot.uniforms.box.value = this.box;
+    }
+
+    switchMode() {
+        if (this.mandelbrotMode === "basic") {
+            this.shaderAccumulator = this.shaderAccumulator2;
+            this.shaderMandelbrot = this.shaderMandelbrot2;
+        } else {
+            this.shaderAccumulator = this.shaderAccumulator1;
+            this.shaderMandelbrot = this.shaderMandelbrot1;
+        }
+        this.mandelbrotMode = (this.mandelbrotMode === "basic") ? "DEM/M" : "basic";
+        this.meshMandelbrot.material = this.shaderMandelbrot;
+        this.meshAccumulator.material = this.shaderAccumulator;
+        this.resize();
     }
 
     assignWork(workOrder: MandelbrotWorkOrder) {

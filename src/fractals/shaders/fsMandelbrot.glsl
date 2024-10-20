@@ -19,7 +19,7 @@ void main() {
     float iter = tex.z;
 
     int k;
-    for (k = 0; (k < 1000) && (z.x*z.x + z.y*z.y < 100.0); k++) {
+    for (k = 0; (k < 1000) && (length(z) < 1.0e2); k++) {
         float temp = 2.0*z.x*z.y + c.y;
         z.x = z.x*z.x - z.y*z.y + c.x;
         z.y = temp;

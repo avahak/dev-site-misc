@@ -1,17 +1,33 @@
 import React, { useEffect, useRef } from 'react';
 import { ScreenScene } from './screenScene';
 import { InputListener } from '../inputListener';
+import { MandelbrotMode } from './types';
 
-const SceneComponent: React.FC<{ showMandelbrot: boolean, showJulia: boolean }> = ({ showMandelbrot, showJulia }) => {
+const SceneComponent: React.FC<{ 
+    mandelbrotMode: MandelbrotMode, 
+    setMandelbrotMode: (value: React.SetStateAction<MandelbrotMode>) => void, 
+    showJulia: boolean 
+    setShowJulia: (value: React.SetStateAction<boolean>) => void, 
+}> = ({ mandelbrotMode, setMandelbrotMode, showJulia, setShowJulia }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const sceneRef = useRef<ScreenScene|null>(null);
 
+    const switchMandelbrotMode = () => {
+        if (sceneRef.current) {
+            if (sceneRef.current.mandelbrotMode !== mandelbrotMode && mandelbrotMode !== "off") {
+                sceneRef.current.mandelbrotScene.switchMode();
+                sceneRef.current.resetMandelbrotStage();
+            }
+            sceneRef.current.mandelbrotMode = mandelbrotMode;
+        }
+    }
+
     useEffect(() => {
         if (sceneRef.current) {
-            sceneRef.current.showMandelbrot = showMandelbrot;
+            switchMandelbrotMode();
             sceneRef.current.showJulia = showJulia;
         }
-    }, [showJulia, showMandelbrot]);
+    }, [showJulia, mandelbrotMode]);
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
@@ -37,9 +53,9 @@ const SceneComponent: React.FC<{ showMandelbrot: boolean, showJulia: boolean }> 
             keyboard: {
                 keydown: (params) => { 
                     if (params.key.toUpperCase() === "J") 
-                        scene.showJulia = !scene.showJulia; 
-                    if (params.key.toUpperCase() === "M") 
-                        scene.showMandelbrot = !scene.showMandelbrot; 
+                        setShowJulia(v => !v);
+                    if (params.key.toUpperCase() === "M")
+                        setMandelbrotMode(mode => mode === "off" ? "basic" : (mode === "basic" ? "DEM/M" : "off"));
                     if (params.key === "-") 
                         scene.pointerInput(0, 0, 1.2, 0); 
                     if (params.key === "+") 

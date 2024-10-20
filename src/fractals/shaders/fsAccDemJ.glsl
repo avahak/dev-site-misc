@@ -1,3 +1,5 @@
+// DEM/J algorithm, The Science of Fractal Images, p. 199
+
 precision highp float;
 
 uniform sampler2D juliaMap;
@@ -14,17 +16,17 @@ vec4 getColor(vec2 uv) {
     vec2 z = tex.xy;
     vec2 w = tex.zw;
 
-    float rz2 = z.x*z.x + z.y*z.y;
-    float rw2 = w.x*w.x + w.y*w.y;
+    float rz = length(z);
+    float rw = length(w);
 
-    if (rz2 < 1.0e3)
+    if (rz < 1.0e2)
         return vec4(0.0, 0.0, 1.0, 1.0);        // 0
-    if (rw2 > 1.0e20)
+    if (rw > 1.0e32)
         return vec4(1.0, 0.0, 1.0, 1.0);        // -1
 
-    float d = sqrt(rz2/rw2)*log(rz2);
+    float d = 2.0*(rz/rw)*log(rz);
 
-    float b = 0.5;
+    float b = 0.1;
 
     float s = log(d/b);
 

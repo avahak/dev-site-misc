@@ -1,3 +1,5 @@
+type MandelbrotMode = "off"|"basic"|"DEM/M";
+
 type MandelbrotWorkOrder = {
     zoomCenter: [number, number];
     zoomScale: number;
@@ -23,5 +25,5 @@ type Progress = {
 type MandelbrotWorkProgress = MandelbrotWorkOrder & Progress;
 type JuliaWorkProgress = JuliaWorkOrder & Progress;
 
-export type { MandelbrotWorkOrder, JuliaWorkOrder, 
+export type { MandelbrotMode, MandelbrotWorkOrder, JuliaWorkOrder, 
     MandelbrotWorkProgress, JuliaWorkProgress };

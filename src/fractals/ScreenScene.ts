@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import vsGeneric from './shaders/vsGeneric.glsl?raw';
 import fsScreen from './shaders/fsScreen.glsl?raw';
 import { MandelbrotScene } from './mandelbrotScene';
-import { JuliaWorkOrder, MandelbrotWorkOrder } from './types';
+import { JuliaWorkOrder, MandelbrotMode, MandelbrotWorkOrder } from './types';
 import { JuliaScene } from './juliaScene';
 import { drawAxis, roundNumber } from './axis';
 
@@ -28,7 +28,7 @@ class ScreenScene {
     juliaStage!: number;
 
     showJulia: boolean = true;
-    showMandelbrot: boolean = true;
+    mandelbrotMode: MandelbrotMode = "basic";
 
     shader: THREE.ShaderMaterial|null = null;
 
@@ -179,26 +179,26 @@ class ScreenScene {
     }
 
     progressMandelbrotStage() {
-        if (this.mandelbrotStage >= 2)
+        if (this.mandelbrotStage >= 3)
             return;
         const workOrder: MandelbrotWorkOrder = { 
             zoomCenter: this.zoomCenter, 
             zoomScale: this.zoomScale, 
-            iterations: [1, 32][this.mandelbrotStage], 
-            samplesPerAxis: [1, 5][this.mandelbrotStage], 
+            iterations: [1, 16, 64][this.mandelbrotStage], 
+            samplesPerAxis: [1, 1, 7][this.mandelbrotStage], 
         };
         this.mandelbrotScene.assignWork(workOrder);
         this.mandelbrotStage++;
     }
 
     progressJuliaStage() {
-        if (this.juliaStage >= 2)
+        if (this.juliaStage >= 3)
             return;
         const workOrder: JuliaWorkOrder = { 
             c: this.z0,
             zoomScale: this.zoomScale, 
-            iterations: [1, 32][this.juliaStage], 
-            samplesPerAxis: [1, 5][this.juliaStage], 
+            iterations: [1, 16, 64][this.juliaStage], 
+            samplesPerAxis: [1, 1, 7][this.juliaStage], 
         };
         this.juliaScene.assignWork(workOrder);
         this.juliaStage++;
@@ -232,7 +232,7 @@ class ScreenScene {
         const currentTime = (this.lastTime ?? 0.0) + (isStopped ? 0.0 : 0.01);
         this.lastTime = currentTime;
 
-        if (this.showMandelbrot) {
+        if (this.mandelbrotMode !== "off") {
             const isMandelbrotDone = this.mandelbrotScene.step(this.renderer);
             if (isMandelbrotDone)
                 this.progressMandelbrotStage();
@@ -247,14 +247,14 @@ class ScreenScene {
         this.shader!.uniforms.accumulatorMap1.value = this.mandelbrotScene.getCurrentAccumulatorFboTexture();
         this.shader!.uniforms.accumulatorMap2.value = this.juliaScene.getCurrentAccumulatorFboTexture();
         this.shader!.uniforms.showJulia.value = this.showJulia ? 1 : 0;
-        this.shader!.uniforms.showMandelbrot.value = this.showMandelbrot ? 1 : 0;
+        this.shader!.uniforms.showMandelbrot.value = this.mandelbrotMode === "off" ? 0 : 1;
         this.renderer.render(this.scene, this.camera);
 
         const context = this.overlayCanvas.getContext('2d');
         if (context) {
             const res = this.getResolution();
             context.clearRect(0, 0, res.x, res.y);
-            if (this.showMandelbrot) {
+            if (this.mandelbrotMode !== "off") {
                 drawAxis({ 
                     context, 
                     width: res.x, 

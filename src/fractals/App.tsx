@@ -3,10 +3,11 @@ import { Box, Container, Link, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
 import { CircularButton } from '../CircularButton';
+import { MandelbrotMode } from './types';
 const SceneComponent = React.lazy(() => import('./ThreeComponent'));
 
 const App: React.FC = () => {
-    const [showMandelbrot, setShowMandelbrot] = useState<boolean>(true);
+    const [mandelbrotMode, setMandelbrotMode] = useState<MandelbrotMode>("basic");
     const [showJulia, setShowJulia] = useState<boolean>(true);
 
     return (
@@ -18,11 +19,11 @@ const App: React.FC = () => {
             </Box>
             <Box sx={{ position: "relative", width: "100%", height: "80vh" }}>
                 <Suspense fallback={<Box display="flex" justifyContent="center"><Typography>Loading..</Typography></Box>}>
-                    <SceneComponent showMandelbrot={showMandelbrot} showJulia={showJulia} />
+                    <SceneComponent mandelbrotMode={mandelbrotMode} setMandelbrotMode={setMandelbrotMode} showJulia={showJulia} setShowJulia={setShowJulia} />
                 </Suspense>
                 <Box sx={{ position: "absolute", top: "1em", left: "1em" }}>
                     <Box>
-                        <CircularButton Icon={"M"} onClick={() => { setShowMandelbrot(v => !v) }} />
+                        <CircularButton Icon={"M"} onClick={() => { setMandelbrotMode(mode => mode === "off" ? "basic" : (mode === "basic" ? "DEM/M" : "off")) }} />
                     </Box>
                     <Box sx={{mt: 3}}>
                         <CircularButton Icon={"J"} onClick={() => { setShowJulia(v => !v) }} />

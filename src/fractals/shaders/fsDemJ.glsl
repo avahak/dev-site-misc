@@ -22,9 +22,9 @@ void main() {
 
     int k;
     float temp;
-    for (k = 0; (k < 2000) && (z.x*z.x + z.y*z.y < 1.0e3); k++) {
+    for (k = 0; (k < 2000) && (length(z) < 1.0e2); k++) {
 
-        if (w.x*w.x + w.y*w.y < 1.0e20) {
+        if (length(w) < 1.0e32) {
             temp = 2.0*z.x*w.y + 2.0*z.y*w.x;
             w.x = 2.0*z.x*w.x - 2.0*z.y*w.y;
             w.y = temp;
