@@ -49,6 +49,7 @@ class InputListener {
 
         // Needed to prevent default touch behaviors such as scrolling and zooming
         this.container.style.touchAction = 'none';
+        this.container.style.userSelect = 'none';
 
         this.container.addEventListener('pointerdown', this.onPointerDown);
         window.addEventListener('pointermove', this.onPointerMove);
