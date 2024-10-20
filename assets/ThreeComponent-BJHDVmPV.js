@@ -1,4 +1,4 @@
-var j=Object.defineProperty;var V=(r,t,e)=>t in r?j(r,t,{enumerable:!0,configurable:!0,writable:!0,value:e}):r[t]=e;var c=(r,t,e)=>V(r,typeof t!="symbol"?t+"":t,e);import{r as k,j as z}from"./index-Bx8vq5kq.js";import{l as D,O as H,p as R,q as I,r as M,N as b,s as O,t as U,f as T,u as G,W as N,m as L,I as Y,v as J,V as y,n as X,A as W,B as K,w as Z,e as q}from"./three.module-CyiO67I9.js";import{O as Q}from"./OrbitControls-CZc9sQFR.js";const tt=`// From three.js: position, uv, normal, time, etc.\r
+var j=Object.defineProperty;var V=(r,t,e)=>t in r?j(r,t,{enumerable:!0,configurable:!0,writable:!0,value:e}):r[t]=e;var c=(r,t,e)=>V(r,typeof t!="symbol"?t+"":t,e);import{r as k,j as z}from"./index-p0WTITeb.js";import{l as D,O as H,p as R,q as I,r as M,N as b,s as O,t as U,f as T,u as G,W as N,m as L,I as Y,v as J,V as y,n as X,A as W,B as K,w as Z,e as q}from"./three.module-CyiO67I9.js";import{O as Q}from"./OrbitControls-CZc9sQFR.js";const tt=`// From three.js: position, uv, normal, time, etc.\r
 \r
 varying vec2 vUv;\r
 \r
