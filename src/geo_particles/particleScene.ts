@@ -1,8 +1,23 @@
 import * as THREE from 'three';
-import vsString from './shaders/particleVertex.glsl?raw';
-import fsString from './shaders/particleFragment.glsl?raw';
+import vsString from './shaders/vsParticle.glsl?raw';
+import fsString from './shaders/fsParticle.glsl?raw';
 import { NUM_OBJECTS, PARTICLE_TEXTURE_SIZE } from './config';
 import { BaseScene } from './baseScene';
+
+const project = (lon: number, lat: number): [number, number] => {
+    const LON_BASE = 20*Math.PI/180;
+    const LAT_BASE = 62*Math.PI/180;
+    const SCALE = 5.0;
+
+    const deltaLon = lon - LON_BASE;
+    const deltaLat = lat - LAT_BASE;
+
+    const x = SCALE * deltaLon * Math.cos(LAT_BASE);
+    const y = SCALE * deltaLat;
+
+    return [x, y];
+};
+
 
 class ParticleScene {
     baseScene: BaseScene;
@@ -22,20 +37,7 @@ class ParticleScene {
         this.camera.position.set(0, 0, 1);
         this.camera.lookAt(0, 0, 0);
 
-        // just initial values!
-        const initialPositions = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*4);
-        for (let j = 0; j < PARTICLE_TEXTURE_SIZE; j++) {
-            for (let k = 0; k < PARTICLE_TEXTURE_SIZE; k++) {
-                let index = j*PARTICLE_TEXTURE_SIZE + k;
-                let theta = Math.random()*Math.PI*2;
-                let r = 0.3 + 0.7*Math.random();
-                initialPositions[index*4 + 0] = r*Math.cos(theta);
-                initialPositions[index*4 + 1] = r*Math.sin(theta);
-                initialPositions[index*4 + 2] = Math.random()*0.1-0.05;
-                initialPositions[index*4 + 3] = -0.5;
-                // initialPositions[index*4 + 3] = 0.0;
-            }
-        }
+        const initialPositions = this.computeInitialPositions();
 
         this.initialPositionsTexture = new THREE.DataTexture(initialPositions, PARTICLE_TEXTURE_SIZE, PARTICLE_TEXTURE_SIZE, THREE.RGBAFormat, THREE.FloatType);
         this.initialPositionsTexture.minFilter = THREE.NearestFilter;
@@ -44,7 +46,7 @@ class ParticleScene {
 
         this.shaderMaterial = new THREE.ShaderMaterial({
             uniforms: {
-                uPositionObjects: { value: this.baseScene.objects.map((object) => object.position) },
+                uPositionObjects: { value: Array.from({ length: NUM_OBJECTS }, () => new THREE.Vector3(0, 0, 0)) },
                 uPosition0: { value: this.initialPositionsTexture },
                 uPosition1: { value: this.initialPositionsTexture },
                 uPosition2: { value: this.initialPositionsTexture },
@@ -113,7 +115,44 @@ class ParticleScene {
 
     setObjectPositions() {
         for (let k = 0; k < NUM_OBJECTS; k++)
-            this.shaderMaterial.uniforms.uPositionObjects.value[k] = this.baseScene.objects[k].position;
+            this.shaderMaterial.uniforms.uPositionObjects.value[k] = new THREE.Vector3(this.baseScene.appIconPositions[3*k+0], this.baseScene.appIconPositions[3*k+1], this.baseScene.appIconPositions[3*k+2]);
+    }
+
+    computeInitialPositions() {
+        // just initial values!
+        const initialPositions = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*4);
+        for (let j = 0; j < PARTICLE_TEXTURE_SIZE; j++) {
+            for (let k = 0; k < PARTICLE_TEXTURE_SIZE; k++) {
+                let index = j*PARTICLE_TEXTURE_SIZE + k;
+                let theta = Math.random()*Math.PI*2;
+                let r = 0.3 + 0.7*Math.random();
+                initialPositions[index*4 + 0] = 1000.0 + r*Math.cos(theta);
+                initialPositions[index*4 + 1] = r*Math.sin(theta);
+                initialPositions[index*4 + 2] = Math.random()*0.1-0.05;
+                initialPositions[index*4 + 3] = -0.5;
+            }
+        }
+    
+        console.log(this.baseScene.data.scandinavia.pointsObj);
+        let index = 0;
+        let countryIndex = 0;
+        for (const country in this.baseScene.data.scandinavia.pointsObj) {
+            const points = this.baseScene.data.scandinavia.pointsObj[country];
+            console.log("country, points", country, points);
+            for (const p of points) {
+                const proj = project(p[0]*Math.PI/180, p[1]*Math.PI/180);
+                initialPositions[index*4 + 0] = proj[0];
+                initialPositions[index*4 + 1] = proj[1];
+                initialPositions[index*4 + 2] = countryIndex*0.01;
+                index++;
+                if (index >= PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE)
+                    throw Error("Particle texture size is too small.")
+            }
+            countryIndex++;
+        }
+        console.log("index", index, `${(100*index/(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE)).toFixed(1)}% of particles used`)
+    
+        return initialPositions;
     }
 }
 

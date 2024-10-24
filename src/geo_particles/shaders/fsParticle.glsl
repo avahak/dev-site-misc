@@ -15,7 +15,7 @@ Steering forces:
 acceleration = sum(steering forces)
 */
 
-#define NUM_OBJECTS 5       // NOTE! This has to be same as in config.ts
+#define NUM_OBJECTS 16       // NOTE! This has to be same as in config.ts
 
 uniform vec3 uPositionObjects[NUM_OBJECTS];
 uniform sampler2D uPosition0;   // initial positions for particles
@@ -97,7 +97,7 @@ float computeState(vec3 p0, vec3 p1, vec3 p2, float state) {
             // if ((dist0 < 0.01) && (dist1 < 0.25+0.5*rand.x*rand.y)) 
             //     newStateI = k;
             if (dist0 < 0.01)
-                if (dist1 < 0.25+0.5*rand.x*rand.y)
+                if (dist1 < -0.15+0.5*rand.x*rand.y)
                     newStateI = k;
         }
         return encodeIntAndFloat(newStateI, stateF);
@@ -106,7 +106,7 @@ float computeState(vec3 p0, vec3 p1, vec3 p2, float state) {
     // Now stateI >= 0:
 
     // Return home if distance home is too long
-    if (dist0 > 1.0+0.5*rand.y) {
+    if (dist0 > 0.4+0.2*rand.y) {
         newStateI = -1;
     }
     return encodeIntAndFloat(newStateI, stateF);
@@ -140,8 +140,8 @@ vec3 computeForce(vec3 p0, vec3 p1, vec3 p2, float state) {
         return steeringHome + steeringSpeedHome;
 
     vec3 vp = p2-uPositionObjects[stateI];
-    vec3 steeringOrbit = computeSteering(vp*(0.2-length(vp)), v, maxSpeedOrbit, maxForceOrbit);
-    vec3 steeringSpeedOrbit = computeSteering(v*(0.1-length(v)), v, maxSpeedOrbit, maxForceOrbit);
+    vec3 steeringOrbit = computeSteering(vp*(0.1-length(vp)), v, maxSpeedOrbit, maxForceOrbit);
+    vec3 steeringSpeedOrbit = computeSteering(v*(0.05-length(v)), v, maxSpeedOrbit, maxForceOrbit);
 
     return steeringOrbit + steeringSpeedOrbit;
 }
@@ -160,7 +160,8 @@ void main() {
     vec3 p2 = p.xyz;
 
     float state = computeState(p0, p1, p2, p.w);
-    vec3 F = 0.01*computeForce(p0, p1, p2, state);
-    vec3 newPos = p2 + 0.9*(p2-p1) + F;     // Verlet integration
+    vec3 F = 0.002*computeForce(p0, p1, p2, state);
+    vec3 newPos = p2 + 0.8*(p2-p1) + F;     // Verlet integration
     gl_FragColor = vec4(newPos, state);
+    // gl_FragColor = vec4(p0, p.w);
 }

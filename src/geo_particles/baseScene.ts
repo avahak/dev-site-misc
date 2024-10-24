@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { ParticleScene } from './particleScene';
-import vsString from './shaders/vertex.glsl?raw';
-import fsString from './shaders/fragment.glsl?raw';
+import vsString from './shaders/vs.glsl?raw';
+import fsString from './shaders/fs.glsl?raw';
+import vsAppString from './shaders/vsApp.glsl?raw';
+import fsAppString from './shaders/fsApp.glsl?raw';
 import { NUM_OBJECTS, PARTICLE_TEXTURE_SIZE } from './config';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+import { PreloadData } from './types';
 
 class BaseScene {
     container: HTMLDivElement;
@@ -17,16 +20,19 @@ class BaseScene {
     gui: any;
     isStopped: boolean = false;
 
-    objects: THREE.Mesh[] = [];
-    objectRotationVectors: THREE.Vector3[] = [];
     particleScene: ParticleScene;
-    shaderMaterial: THREE.ShaderMaterial|null = null;
 
-    scandinavia: any;
+    shaderReaction!: THREE.ShaderMaterial;
 
-    constructor(container: HTMLDivElement, scandinavia: any) {
+    appIconPositions = new Float32Array(NUM_OBJECTS*3);
+    appIconPositionsAttribute!: THREE.BufferAttribute;
+    shaderApp!: THREE.ShaderMaterial;
+
+    data: PreloadData;
+
+    constructor(container: HTMLDivElement, data: PreloadData) {
         this.container = container;
-        this.scandinavia = scandinavia;
+        this.data = data;
         this.cleanUpTasks = [];
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         this.renderer.setClearColor(0x000000, 0);
@@ -42,7 +48,9 @@ class BaseScene {
 
         this.createGUI();
 
-        console.log(scandinavia);
+        console.log(data.scandinavia);
+        console.log(data.appAtlas);
+        console.log(data.reactionAtlas);
         
         this.cleanUpTasks.push(() => { 
             if (this.animationRequestID)
@@ -118,15 +126,6 @@ class BaseScene {
     setupScene() {
         const scene = new THREE.Scene();
 
-        const geometry = new THREE.IcosahedronGeometry(0.1, 1);
-        const shaderMaterial = new THREE.MeshNormalMaterial({ flatShading: true });
-        for (let k = 0; k < NUM_OBJECTS; k++) {
-            const object = new THREE.Mesh(geometry, shaderMaterial);
-            this.objects.push(object);
-            this.objectRotationVectors.push(new THREE.Vector3().randomDirection());
-            scene.add(object);
-        }
-
         // const axesHelper = new THREE.AxesHelper(5);
         // scene.add(axesHelper);
 
@@ -135,32 +134,54 @@ class BaseScene {
         scene.add(new THREE.AmbientLight(0xddeeff, 0.8));
         scene.add(light);
 
-        const geom = new THREE.BufferGeometry();
-        const posData = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*3);
+        // Reactions:
+        const geomReaction = new THREE.BufferGeometry();
+        const posDataReaction = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*3);
         for (let j = 0; j < PARTICLE_TEXTURE_SIZE; j++) {
             for (let k = 0; k < PARTICLE_TEXTURE_SIZE; k++) {
                 let index = j*PARTICLE_TEXTURE_SIZE + k;
-                posData[index*3 + 0] = j / PARTICLE_TEXTURE_SIZE;
-                posData[index*3 + 1] = k / PARTICLE_TEXTURE_SIZE;
-                posData[index*3 + 2] = 0;
+                posDataReaction[index*3 + 0] = j / PARTICLE_TEXTURE_SIZE;
+                posDataReaction[index*3 + 1] = k / PARTICLE_TEXTURE_SIZE;
+                posDataReaction[index*3 + 2] = 0;
             }
         }
-        geom.setAttribute("position", new THREE.BufferAttribute(posData, 3));
-        this.shaderMaterial = new THREE.ShaderMaterial({
+        geomReaction.setAttribute("position", new THREE.BufferAttribute(posDataReaction, 3));
+        this.shaderReaction = new THREE.ShaderMaterial({
             uniforms: {
                 particleMap: { value: null },
-                time: { value: 0 }
+                time: { value: 0 },
+                reactions: { value: this.data.reactionAtlas },
             },
             vertexShader: vsString,
             fragmentShader: fsString,
-            // blending: THREE.AdditiveBlending,
-            // depthWrite: false
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
         });
-        const points = new THREE.Points(geom, this.shaderMaterial);
-        points.frustumCulled = false;
-        scene.add(points);
+        const pointsReaction = new THREE.Points(geomReaction, this.shaderReaction);
+        pointsReaction.frustumCulled = false;
+        scene.add(pointsReaction);
 
-        this.moveObjects(0.0);
+        // Apps:
+        const geomApp = new THREE.BufferGeometry();
+        this.appIconPositionsAttribute = new THREE.BufferAttribute(this.appIconPositions, 3)
+        geomApp.setAttribute("position", this.appIconPositionsAttribute);
+        this.shaderApp = new THREE.ShaderMaterial({
+            uniforms: {
+                particleMap: { value: null },
+                time: { value: 0 },
+                apps: { value: this.data.appAtlas },
+            },
+            vertexShader: vsAppString,
+            fragmentShader: fsAppString,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        const pointsApp = new THREE.Points(geomApp, this.shaderApp);
+        pointsApp.frustumCulled = false;
+        scene.add(pointsApp);
+
+        this.moveAppIcons(0);
+
         scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI/2.0);   // just for camera angles
 
         return scene;
@@ -183,25 +204,27 @@ class BaseScene {
     };
 
     animateStep(isStopped: boolean) {
-        const currentTime = (this.lastTime ?? 0.0) + (isStopped ? 0.0 : 0.01);
+        const currentTime = (this.lastTime ?? 0.0) + (isStopped ? 0.0 : 0.002);
         this.lastTime = currentTime;
         this.particleScene.shaderMaterial.uniforms.time.value = currentTime;
 
         if (!isStopped) {
-            this.moveObjects(currentTime);
+            this.moveAppIcons(currentTime);
             this.particleScene.setObjectPositions();
             this.particleScene.step(this.renderer);
         }
         
-        this.shaderMaterial!.uniforms.particleMap.value = this.particleScene.fbos[this.particleScene.currentFboIndex].texture;
+        this.shaderReaction.uniforms.particleMap.value = this.particleScene.fbos[this.particleScene.currentFboIndex].texture;
         this.renderer.render(this.scene, this.camera);
     }
 
-    moveObjects(time: number) {
-        this.objects.forEach((object, k) => {
-            object.rotateOnAxis(this.objectRotationVectors[k], 0.2);
-            object.position.set(1.0*Math.cos(k+0.1*time), 1.0*Math.sin(2*k+0.2*time), 0.2);
-        });
+    moveAppIcons(time: number) {
+        for (let k = 0; k < NUM_OBJECTS; k++) {
+            this.appIconPositions[3*k+0] = 1.0*Math.cos(k+0.1*time);
+            this.appIconPositions[3*k+1] = 1.0*Math.sin(2*k+0.2*time);
+            this.appIconPositions[3*k+2] = 0.2;
+        }
+        this.appIconPositionsAttribute.needsUpdate = true;
     }
 }
 

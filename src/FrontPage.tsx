@@ -30,7 +30,7 @@ const FrontPage = () => {
                 </MUILink>
                 <br />
                 <MUILink component={RouterLink} to="/geo_particles" variant="body1" color="primary">
-                    Geo Particles
+                    Geo particles
                 </MUILink>
                 <br />
                 <MUILink component={RouterLink} to="/fractals" variant="body1" color="primary">
