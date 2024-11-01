@@ -82,7 +82,7 @@ float computeState(vec3 p0, vec3 p1, vec3 p2, float state) {
 
     int newStateI = stateI;
 
-    vec3 v02 = p2-p0;
+    vec3 v02 = p2-vec3(p0.xy, 0.0);
     float dist0 = length(v02); // distance home
 
     if (stateI == -1) {
@@ -125,7 +125,7 @@ vec3 computeForce(vec3 p0, vec3 p1, vec3 p2, float state) {
     int stateI = decodeInt(state);
     float stateF = decodeFloat(state);
 
-    vec3 v02 = p2-p0;
+    vec3 v02 = p2-vec3(p0.xy, 0.0);
     vec3 v = p2-p1;
 
     float maxForce = 5.;
@@ -160,7 +160,7 @@ void main() {
     vec3 p2 = p.xyz;
 
     float state = computeState(p0, p1, p2, p.w);
-    vec3 F = 0.002*computeForce(p0, p1, p2, state);
+    vec3 F = 0.02*computeForce(p0, p1, p2, state);
     vec3 newPos = p2 + 0.8*(p2-p1) + F;     // Verlet integration
     gl_FragColor = vec4(newPos, state);
     // gl_FragColor = vec4(p0, p.w);

@@ -149,13 +149,14 @@ class BaseScene {
         this.shaderReaction = new THREE.ShaderMaterial({
             uniforms: {
                 particleMap: { value: null },
+                extraData: { value: null },
                 time: { value: 0 },
                 reactions: { value: this.data.reactionAtlas },
             },
             vertexShader: vsString,
             fragmentShader: fsString,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
+            // blending: THREE.AdditiveBlending,
+            // depthWrite: false
         });
         const pointsReaction = new THREE.Points(geomReaction, this.shaderReaction);
         pointsReaction.frustumCulled = false;
@@ -173,8 +174,8 @@ class BaseScene {
             },
             vertexShader: vsAppString,
             fragmentShader: fsAppString,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
+            // blending: THREE.AdditiveBlending,
+            // depthWrite: false
         });
         const pointsApp = new THREE.Points(geomApp, this.shaderApp);
         pointsApp.frustumCulled = false;
@@ -215,6 +216,7 @@ class BaseScene {
         }
         
         this.shaderReaction.uniforms.particleMap.value = this.particleScene.fbos[this.particleScene.currentFboIndex].texture;
+        this.shaderReaction.uniforms.extraData.value = this.particleScene.initialExtraDataTexture;
         this.renderer.render(this.scene, this.camera);
     }
 

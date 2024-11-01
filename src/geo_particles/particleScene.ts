@@ -25,7 +25,8 @@ class ParticleScene {
     camera: THREE.Camera;
     // cleanUpTasks: (() => void)[];
     shaderMaterial: THREE.ShaderMaterial;
-    initialPositionsTexture: THREE.DataTexture;
+    initialPositionsTexture!: THREE.DataTexture;
+    initialExtraDataTexture!: THREE.DataTexture;
 
     fbos: THREE.WebGLRenderTarget[];
     currentFboIndex: number;    // latest computed fbo index
@@ -37,16 +38,12 @@ class ParticleScene {
         this.camera.position.set(0, 0, 1);
         this.camera.lookAt(0, 0, 0);
 
-        const initialPositions = this.computeInitialPositions();
-
-        this.initialPositionsTexture = new THREE.DataTexture(initialPositions, PARTICLE_TEXTURE_SIZE, PARTICLE_TEXTURE_SIZE, THREE.RGBAFormat, THREE.FloatType);
-        this.initialPositionsTexture.minFilter = THREE.NearestFilter;
-        this.initialPositionsTexture.magFilter = THREE.NearestFilter;
-        this.initialPositionsTexture.needsUpdate = true;
+        this.computeInitialTextures();
 
         this.shaderMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 uPositionObjects: { value: Array.from({ length: NUM_OBJECTS }, () => new THREE.Vector3(0, 0, 0)) },
+                extraData: { value: this.initialExtraDataTexture },
                 uPosition0: { value: this.initialPositionsTexture },
                 uPosition1: { value: this.initialPositionsTexture },
                 uPosition2: { value: this.initialPositionsTexture },
@@ -118,9 +115,11 @@ class ParticleScene {
             this.shaderMaterial.uniforms.uPositionObjects.value[k] = new THREE.Vector3(this.baseScene.appIconPositions[3*k+0], this.baseScene.appIconPositions[3*k+1], this.baseScene.appIconPositions[3*k+2]);
     }
 
-    computeInitialPositions() {
+    computeInitialTextures() {
         // just initial values!
         const initialPositions = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*4);
+        const initialExtraData = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*4);
+
         for (let j = 0; j < PARTICLE_TEXTURE_SIZE; j++) {
             for (let k = 0; k < PARTICLE_TEXTURE_SIZE; k++) {
                 let index = j*PARTICLE_TEXTURE_SIZE + k;
@@ -128,8 +127,13 @@ class ParticleScene {
                 let r = 0.3 + 0.7*Math.random();
                 initialPositions[index*4 + 0] = 1000.0 + r*Math.cos(theta);
                 initialPositions[index*4 + 1] = r*Math.sin(theta);
-                initialPositions[index*4 + 2] = Math.random()*0.1-0.05;
+                initialPositions[index*4 + 2] = 0.0;
                 initialPositions[index*4 + 3] = -0.5;
+
+                initialExtraData[index*4 + 0] = 0.0;
+                initialExtraData[index*4 + 1] = 0.0;
+                initialExtraData[index*4 + 2] = 0.0;
+                initialExtraData[index*4 + 3] = 0.0;
             }
         }
     
@@ -141,9 +145,17 @@ class ParticleScene {
             console.log("country, points", country, points);
             for (const p of points) {
                 const proj = project(p[0]*Math.PI/180, p[1]*Math.PI/180);
+                const reaction = Math.floor(Math.random()*22);
+
                 initialPositions[index*4 + 0] = proj[0];
                 initialPositions[index*4 + 1] = proj[1];
-                initialPositions[index*4 + 2] = countryIndex*0.01;
+                initialPositions[index*4 + 2] = 0.0;
+
+                initialExtraData[index*4 + 0] = countryIndex;
+                initialExtraData[index*4 + 1] = reaction;
+                initialExtraData[index*4 + 2] = 0.0;
+                initialExtraData[index*4 + 3] = 0.0;
+
                 index++;
                 if (index >= PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE)
                     throw Error("Particle texture size is too small.")
@@ -152,7 +164,15 @@ class ParticleScene {
         }
         console.log("index", index, `${(100*index/(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE)).toFixed(1)}% of particles used`)
     
-        return initialPositions;
+        this.initialPositionsTexture = new THREE.DataTexture(initialPositions, PARTICLE_TEXTURE_SIZE, PARTICLE_TEXTURE_SIZE, THREE.RGBAFormat, THREE.FloatType);
+        this.initialPositionsTexture.minFilter = THREE.NearestFilter;
+        this.initialPositionsTexture.magFilter = THREE.NearestFilter;
+        this.initialPositionsTexture.needsUpdate = true;
+
+        this.initialExtraDataTexture = new THREE.DataTexture(initialExtraData, PARTICLE_TEXTURE_SIZE, PARTICLE_TEXTURE_SIZE, THREE.RGBAFormat, THREE.FloatType);
+        this.initialExtraDataTexture.minFilter = THREE.NearestFilter;
+        this.initialExtraDataTexture.magFilter = THREE.NearestFilter;
+        this.initialExtraDataTexture.needsUpdate = true;
     }
 }
 
