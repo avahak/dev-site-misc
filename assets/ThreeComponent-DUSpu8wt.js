@@ -1,4 +1,4 @@
-var w=Object.defineProperty;var I=(s,e,t)=>e in s?w(s,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):s[e]=t;var n=(s,e,t)=>I(s,typeof e!="symbol"?e+"":e,t);import{r as f,j as T}from"./index-KEOWDWdu.js";import{l as b,O as M,p as O,q as v,r as g,N as u,s as x,t as R,f as P,u as j,W as y,m as S,I as U,v as A,V as m,n as k,A as B,B as C,w as D,e as E}from"./three.module-CerfKBDK.js";import{O as z}from"./OrbitControls-0sMovaCw.js";import{g as N}from"./lil-gui.module.min-Bc0DeA9g.js";const _=`// From three.js: position, uv, normal, time, etc.\r
+var w=Object.defineProperty;var I=(s,e,t)=>e in s?w(s,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):s[e]=t;var n=(s,e,t)=>I(s,typeof e!="symbol"?e+"":e,t);import{r as f,j as T}from"./index-B0CixmEj.js";import{l as b,O as M,p as O,q as v,r as g,N as u,s as x,t as R,f as P,u as j,W as y,m as S,I as U,v as A,V as m,n as k,A as B,B as C,w as D,e as E}from"./three.module-CerfKBDK.js";import{O as z}from"./OrbitControls-0sMovaCw.js";import{g as N}from"./lil-gui.module.min-Bc0DeA9g.js";const _=`// From three.js: position, uv, normal, time, etc.\r
 \r
 varying vec2 vUv;\r
 \r
