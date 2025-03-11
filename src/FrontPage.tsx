@@ -46,11 +46,11 @@ const FrontPage = () => {
                 </MUILink>
                 <br />
                 <MUILink component={RouterLink} to="/template_class" variant="body1" color="primary">
-                    Template for Three.js (class)
+                    Template for Three.js (separate class)
                 </MUILink>
                 <br />
-                <MUILink component={RouterLink} to="/template_react" variant="body1" color="primary">
-                    Template for Three.js (React)
+                <MUILink component={RouterLink} to="/webgl_tools" variant="body1" color="primary">
+                    WebGL rendering tools
                 </MUILink>
             </Box>
             <Typography variant="body2" color="textSecondary" sx={{mt: 10}}>{`Build: ${BUILD_TIMESTAMP}`}</Typography>

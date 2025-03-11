@@ -5,7 +5,7 @@ import { PreloadData } from './types';
 // import scandinaviaJson from '../../public/geo/scandinavia?raw';
 
 const SceneComponent: React.FC = () => {
-    const containerRef = useRef<HTMLDivElement>(null);
+    const container = useRef<HTMLDivElement>(null);
     const [data, setData] = useState<PreloadData>();
 
     const preload = async () => {
@@ -36,18 +36,20 @@ const SceneComponent: React.FC = () => {
     };
 
     useEffect(() => {
+        console.log("useEffect: ", container);
+        if (!container.current)
+            return;
         if (!data) {
             preload();
             return;
         }
-        console.log("useEffect: ", containerRef.current);
-        const scene = new BaseScene(containerRef.current!, data);
+        const scene = new BaseScene(container.current, data);
         return () => {
             scene.cleanUp();
         };
-    }, [data]);
+    }, [data, container]);
 
-    return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
+    return <div style={{position: "fixed", left: 0, top: 0, width: "100%", height: "100%", zIndex: "-1", opacity: 1.0 }} ref={container}></div>;
 };
 
 export default SceneComponent;

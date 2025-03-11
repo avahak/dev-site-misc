@@ -38,13 +38,13 @@ void main() {
     vec2 p = indexImage(offset, reactionIndex, size);
     vec4 colorImg = texture2D(reactions, p);
 
-    vec4 colorBase = vec4(0.2, 0.2, 0.5, 1.0);
-    if (countryIndex == 1)
+    vec4 colorBase = vec4(0.5, 0.5, 0.2, 1.0);  // SWE
+    if (countryIndex == 1)  // NOR
         colorBase = vec4(0.5, 0.2, 0.2, 1.0);
-    if (countryIndex == 2)
+    if (countryIndex == 2)  // FIN
         colorBase = vec4(0.2, 0.5, 0.2, 1.0);
-    if (countryIndex == 3)
-        colorBase = vec4(0.5, 0.5, 0.2, 1.0);
+    if (countryIndex == 3)  // DK
+        colorBase = vec4(0.5, 0.2, 0.5, 1.0);
 
     if (dist < 0.07*r2) {
         gl_FragColor = mix(colorBase, colorImg, t);

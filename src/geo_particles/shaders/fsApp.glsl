@@ -1,5 +1,6 @@
 uniform sampler2D apps;
 varying vec3 vPosition;
+flat in int vertexID;
 
 #define PI 3.14159265359
 
@@ -15,7 +16,8 @@ vec2 indexImage(vec2 p, int index) {
 }
 
 void main() {
-    int index = int(vPosition.y*10.0+100.0) % 12;
+    // int index = int(vPosition.y*10.0+100.0) % 12;
+    int index = vertexID % 12;
     vec2 offset = gl_PointCoord - vec2(0.5, 0.5);
     float dist = length(offset);
     vec2 p = indexImage(gl_PointCoord, index);

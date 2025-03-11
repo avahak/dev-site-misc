@@ -6,8 +6,8 @@ import { App as GeoApp } from './geo/App.tsx';
 import { App as GeoParticlesApp } from './geo_particles/App.tsx';
 import { App as RegionJsonApp } from './region_json/App.tsx';
 import { App as FractalApp } from './fractals/App.tsx';
-import { App as ClassTemplateApp } from './template_three_class/App.tsx';
-import { App as ReactTemplateApp } from './template_three_react/App.tsx';
+import { App as ClassTemplateApp } from './template_class/App.tsx';
+import { App as WebGLApp } from './webgl_tools/App.tsx';
 import { FrontPage } from './FrontPage.tsx';
 
 const AppRouter = () => {
@@ -22,7 +22,7 @@ const AppRouter = () => {
                 <Route path="/region_json" element={<RegionJsonApp />} />
                 <Route path="/fractals" element={<FractalApp />} />
                 <Route path="/template_class" element={<ClassTemplateApp />} />
-                <Route path="/template_react" element={<ReactTemplateApp />} />
+                <Route path="/webgl_tools" element={<WebGLApp />} />
                 <Route path="/" element={<FrontPage />} />
             </Routes>
         </HashRouter>

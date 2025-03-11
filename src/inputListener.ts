@@ -1,3 +1,5 @@
+// TODO Fix to allow multiple pointerType "mouse" pointers
+
 type KeyParams = {
     key: string;
     code: string;

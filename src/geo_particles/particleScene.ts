@@ -42,7 +42,7 @@ class ParticleScene {
 
         this.shaderMaterial = new THREE.ShaderMaterial({
             uniforms: {
-                uPositionObjects: { value: Array.from({ length: NUM_OBJECTS }, () => new THREE.Vector3(0, 0, 0)) },
+                uPositionObjects: { value: Array.from({ length: NUM_OBJECTS }, () => new THREE.Vector3(-100.0, 0, 0)) },
                 extraData: { value: this.initialExtraDataTexture },
                 uPosition0: { value: this.initialPositionsTexture },
                 uPosition1: { value: this.initialPositionsTexture },
