@@ -50,7 +50,7 @@ const FrontPage = () => {
                 </MUILink>
                 <br />
                 <MUILink component={RouterLink} to="/webgl_tools" variant="body1" color="primary">
-                    WebGL rendering tools
+                    Rendering tools
                 </MUILink>
             </Box>
             <Typography variant="body2" color="textSecondary" sx={{mt: 10}}>{`Build: ${BUILD_TIMESTAMP}`}</Typography>

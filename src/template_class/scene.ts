@@ -128,16 +128,15 @@ class Scene {
 
     animate() {
         this.animationRequestID = requestAnimationFrame(this.animate);
-        this.animateStep();
+        if (!this.isStopped)
+            this.animateStep();
     }
 
     animateStep() {
-        if (this.isStopped)
-            return;
         const currentTime = (this.lastTime ?? 0.0) + 1.0;
         this.lastTime = currentTime;
 
-        const t = 0.25 + this.lastTime*0.002;
+        const t = this.lastTime*0.002;
         this.cube.setRotationFromEuler(new THREE.Euler(t, 2.0*t, 3.0*t));
 
         this.renderer.render(this.scene, this.camera);

@@ -1,20 +1,18 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-import vs from './shaders/vs.glsl?raw';
-import fs from './shaders/fs.glsl?raw';
+import { OrbitControls } from 'three/examples/jsm/Addons.js';
 
-class Scene {
+class TextScene {
     container: HTMLDivElement;
     camera!: THREE.Camera;
     scene!: THREE.Scene;
     renderer: THREE.WebGLRenderer;
     cleanUpTasks: (() => void)[];
     animationRequestID: number|null = null;
-    lastTime: number|null = null;
+    lastTime: number = 0;
     gui: any;
     isStopped: boolean = false;
-
-    shader!: THREE.ShaderMaterial;
+    controls!: OrbitControls;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -45,12 +43,11 @@ class Scene {
         console.log(`Resize! (${clientWidth}, ${clientHeight})`);
         this.renderer.setSize(clientWidth, clientHeight);
         const aspect = clientWidth / clientHeight;
-        if (this.camera instanceof THREE.OrthographicCamera) {
-            this.camera.left = -aspect;
-            this.camera.right = aspect;
+        if (this.camera instanceof THREE.PerspectiveCamera) {
+            this.camera.aspect = aspect;
             this.camera.updateProjectionMatrix();
         }
-        this.shader.uniforms.resolution.value = new THREE.Vector2(clientWidth, clientHeight);
+        // this.shader.uniforms.resolution.value = new THREE.Vector2(clientWidth, clientHeight);
     }
 
     setupResizeRenderer() {
@@ -65,7 +62,12 @@ class Scene {
 
     createGUI() {
         this.gui = new GUI();
-        const animateButton = () => this.animateStep();
+        const animateButton = () => {
+            const temp = this.isStopped;
+            this.isStopped = false;
+            this.animateStep();
+            this.isStopped = temp;
+        }
         const toggleStop = () => { 
             this.isStopped = !this.isStopped;
         };
@@ -88,26 +90,23 @@ class Scene {
     }
 
     setupCamera() {
-        this.camera = new THREE.OrthographicCamera();
+        this.camera = new THREE.PerspectiveCamera();
 
-        this.camera.position.set(0, 0, 1);
+        this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+
+        this.camera.position.set(0, 0.2, 1.0);
         this.camera.lookAt(new THREE.Vector3(0, 0, 0));
+        this.controls.update();
     }
 
     setupScene() {
         this.scene = new THREE.Scene();
 
-        this.shader = new THREE.ShaderMaterial({
-            uniforms: {
-                resolution: { value: null },
-            },
-            vertexShader: vs,
-            fragmentShader: fs,
-        });
+        const cubeGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        const cubeMaterial = new THREE.MeshNormalMaterial();
+        const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
 
-        const geometry = new THREE.PlaneGeometry(2, 2);
-        let mesh = new THREE.Mesh(geometry, this.shader);
-        this.scene.add(mesh);
+        this.scene.add(cube);
     }
 
     getResolution() {
@@ -121,15 +120,13 @@ class Scene {
     }
 
     animateStep() {
-        if (this.isStopped)
-            return;
-        const currentTime = (this.lastTime ?? 0.0) + 1.0;
+        const currentTime = (this.lastTime ?? 0.0) + (this.isStopped ? 0.0 : 1.0);
         this.lastTime = currentTime;
 
-        const t = 0.25 + this.lastTime*0.002;
+        const t = this.lastTime*0.001;
 
         this.renderer.render(this.scene, this.camera);
     }
 }
 
-export { Scene };
+export { TextScene };
