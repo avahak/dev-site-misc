@@ -5,7 +5,7 @@ import fs from './shaders/fs.glsl?raw';
 /**
  * Draws uniform cubic B-splines using instancing.
  */
-class UniformBSplineGroup {
+class UCBSplineGroup {
     // MAX_WIDTH has to match value in vs.glsl.
     // This is used to avoid limitations on texture dimensions.
     static MAX_WIDTH = 1024;
@@ -77,8 +77,8 @@ class UniformBSplineGroup {
             const m = this.controlPointArray.length / 4;
             this.controlPointTexture = new THREE.DataTexture(
                 this.controlPointArray, 
-                Math.min(m, UniformBSplineGroup.MAX_WIDTH), 
-                Math.ceil(m / UniformBSplineGroup.MAX_WIDTH),
+                Math.min(m, UCBSplineGroup.MAX_WIDTH), 
+                Math.ceil(m / UCBSplineGroup.MAX_WIDTH),
                 THREE.RGBAFormat, THREE.FloatType
             );
             this.shader.uniforms.controlPointTexture.value = this.controlPointTexture;
@@ -97,8 +97,8 @@ class UniformBSplineGroup {
             this.indexTexture.dispose();
             this.indexTexture = new THREE.DataTexture(
                 this.indexArray, 
-                Math.min(this.indexArray.length, UniformBSplineGroup.MAX_WIDTH), 
-                Math.ceil(this.indexArray.length / UniformBSplineGroup.MAX_WIDTH), 
+                Math.min(this.indexArray.length, UCBSplineGroup.MAX_WIDTH), 
+                Math.ceil(this.indexArray.length / UCBSplineGroup.MAX_WIDTH), 
                 THREE.RedIntegerFormat, THREE.IntType
             );
             this.shader.uniforms.indexTexture.value = this.indexTexture;
@@ -133,4 +133,4 @@ class UniformBSplineGroup {
     }
 }
 
-export { UniformBSplineGroup };
+export { UCBSplineGroup };

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-import { UniformBSplineGroup } from './uniformBSpline';
+import { UCBSplineGroup } from './UCBSpline';
 import { OrbitControls } from 'three/examples/jsm/Addons.js';
 
 class SplineScene {
@@ -15,7 +15,7 @@ class SplineScene {
     isStopped: boolean = false;
     controls!: OrbitControls;
 
-    splineGroup!: UniformBSplineGroup;
+    splineGroup!: UCBSplineGroup;
     splineObject!: THREE.Object3D;
 
     constructor(container: HTMLDivElement) {
@@ -281,7 +281,7 @@ class SplineScene {
     setupScene() {
         this.scene = new THREE.Scene();
 
-        this.splineGroup = new UniformBSplineGroup();
+        this.splineGroup = new UCBSplineGroup();
         this.fillSplineGroup3(0, 3, true);
 
         this.splineObject = this.splineGroup.getObject();

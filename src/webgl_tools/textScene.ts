@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/examples/jsm/Addons.js';
+import vsText from './shaders/vs_text.glsl?raw';
+import fsText from './shaders/fs_text.glsl?raw';
 
 class TextScene {
     container: HTMLDivElement;
@@ -13,6 +15,9 @@ class TextScene {
     gui: any;
     isStopped: boolean = false;
     controls!: OrbitControls;
+
+    shader!: THREE.ShaderMaterial;
+    bg!: THREE.Group;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -47,7 +52,7 @@ class TextScene {
             this.camera.aspect = aspect;
             this.camera.updateProjectionMatrix();
         }
-        // this.shader.uniforms.resolution.value = new THREE.Vector2(clientWidth, clientHeight);
+        this.shader.uniforms.resolution.value = new THREE.Vector2(clientWidth, clientHeight);
     }
 
     setupResizeRenderer() {
@@ -102,11 +107,30 @@ class TextScene {
     setupScene() {
         this.scene = new THREE.Scene();
 
+        this.bg = new THREE.Group();
+        const tempGeometry = new THREE.BoxGeometry(0.1, 0.2, 0.7);
+        const tempMaterial = new THREE.MeshNormalMaterial();
+        const tempCube = new THREE.Mesh(tempGeometry, tempMaterial);
+        this.bg.add(tempCube);
+
+        const texture = new THREE.TextureLoader().load('/dev-site-misc/fonts/test.png');
+        // texture.generateMipmaps = false;
+
+        this.shader = new THREE.ShaderMaterial({
+            uniforms: {
+                tex: { value: texture },
+                resolution: { value: null },
+            },
+            vertexShader: vsText,
+            fragmentShader: fsText,
+            transparent: true,
+        });
+
         const cubeGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-        const cubeMaterial = new THREE.MeshNormalMaterial();
-        const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+        const cube = new THREE.Mesh(cubeGeometry, this.shader);
 
         this.scene.add(cube);
+        this.scene.add(this.bg);
     }
 
     getResolution() {
@@ -116,7 +140,8 @@ class TextScene {
 
     animate() {
         this.animationRequestID = requestAnimationFrame(this.animate);
-        this.animateStep();
+        if (!this.isStopped)
+            this.animateStep();
     }
 
     animateStep() {
@@ -124,6 +149,7 @@ class TextScene {
         this.lastTime = currentTime;
 
         const t = this.lastTime*0.001;
+        this.bg.setRotationFromEuler(new THREE.Euler(0.5*t, 1.0*t, -0.3*t));
 
         this.renderer.render(this.scene, this.camera);
     }

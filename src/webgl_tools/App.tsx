@@ -53,13 +53,20 @@ const App: React.FC = () => {
                     Rendering tools
                 </Typography>
             </Box>
-            <Box sx={{ display: "flex", flexDirection: "row", width: "100%", height: "100%", justifyContent: "center", gap: "10px" }}>
-                <Box width="50%">
+            <Box sx={{ 
+                display: "flex", 
+                flexDirection: { xs: "column", md: "row" },
+                width: "100%", 
+                height: "100%", 
+                justifyContent: "center", 
+                gap: "10px" 
+            }}>
+                <Box sx={{ width: { xs: "100%", md: "50%" }, height: "100%" }}>
                     <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
                         <TextSceneComponent />
                     </Suspense>
                 </Box>
-                <Box width="50%">
+                <Box sx={{ width: { xs: "100%", md: "50%" }, height: "100%" }}>
                     <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
                         <SplineSceneComponent />
                     </Suspense>
