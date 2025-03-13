@@ -24,6 +24,9 @@ void main() {
     float screenPxDistance = screenPxRange()*(sd - 0.5);
     float opacity = clamp(screenPxDistance + 0.5, 0.0, 1.0);
 
-    gl_FragColor = vec4(vec3(1.0), opacity);
-    // gl_FragColor = vec4(0.1, 0.2, 0.5+0.5*sin(100.0*aspect), 1.0);
+    if (opacity > 0.1) {
+        gl_FragColor = vec4(vec3(1.0), opacity);
+    } else {
+        discard;
+    }
 }

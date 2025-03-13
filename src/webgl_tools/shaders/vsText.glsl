@@ -3,27 +3,23 @@ precision highp float;
 uniform int numChars;
 uniform sampler2D offsetCoordsTexture;
 uniform sampler2D atlasCoordsTexture;
-uniform vec2 resolution;
 
-out vec4 vPos;
-out vec2 vUv;
-out vec4 atlasCoords;
+out vec2 atlasCoords;
+
+#define MAX_WIDTH 1024
 
 void main() {
-    int vIndex = gl_VertexID;
     int iIndex = gl_InstanceID;
+    ivec2 texelIndex = ivec2(iIndex % MAX_WIDTH, iIndex / MAX_WIDTH);
+
     vec2 p = position.xy;
 
-    vec4 offset = texelFetch(offsetCoordsTexture, ivec2(iIndex, 0), 0);
+    vec4 offset4 = texelFetch(offsetCoordsTexture, texelIndex, 0);
+    vec2 offsetCoords = offset4.xy + p*(offset4.zw-offset4.xy);
+    vec4 vPos = vec4(offsetCoords, 0.0, 1.0);
 
-    vPos = vec4(
-        offset.x + p.x*(offset.z-offset.x), 
-        offset.y + p.y*(offset.w-offset.y),
-        0.0, 
-        1.0
-    );
+    vec4 atlas4 = texelFetch(atlasCoordsTexture, texelIndex, 0);
+    atlasCoords = atlas4.xy + p*(atlas4.zw - atlas4.xy);
 
-    atlasCoords = texelFetch(atlasCoordsTexture, ivec2(iIndex, 0), 0);
-    vUv = p.xy;
     gl_Position = projectionMatrix * modelViewMatrix * vPos;
 }

@@ -24,8 +24,8 @@ class MCDFFont {
 
         this.atlas = new THREE.TextureLoader().load(`/dev-site-misc/fonts/${this.name}.png`);
         this.atlas.needsUpdate = true;
-        // this.atlas.generateMipmaps = false;
         this.atlas.anisotropy = 4;
+        // this.atlas.generateMipmaps = false;
 
         try {
             const response = await fetch(`/dev-site-misc/fonts/${this.name}.json`);

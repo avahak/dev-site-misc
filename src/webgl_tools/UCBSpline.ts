@@ -16,6 +16,7 @@ class UCBSplineGroup {
     ibGeometry!: THREE.InstancedBufferGeometry;
     controlPointTexture!: THREE.DataTexture;
     indexTexture!: THREE.DataTexture;
+    mesh: THREE.Object3D;
 
     // (x,y,z,0) for each control point, flattened
     controlPointArray: Float32Array;
@@ -49,6 +50,8 @@ class UCBSplineGroup {
         this.indexTexture = new THREE.DataTexture(this.indexArray, this.indexArray.length, 1, THREE.RedIntegerFormat, THREE.IntType);
         this.shader.uniforms.controlPointTexture.value = this.controlPointTexture;
         this.shader.uniforms.indexTexture.value = this.indexTexture;
+
+        this.mesh = new THREE.Line(this.ibGeometry, this.shader);
 
         this.reset();
     }
@@ -129,7 +132,7 @@ class UCBSplineGroup {
     }
 
     getObject(): THREE.Object3D {
-        return new THREE.Line(this.ibGeometry, this.shader);
+        return this.mesh;
     }
 }
 

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/examples/jsm/Addons.js';
-import vsText from './shaders/vsTestText.glsl?raw';
-import fsText from './shaders/fsTestText.glsl?raw';
+import vsTestText from './shaders/vsTestText.glsl?raw';
+import fsTestText from './shaders/fsTestText.glsl?raw';
 import { TextGroup } from './textRender';
 import { MCDFFont } from './font';
 
@@ -122,16 +122,21 @@ class TextScene {
                 tex: { value: this.font.atlas },
                 resolution: { value: null },
             },
-            vertexShader: vsText,
-            fragmentShader: fsText,
+            vertexShader: vsTestText,
+            fragmentShader: fsTestText,
             transparent: true,
+            // blending: THREE.AdditiveBlending,    // There is no easy solution here
+            // depthWrite: false,
         });
 
         const cubeGeometry = new THREE.BoxGeometry(0.25, 0.5, 0.5);
         const cube = new THREE.Mesh(cubeGeometry, this.shader);
 
         const textGroup = new TextGroup(this.font);
-        textGroup.addText('Test 123! AVat/025,:"aa')
+        let s = '';
+        for (let k = 0; k < 100; k++)
+            s += `R:_${Math.random()}_\n`;
+        textGroup.addText(s);
 
         this.scene.add(cube);
         this.scene.add(this.bg);
