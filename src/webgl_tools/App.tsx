@@ -4,6 +4,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
 import { SplineScene } from './splineScene';
 import { TextScene } from './textScene';
+import { MCDFFont } from './font';
 
 const SplineSceneComponent: React.FC = () => { 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -27,20 +28,44 @@ const SplineSceneComponent: React.FC = () => {
 
 const TextSceneComponent: React.FC = () => { 
     const containerRef = useRef<HTMLDivElement>(null);
+    const [font, setFont] = useState<MCDFFont | null>(null);
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
-        const scene = new TextScene(containerRef.current!);
-        return () => {
-            scene.cleanUp();
+
+        const loadFont = async () => {
+            try {
+                const font = new MCDFFont();
+                await font.load('test');
+                setFont(font);
+            } catch (error) {
+                console.error("Failed to load MyObject:", error);
+            }
         };
+
+        loadFont();
     }, []);
+
+    useEffect(() => {
+        if (font) {
+            const scene = new TextScene(containerRef.current!, font);
+            return () => {
+                scene.cleanUp();
+            };
+        }
+    }, [font]);
 
     return (
         <Box style={{ width: "100%", height: "600px" }}>
+            {!font ? (
+                <Box display="flex" justifyContent="center">
+                    <Typography>Loading font...</Typography>
+                </Box>
+            ) : (
             <Suspense fallback={<Box display="flex" justifyContent="center"><Typography>Loading..</Typography></Box>}>
                 <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
             </Suspense>
+            )}
         </Box>
     );
 };

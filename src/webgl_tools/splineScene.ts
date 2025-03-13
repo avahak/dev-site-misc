@@ -307,9 +307,10 @@ class SplineScene {
 
         // this.fillSplineGroup1(t, true);
         // this.fillSplineGroup2(t, false);
-        this.fillSplineGroup3(t, 3, true);
+        // this.fillSplineGroup3(t, 3, true);
 
         // this.splineObject.setRotationFromEuler(new THREE.Euler(3.0+3.0*t, 2.0+5.0*t, 5.0+2.0*t));
+        this.splineObject.setRotationFromEuler(new THREE.Euler(0.02*Math.sin(30*t), 0.02*Math.cos(30*t), Math.PI/2));
 
         this.renderer.render(this.scene, this.camera);
     }
