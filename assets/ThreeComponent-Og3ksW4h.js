@@ -1,4 +1,4 @@
-var w=Object.defineProperty;var I=(s,e,t)=>e in s?w(s,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):s[e]=t;var n=(s,e,t)=>I(s,typeof e!="symbol"?e+"":e,t);import{l as b,q as T,s as M,t as f,u as v,N as u,v as x,w as O,i as P,x as R,W as y,m as g,y as j,I as U,z as A,c as m,n as k,A as B,B as C,E,h as D,O as z,r as S,p as N}from"./index-c3FJh4BM.js";const _=`// From three.js: position, uv, normal, time, etc.\r
+var w=Object.defineProperty;var I=(s,e,t)=>e in s?w(s,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):s[e]=t;var n=(s,e,t)=>I(s,typeof e!="symbol"?e+"":e,t);import{l as b,q as T,s as M,t as f,u as v,N as u,v as x,w as O,i as P,x as R,W as y,m as g,y as j,I as U,z as A,c as m,n as k,A as B,B as C,E,h as D,O as z,r as S,p as N}from"./index-Jw2Xkb4H.js";const _=`// From three.js: position, uv, normal, time, etc.\r
 \r
 varying vec2 vUv;\r
 \r
