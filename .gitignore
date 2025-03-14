@@ -2,6 +2,8 @@
 *.env_azure
 *.txt
 
+!pap.txt
+
 # Logs
 logs
 *.log
