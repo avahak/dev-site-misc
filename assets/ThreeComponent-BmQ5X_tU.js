@@ -1,4 +1,4 @@
-var T=Object.defineProperty;var U=(n,e,t)=>e in n?T(n,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):n[e]=t;var i=(n,e,t)=>U(n,typeof e!="symbol"?e+"":e,t);import{q as x,x as I,N as k,R as C,t as J,u as D,l as y,v,w as M,i as z,V as R,X as O,Y as E,W as K,r as S,p as j}from"./index-Jw2Xkb4H.js";const g=`precision highp float;\r
+var T=Object.defineProperty;var U=(n,e,t)=>e in n?T(n,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):n[e]=t;var i=(n,e,t)=>U(n,typeof e!="symbol"?e+"":e,t);import{q as x,x as I,N as k,R as C,t as J,u as D,l as y,v,w as M,i as z,V as R,X as O,Y as E,W as K,r as S,p as j}from"./index-CviKRLtH.js";const g=`precision highp float;\r
 \r
 varying vec4 vPosition;\r
 varying vec2 vUv;\r
