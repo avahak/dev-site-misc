@@ -140,7 +140,7 @@ class TextScene {
 
         this.textGroups.push(new TextGroup(this.font2));
         this.textGroups.push(new TextGroup(this.font1));
-        this.textGroups.push(new TextGroup(this.font1));
+        this.textGroups.push(new TextGroup(this.font2));
 
         // this.scene.add(cube);
         this.scene.add(this.bg);

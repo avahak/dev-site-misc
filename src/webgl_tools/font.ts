@@ -23,12 +23,13 @@ class MCDFFont {
         this.name = name;
 
         this.atlas = new THREE.TextureLoader().load(`/dev-site-misc/fonts/${this.name}.png`);
-        // Direct approach with mipmapping is problematic here - it samples outside the 
-        // character rectangle in the atlas. Could replace the mipmaps though.
-        // this.atlas.anisotropy = 4;
-        this.atlas.generateMipmaps = false;
-        this.atlas.minFilter = THREE.LinearFilter;
-        this.atlas.magFilter = THREE.LinearFilter;
+        // Careful with mipmapping here - need padding in the font atlases and
+        // need to clean up the padding by removing the single color areas in padding zones
+        // (using pad.py).
+        this.atlas.anisotropy = 4;
+        // this.atlas.generateMipmaps = false;
+        // this.atlas.minFilter = THREE.LinearFilter;
+        // this.atlas.magFilter = THREE.LinearFilter;
         this.atlas.needsUpdate = true;
 
         try {

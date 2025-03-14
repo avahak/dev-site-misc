@@ -1,3 +1,5 @@
+// TODO How to do colors here?
+
 import * as THREE from 'three';
 import vs from './shaders/vs.glsl?raw';
 import fs from './shaders/fs.glsl?raw';
