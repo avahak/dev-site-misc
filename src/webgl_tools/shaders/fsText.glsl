@@ -2,17 +2,16 @@ precision highp float;
 
 uniform int numChars;
 uniform sampler2D atlasTexture;
-uniform vec2 atlasSize;
-uniform vec3 color;
+uniform vec2 unitRange;
 
 in vec2 atlasCoords;
+in vec3 color;
 
 float median(float r, float g, float b) {
     return max(min(r, g), min(max(r, g), b));
 }
 
 float screenPxRange() {
-    vec2 unitRange = vec2(0.75) / atlasSize;
     vec2 screenTexSize = vec2(1.0) / fwidth(atlasCoords);
     return max(dot(unitRange, screenTexSize), 1.0);
 }

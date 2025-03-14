@@ -252,7 +252,7 @@ class SplineScene {
             const I = 3;
             const K = 64;
             for (let i = 0; i < I; i++) {
-                const M = 128*2;
+                const M = 128;
                 for (let m = 0; m < M; m++) {
                     const sm = m / M;
                     const pList = [];

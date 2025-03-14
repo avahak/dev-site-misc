@@ -28,36 +28,40 @@ const SplineSceneComponent: React.FC = () => {
 
 const TextSceneComponent: React.FC = () => { 
     const containerRef = useRef<HTMLDivElement>(null);
-    const [font, setFont] = useState<MCDFFont | null>(null);
+    const [font1, setFont1] = useState<MCDFFont | null>(null);
+    const [font2, setFont2] = useState<MCDFFont | null>(null);
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
 
-        const loadFont = async () => {
+        const loadFonts = async () => {
             try {
-                const font = new MCDFFont();
-                await font.load('test');
-                setFont(font);
+                const font1 = new MCDFFont();
+                await font1.load('times64');
+                const font2 = new MCDFFont();
+                await font2.load('consola64');
+                setFont1(font1);
+                setFont2(font2);
             } catch (error) {
                 console.error("Failed to load MyObject:", error);
             }
         };
 
-        loadFont();
+        loadFonts();
     }, []);
 
     useEffect(() => {
-        if (font) {
-            const scene = new TextScene(containerRef.current!, font);
+        if (font1 && font2) {
+            const scene = new TextScene(containerRef.current!, font1, font2);
             return () => {
                 scene.cleanUp();
             };
         }
-    }, [font]);
+    }, [font1, font2]);
 
     return (
         <Box style={{ width: "100%", height: "600px" }}>
-            {!font ? (
+            {!(font1 && font2) ? (
                 <Box display="flex" justifyContent="center">
                     <Typography>Loading font...</Typography>
                 </Box>
@@ -78,7 +82,7 @@ const App: React.FC = () => {
                     Rendering tools
                 </Typography>
             </Box>
-            <Box sx={{ 
+            {/* <Box sx={{ 
                 display: "flex", 
                 flexDirection: { xs: "column", md: "row" },
                 width: "100%", 
@@ -96,6 +100,16 @@ const App: React.FC = () => {
                         <SplineSceneComponent />
                     </Suspense>
                 </Box>
+            </Box> */}
+            <Box sx={{ width: "100%", height: "100%" }}>
+                <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
+                    <TextSceneComponent />
+                </Suspense>
+            </Box>
+            <Box sx={{ width: "100%", height: "100%" }}>
+                <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
+                    <SplineSceneComponent />
+                </Suspense>
             </Box>
             {/* <Typography sx={{my: 2}}>
                 Text

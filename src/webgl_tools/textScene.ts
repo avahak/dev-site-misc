@@ -17,14 +17,17 @@ class TextScene {
     gui: any;
     isStopped: boolean = false;
     controls!: OrbitControls;
-    font: MCDFFont;
+    font1: MCDFFont;
+    font2: MCDFFont;
+    textGroups: TextGroup[] = [];
 
     shader!: THREE.ShaderMaterial;
     bg!: THREE.Group;
 
-    constructor(container: HTMLDivElement, font: MCDFFont) {
+    constructor(container: HTMLDivElement, font1: MCDFFont, font2: MCDFFont) {
         this.container = container;
-        this.font = font;
+        this.font1 = font1;
+        this.font2 = font2;
         this.cleanUpTasks = [];
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         this.renderer.setClearColor(0x000000, 0);
@@ -103,7 +106,8 @@ class TextScene {
 
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         
-        this.camera.position.set(0, 0, 2);
+        this.camera.position.set(0, 0.5, 0.7);
+        this.controls.target.set(0, 0, 0);
         // this.camera.lookAt(new THREE.Vector3(5, 0, 0));
         this.controls.update();
     }
@@ -119,7 +123,7 @@ class TextScene {
 
         this.shader = new THREE.ShaderMaterial({
             uniforms: {
-                tex: { value: this.font.atlas },
+                tex: { value: this.font1.atlas },
                 resolution: { value: null },
             },
             vertexShader: vsTestText,
@@ -129,18 +133,20 @@ class TextScene {
             // depthWrite: false,
         });
 
-        const cubeGeometry = new THREE.BoxGeometry(0.25, 0.5, 0.5);
-        const cube = new THREE.Mesh(cubeGeometry, this.shader);
+        // const cubeGeometry = new THREE.BoxGeometry(0.25, 0.5, 0.5);
+        // const cube = new THREE.Mesh(cubeGeometry, this.shader);
 
-        const textGroup = new TextGroup(this.font);
-        let s = '';
-        for (let k = 0; k < 100; k++)
-            s += `R:_${Math.random()}_\n`;
-        textGroup.addText(s);
+        this.textGroups.push(new TextGroup(this.font2));
+        this.textGroups.push(new TextGroup(this.font1));
 
-        this.scene.add(cube);
+        // this.scene.add(cube);
         this.scene.add(this.bg);
-        this.scene.add(textGroup.getObject());
+        this.textGroups.forEach((tg) => {
+            this.scene.add(tg.getObject());
+        });
+        this.temp(this.textGroups[1], 600, 100000, 0);
+
+        this.scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI/2);
     }
 
     getResolution() {
@@ -154,12 +160,45 @@ class TextScene {
             this.animateStep();
     }
 
+    temp(tg: TextGroup, start: number, end: number, t: number) {
+        tg.reset();
+        let count = 11*start;
+        const col1 = [0.8, 0.7, 0.5];
+        const col2 = [1.0, 0.2, 0.1];
+        for (let k = start; k < end; k++) {
+            const c1 = 8;
+            const dx = count + 10*t;
+            const posFn = (x: number, y: number) => {
+                const p1 = 0.01*(Math.sqrt(c1*(x+dx))+c1*y)*Math.cos(Math.sqrt(c1*(x+dx)));
+                const p2 = -0.01*(Math.sqrt(c1*(x+dx))+c1*y)*Math.sin(Math.sqrt(c1*(x+dx)));
+                // const r = Math.sqrt(p1*p1 + p2*p2);
+                // const z = k > 1000 ? (1*Math.atan(0.001*(k-1000)))*(Math.sin(r/2) + Math.sin(5*p1/r) + Math.sin(7*p2/r)) : 0;
+                return [p1, p2, 0];
+            };
+            const a = count/100 + t;
+            let rand = count + Math.round(a) * 1666196;
+            rand = (rand * 1664525 + 1013904223) % 4294967296;
+            const x = (rand >>> 0) / 4294967296
+            let s = `$${x.toFixed(16)}#`;
+            if (k % 50 == 0)
+                s = `Font: ${tg.font.name}`
+            let d = 10*Math.min(Math.max(Math.abs(Math.round(a)-a)-0.35, 0), 1);
+            d = d*d; 
+            let color = [d*col2[0]+(1-d)*col1[0], d*col2[1]+(1-d)*col1[1], d*col2[2]+(1-d)*col1[2]];
+            tg.addText(s, posFn, color);
+            count += (tg.font == this.font1) ? 11 : 12;
+        }
+        // this.textGroup.addText(s, posFn, color);
+    }
+
     animateStep() {
         const currentTime = (this.lastTime ?? 0.0) + (this.isStopped ? 0.0 : 1.0);
         this.lastTime = currentTime;
 
         const t = this.lastTime*0.001;
-        this.bg.setRotationFromEuler(new THREE.Euler(0.5*t, 1.0*t, -0.3*t));
+        this.bg.setRotationFromEuler(new THREE.Euler(Math.PI/2, 2*t, 3*t));
+
+        this.temp(this.textGroups[0], 0, 500, t);
 
         this.renderer.render(this.scene, this.camera);
     }

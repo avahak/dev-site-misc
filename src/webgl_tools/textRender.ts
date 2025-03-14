@@ -7,19 +7,22 @@ import { MCDFFont } from './font';
  * Renders text.
  */
 class TextGroup {
-    // MAX_WIDTH has to match value in vsText.glsl.
+    // TEXTURE_MAX_WIDTH has to match value in vsText.glsl.
     // This is used to avoid limitations on texture dimensions.
-    static MAX_WIDTH = 1024;
+    static TEXTURE_MAX_WIDTH = 1024;
+    // FLOATS_PER_CHAR is number of floats stored for 1 text character
+    // (4 atlasCoords, 3 pos, 3 e1, 3 e2, 3 color)
+    static FLOATS_PER_CHAR = 16;
+    // affects sharpness on text edges, default 0.75
+    static SHARPNESS = 0.75;
 
     font!: MCDFFont;
     shader!: THREE.ShaderMaterial;
     ibGeometry!: THREE.InstancedBufferGeometry;
-    offsetCoordsTexture!: THREE.Texture;
-    atlasCoordsTexture!: THREE.Texture;
+    dataTexture!: THREE.Texture;
     mesh: THREE.Object3D;
 
-    offsetCoords!: Float32Array;
-    atlasCoords!: Float32Array;
+    data!: Float32Array;
     numChars!: number;
 
     constructor(font: MCDFFont) {
@@ -27,12 +30,10 @@ class TextGroup {
 
         this.shader = new THREE.ShaderMaterial({
             uniforms: {
-                offsetCoordsTexture: { value: null },
-                atlasCoordsTexture: { value: null },
+                dataTexture: { value: null },
                 atlasTexture: { value: font.atlas },
-                atlasSize: { value: [this.font.layoutData.atlas.width, this.font.layoutData.atlas.height] },
+                unitRange: { value: [TextGroup.SHARPNESS/this.font.layoutData.atlas.width, TextGroup.SHARPNESS/this.font.layoutData.atlas.height] },
                 numChars: { value: null },
-                color: { value: [0.5, 0.7, 1.0] }
             },
             vertexShader: vsText,
             fragmentShader: fsText,
@@ -48,14 +49,10 @@ class TextGroup {
         this.ibGeometry.setAttribute('position', new THREE.BufferAttribute(square, 3));
         this.ibGeometry.setIndex(new THREE.BufferAttribute(squareIndices, 1));
 
-        this.offsetCoords = new Float32Array(TextGroup.MAX_WIDTH);
-        this.atlasCoords = new Float32Array(TextGroup.MAX_WIDTH);
-        this.offsetCoordsTexture = new THREE.DataTexture(this.offsetCoords, this.offsetCoords.length/4, 1, THREE.RGBAFormat, THREE.FloatType);
-        this.atlasCoordsTexture = new THREE.DataTexture(this.atlasCoords, this.atlasCoords.length/4, 1, THREE.RGBAFormat, THREE.FloatType);
-        this.shader.uniforms.offsetCoordsTexture.value = this.offsetCoordsTexture;
-        this.shader.uniforms.atlasCoordsTexture.value = this.atlasCoordsTexture;
-        this.offsetCoordsTexture.needsUpdate = true;
-        this.atlasCoordsTexture.needsUpdate = true;
+        this.data = new Float32Array(TextGroup.TEXTURE_MAX_WIDTH/TextGroup.FLOATS_PER_CHAR);
+        this.dataTexture = new THREE.DataTexture(this.data, this.data.length/4, 1, THREE.RGBAFormat, THREE.FloatType);
+        this.shader.uniforms.dataTexture.value = this.dataTexture;
+        this.dataTexture.needsUpdate = true;
 
         this.mesh = new THREE.Mesh(this.ibGeometry, this.shader);
         this.mesh.frustumCulled = false;
@@ -63,7 +60,7 @@ class TextGroup {
         this.reset();
     }
 
-    addText(text: string) {
+    addText(text: string, pos: (x: number, y: number) => number[], color: number[]) {
         let x = 0;
         let y = 0;
         let previousCharCode = -1;
@@ -71,7 +68,7 @@ class TextGroup {
             const code = text.charCodeAt(k);
             if (code == 10) {
                 x = 0;
-                y += this.font.layoutData.metrics.lineHeight;
+                y -= this.font.layoutData.metrics.lineHeight;
                 previousCharCode = -1;
                 continue;
             }
@@ -85,20 +82,49 @@ class TextGroup {
                 const kerning = this.font.kerningLookup?.[previousCharCode]?.[code] ?? 0;
                 x += kerning;
 
-                if (4*this.numChars >= this.offsetCoords.length)
-                    this._extendArrays();
+                const x1 = x + glyph.planeBounds.left;
+                const x2 = x + glyph.planeBounds.right;
+                const y1 = y + glyph.planeBounds.bottom;
+                const y2 = y + glyph.planeBounds.top;
+                const pLeft = pos(x1, 0.5*(y1+y2));
+                const pRight = pos(x2, 0.5*(y1+y2));
+                const pBottom = pos(0.5*(x1+x2), y1);
+                const pTop = pos(0.5*(x1+x2), y2);
+                const p = [
+                    (pLeft[0] + pRight[0] + pBottom[0] + pTop[0]) / 4.0,
+                    (pLeft[1] + pRight[1] + pBottom[1] + pTop[1]) / 4.0,
+                    (pLeft[2] + pRight[2] + pBottom[2] + pTop[2]) / 4.0,
+                ];
+                const e1 = [pRight[0] - pLeft[0], pRight[1] - pLeft[1], pRight[2] - pLeft[2]];
+                const e2 = [pTop[0] - pBottom[0], pTop[1] - pBottom[1], pTop[2] - pBottom[2]];
 
-                // Add offsets (4 floats) and atlas coords (4 floats)
-                this.offsetCoords[4*this.numChars + 0] = x + glyph.planeBounds.left;
-                this.offsetCoords[4*this.numChars + 1] = y + glyph.planeBounds.bottom;
-                this.offsetCoords[4*this.numChars + 2] = x + glyph.planeBounds.right;
-                this.offsetCoords[4*this.numChars + 3] = y + glyph.planeBounds.top;
+                if (TextGroup.FLOATS_PER_CHAR*this.numChars >= this.data.length)
+                    this._extendArray();
 
-                this.atlasCoords[4*this.numChars + 0] = glyph.atlasBounds.left / this.font.layoutData.atlas.width;
-                this.atlasCoords[4*this.numChars + 1] = glyph.atlasBounds.bottom / this.font.layoutData.atlas.height;
-                this.atlasCoords[4*this.numChars + 2] = glyph.atlasBounds.right / this.font.layoutData.atlas.width;
-                this.atlasCoords[4*this.numChars + 3] = glyph.atlasBounds.top / this.font.layoutData.atlas.height;
+                const m = TextGroup.FLOATS_PER_CHAR * this.numChars;
 
+                // 4 atlas coords
+                this.data[m + 0] = glyph.atlasBounds.left / this.font.layoutData.atlas.width;
+                this.data[m + 1] = glyph.atlasBounds.bottom / this.font.layoutData.atlas.height;
+                this.data[m + 2] = glyph.atlasBounds.right / this.font.layoutData.atlas.width;
+                this.data[m + 3] = glyph.atlasBounds.top / this.font.layoutData.atlas.height;
+                // 3 pos
+                this.data[m + 4] = p[0];
+                this.data[m + 5] = p[1];
+                this.data[m + 6] = p[2];
+                // 3 e1
+                this.data[m + 7] = e1[0];
+                this.data[m + 8] = e1[1];
+                this.data[m + 9] = e1[2];
+                // 3 e2
+                this.data[m + 10] = e2[0];
+                this.data[m + 11] = e2[1];
+                this.data[m + 12] = e2[2];
+                // 3 color
+                this.data[m + 13] = color[0];
+                this.data[m + 14] = color[1];
+                this.data[m + 15] = color[2];
+                
                 this.numChars++;
                 previousCharCode = code;
             } else {
@@ -108,45 +134,32 @@ class TextGroup {
         }
         this.ibGeometry.instanceCount = this.numChars;
         this.shader.uniforms.numChars.value = this.numChars;
-        this.offsetCoordsTexture.needsUpdate = true;
-        this.atlasCoordsTexture.needsUpdate = true;
+        this.dataTexture.needsUpdate = true;
     }
 
     /**
-     * Doubles this.offsetCoords and this.atlasCoords.
+     * Doubles this.data.
      */
-    _extendArrays() {
-        const n = this.offsetCoords.length;
+    _extendArray() {
+        const n = this.data.length;
         // Create new arrays with double size
-        const newArray1 = new Float32Array(2*n);
-        const newArray2 = new Float32Array(2*n);
+        const newArray = new Float32Array(2*n);
         
         // Copy existing data from previous array
-        newArray1.set(this.offsetCoords, 0);
-        newArray2.set(this.atlasCoords, 0);
-        this.offsetCoords = newArray1;
-        this.atlasCoords = newArray2;
+        newArray.set(this.data, 0);
+        this.data = newArray;
 
         // Hook new arrays into textures
-        this.offsetCoordsTexture.dispose();
-        this.atlasCoordsTexture.dispose();
+        this.dataTexture.dispose();
         const m = 2*n / 4;
-        this.offsetCoordsTexture = new THREE.DataTexture(
-            this.offsetCoords, 
-            Math.min(m, TextGroup.MAX_WIDTH), 
-            Math.ceil(m / TextGroup.MAX_WIDTH),
+        this.dataTexture = new THREE.DataTexture(
+            this.data, 
+            Math.min(m, TextGroup.TEXTURE_MAX_WIDTH), 
+            Math.ceil(m / TextGroup.TEXTURE_MAX_WIDTH),
             THREE.RGBAFormat, THREE.FloatType
         );
-        this.atlasCoordsTexture = new THREE.DataTexture(
-            this.atlasCoords, 
-            Math.min(m, TextGroup.MAX_WIDTH), 
-            Math.ceil(m / TextGroup.MAX_WIDTH),
-            THREE.RGBAFormat, THREE.FloatType
-        );
-        this.shader.uniforms.offsetCoordsTexture.value = this.offsetCoordsTexture;
-        this.shader.uniforms.atlasCoordsTexture.value = this.atlasCoordsTexture;
-        this.offsetCoordsTexture.needsUpdate = true;
-        this.atlasCoordsTexture.needsUpdate = true;
+        this.shader.uniforms.dataTexture.value = this.dataTexture;
+        this.dataTexture.needsUpdate = true;
     }
 
     reset() {
