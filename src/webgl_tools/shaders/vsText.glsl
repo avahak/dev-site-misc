@@ -5,6 +5,7 @@ uniform sampler2D dataTexture;
 
 out vec2 atlasCoords;
 out vec3 color;
+out vec2 vUv;
 
 #define TEXTURE_MAX_WIDTH 1024
 
@@ -27,11 +28,10 @@ void main() {
     vec3 e2 = vec3(tf2.zw, tf3.x);
     color = tf3.yzw;
 
-    vec2 p = position.xy;
-    vec3 pos = posCenter + (p.x-0.5)*e1 + (p.y-0.5)*e2;
-    vec4 vPos = vec4(pos, 1.0);
+    vUv = position.xy;
+    vec4 vPos = vec4(posCenter + (vUv.x-0.5)*e1 + (vUv.y-0.5)*e2, 1.0);
 
-    atlasCoords = atlas4.xy + p*(atlas4.zw - atlas4.xy);
+    atlasCoords = atlas4.xy + vUv*(atlas4.zw - atlas4.xy);
 
     gl_Position = projectionMatrix * modelViewMatrix * vPos;
 }

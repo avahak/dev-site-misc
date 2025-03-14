@@ -19,15 +19,17 @@ class TextScene {
     controls!: OrbitControls;
     font1: MCDFFont;
     font2: MCDFFont;
+    sampleText!: string;
     textGroups: TextGroup[] = [];
 
     shader!: THREE.ShaderMaterial;
     bg!: THREE.Group;
 
-    constructor(container: HTMLDivElement, font1: MCDFFont, font2: MCDFFont) {
+    constructor(container: HTMLDivElement, font1: MCDFFont, font2: MCDFFont, sampleText: string) {
         this.container = container;
         this.font1 = font1;
         this.font2 = font2;
+        this.sampleText = sampleText;
         this.cleanUpTasks = [];
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         this.renderer.setClearColor(0x000000, 0);
@@ -116,7 +118,7 @@ class TextScene {
         this.scene = new THREE.Scene();
 
         this.bg = new THREE.Group();
-        const tempGeometry = new THREE.BoxGeometry(0.1, 0.2, 1.0);
+        const tempGeometry = new THREE.BoxGeometry(0.05, 0.15, 1.0);
         const tempMaterial = new THREE.MeshNormalMaterial();
         const tempCube = new THREE.Mesh(tempGeometry, tempMaterial);
         this.bg.add(tempCube);
@@ -138,13 +140,16 @@ class TextScene {
 
         this.textGroups.push(new TextGroup(this.font2));
         this.textGroups.push(new TextGroup(this.font1));
+        this.textGroups.push(new TextGroup(this.font1));
 
         // this.scene.add(cube);
         this.scene.add(this.bg);
         this.textGroups.forEach((tg) => {
             this.scene.add(tg.getObject());
         });
-        this.temp(this.textGroups[1], 600, 100000, 0);
+        this.temp(this.textGroups[1], 600, 50000, 0);
+
+        this.textGroups[2].addText(this.sampleText, (x, y) => [0.1*x - 1.3, 0, 0.1*y], [1, 1, 1]);
 
         this.scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI/2);
     }
@@ -156,8 +161,7 @@ class TextScene {
 
     animate() {
         this.animationRequestID = requestAnimationFrame(this.animate);
-        if (!this.isStopped)
-            this.animateStep();
+        this.animateStep();
     }
 
     temp(tg: TextGroup, start: number, end: number, t: number) {
@@ -192,13 +196,16 @@ class TextScene {
     }
 
     animateStep() {
-        const currentTime = (this.lastTime ?? 0.0) + (this.isStopped ? 0.0 : 1.0);
-        this.lastTime = currentTime;
+        if (!this.isStopped) {
+            const currentTime = (this.lastTime ?? 0.0) + (this.isStopped ? 0.0 : 1.0);
+            this.lastTime = currentTime;
+        }
 
         const t = this.lastTime*0.001;
-        this.bg.setRotationFromEuler(new THREE.Euler(Math.PI/2, 2*t, 3*t));
+        this.bg.setRotationFromEuler(new THREE.Euler(Math.PI/2, 0.3*t, 0.5*t));
 
         this.temp(this.textGroups[0], 0, 500, t);
+        this.textGroups[2].mesh.position.set(0, 0, t);
 
         this.renderer.render(this.scene, this.camera);
     }

@@ -30,6 +30,7 @@ const TextSceneComponent: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [font1, setFont1] = useState<MCDFFont | null>(null);
     const [font2, setFont2] = useState<MCDFFont | null>(null);
+    const [sampleText, setSampleText] = useState<string | null>(null);
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
@@ -42,8 +43,15 @@ const TextSceneComponent: React.FC = () => {
                 await font2.load('consola64');
                 setFont1(font1);
                 setFont2(font2);
+
+                const response = await fetch(`/dev-site-misc/text/pap.txt`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch text file');
+                }
+                const text = await response.text();
+                setSampleText(text);
             } catch (error) {
-                console.error("Failed to load MyObject:", error);
+                console.error("Failed to load text resources:", error);
             }
         };
 
@@ -51,17 +59,17 @@ const TextSceneComponent: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if (font1 && font2) {
-            const scene = new TextScene(containerRef.current!, font1, font2);
+        if (font1 && font2 && sampleText) {
+            const scene = new TextScene(containerRef.current!, font1, font2, sampleText);
             return () => {
                 scene.cleanUp();
             };
         }
-    }, [font1, font2]);
+    }, [font1, font2, sampleText]);
 
     return (
         <Box style={{ width: "100%", height: "600px" }}>
-            {!(font1 && font2) ? (
+            {!(font1 && font2 && sampleText) ? (
                 <Box display="flex" justifyContent="center">
                     <Typography>Loading font...</Typography>
                 </Box>

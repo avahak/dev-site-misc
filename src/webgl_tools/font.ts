@@ -23,9 +23,13 @@ class MCDFFont {
         this.name = name;
 
         this.atlas = new THREE.TextureLoader().load(`/dev-site-misc/fonts/${this.name}.png`);
+        // Direct approach with mipmapping is problematic here - it samples outside the 
+        // character rectangle in the atlas. Could replace the mipmaps though.
+        // this.atlas.anisotropy = 4;
+        this.atlas.generateMipmaps = false;
+        this.atlas.minFilter = THREE.LinearFilter;
+        this.atlas.magFilter = THREE.LinearFilter;
         this.atlas.needsUpdate = true;
-        this.atlas.anisotropy = 4;
-        // this.atlas.generateMipmaps = false;
 
         try {
             const response = await fetch(`/dev-site-misc/fonts/${this.name}.json`);
