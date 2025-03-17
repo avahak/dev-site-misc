@@ -3,6 +3,11 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { UCBSplineGroup } from './UCBSpline';
 import { OrbitControls } from 'three/examples/jsm/Addons.js';
 
+function randomColor(k: number) {
+    const f = (j: number) => 1 - Math.sin(Math.PI*2*j)**2;
+    return [f(3*k+42), f(2*k+51), f(k+73)];
+}
+
 class SplineScene {
     container: HTMLDivElement;
     camera!: THREE.Camera;
@@ -36,6 +41,7 @@ class SplineScene {
         this.cleanUpTasks.push(() => { 
             if (this.animationRequestID)
                 cancelAnimationFrame(this.animationRequestID);
+            this.splineGroup.dispose();
         });
         this.animate = this.animate.bind(this);
         this.animate();
@@ -84,7 +90,7 @@ class SplineScene {
         this.gui.close();
     }
 
-    cleanUp() {
+    dispose() {
         this.container.removeChild(this.renderer.domElement);
         for (const task of this.cleanUpTasks)
             task();
@@ -108,14 +114,15 @@ class SplineScene {
             this.splineGroup.reset();
         for (let j = 0; j < 1000; j++) {
             const pList = [];
-            for (let k = 0; k < 4 + (1.0+Math.sin(k-10*j))*50; k++) {
+            const num = Math.floor(4 + (1.0+Math.sin(-10*j))*50);
+            for (let k = 0; k < num; k++) {
                 // const p = new THREE.Vector3(Math.random()-0.5, Math.random()-0.5, Math.random()-0.5);
                 const p = new THREE.Vector3(Math.sin(k+t-10*j), Math.sin(k*3.15+2*t+100*j), Math.sin(k*2.1+3*t+51.2*j));
                 p.normalize();
                 p.multiplyScalar(0.3);
                 pList.push(p);
             }
-            this.splineGroup.addSpline(pList);
+            this.splineGroup.addSpline(pList, (k) => randomColor(j + k/num));
         }
     }
 
@@ -146,7 +153,7 @@ class SplineScene {
                 const p = new THREE.Vector3(x, y, z);
                 pList.push(p);
             }
-            this.splineGroup.addSpline(pList);
+            this.splineGroup.addSpline(pList, (k) => randomColor(0.02*(j + k/n)));
         }
     }
 
@@ -197,7 +204,7 @@ class SplineScene {
                         p.multiplyScalar(0.2);
                         pList.push(p);
                     }
-                    this.splineGroup.addSpline(pList, true);
+                    this.splineGroup.addSpline(pList, (k) => randomColor(m*100 + sj), true);
                 }
             }
         } else if (mode == 1) {
@@ -220,7 +227,7 @@ class SplineScene {
                     p.multiplyScalar(0.3);
                     pList.push(p);
                 }
-                this.splineGroup.addSpline(pList, true);
+                this.splineGroup.addSpline(pList, (k) => randomColor(K*sm + k/K), true);
             }
         } else if (mode == 2) {
             const I = 4;
@@ -245,7 +252,7 @@ class SplineScene {
                         p.multiplyScalar(0.1);
                         pList.push(p);
                     }
-                    this.splineGroup.addSpline(pList);
+                    this.splineGroup.addSpline(pList, (k) => randomColor(si + sm));
                 }
             }
         } else if (mode == 3) {
@@ -272,7 +279,7 @@ class SplineScene {
                         const omega = 0.05*Math.sin(30*t);
                         pList.push(new THREE.Vector3(p.x, Math.cos(omega)*p.y-Math.sin(omega)*p.z, Math.sin(omega)*p.y+Math.cos(omega)*p.z));
                     }
-                    this.splineGroup.addSpline(pList, true);
+                    this.splineGroup.addSpline(pList, (k) => randomColor(sm), true);
                 }
             }
         }
@@ -306,7 +313,7 @@ class SplineScene {
         const t = this.lastTime*0.001;
 
         // this.fillSplineGroup1(t, true);
-        // this.fillSplineGroup2(t, false);
+        // this.fillSplineGroup2(t, true);
         // this.fillSplineGroup3(t, 3, true);
 
         // this.splineObject.setRotationFromEuler(new THREE.Euler(3.0+3.0*t, 2.0+5.0*t, 5.0+2.0*t));

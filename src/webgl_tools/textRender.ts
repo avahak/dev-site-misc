@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import vsText from './shaders/vsText.glsl?raw';
 import fsText from './shaders/fsText.glsl?raw';
-import { MCDFFont } from './font';
+import { MCSDFFont } from './font';
 
 /**
- * Renders text.
+ * Renders text using multi-channel signed distance field fonts.
  */
 class TextGroup {
     // TEXTURE_MAX_WIDTH has to match value in vsText.glsl.
@@ -13,19 +13,19 @@ class TextGroup {
     // FLOATS_PER_CHAR is number of floats stored for 1 text character
     // (4 atlasCoords, 3 pos, 3 e1, 3 e2, 3 color)
     static FLOATS_PER_CHAR = 16;
-    // affects sharpness on text edges, default 0.75
-    static SHARPNESS = 0.75;
+    // affects sharpness on text edges, default 0.5
+    static SHARPNESS = 0.5;
 
-    font!: MCDFFont;
-    shader!: THREE.ShaderMaterial;
-    ibGeometry!: THREE.InstancedBufferGeometry;
-    dataTexture!: THREE.Texture;
+    font: MCSDFFont;
+    shader: THREE.ShaderMaterial;
+    ibGeometry: THREE.InstancedBufferGeometry;
+    dataTexture: THREE.Texture;
     mesh: THREE.Object3D;
 
-    data!: Float32Array;
+    data: Float32Array;
     numChars!: number;
 
-    constructor(font: MCDFFont) {
+    constructor(font: MCSDFFont) {
         this.font = font;
 
         this.shader = new THREE.ShaderMaterial({
@@ -49,7 +49,7 @@ class TextGroup {
         this.ibGeometry.setAttribute('position', new THREE.BufferAttribute(square, 3));
         this.ibGeometry.setIndex(new THREE.BufferAttribute(squareIndices, 1));
 
-        this.data = new Float32Array(TextGroup.TEXTURE_MAX_WIDTH/TextGroup.FLOATS_PER_CHAR);
+        this.data = new Float32Array(Math.floor(TextGroup.TEXTURE_MAX_WIDTH/TextGroup.FLOATS_PER_CHAR));
         this.dataTexture = new THREE.DataTexture(this.data, this.data.length/4, 1, THREE.RGBAFormat, THREE.FloatType);
         this.shader.uniforms.dataTexture.value = this.dataTexture;
         this.dataTexture.needsUpdate = true;
@@ -60,49 +60,139 @@ class TextGroup {
         this.reset();
     }
 
-    addText(text: string, pos: (x: number, y: number) => number[], color: number[]) {
+    /**
+     * Returns bounding box [xMin, yMin, xMax, yMax] for given text.
+     */
+    private computeTextBounds(
+        text: string, 
+    ) {
+        let xMin = 0;
+        let yMin = 0;
+        let xMax = 0;
+        let yMax = 0;
+
         let x = 0;
         let y = 0;
         let previousCharCode = -1;
         for (let k = 0; k < text.length; k++) {
-            const code = text.charCodeAt(k);
-            if (code == 10) {
+            let code = text.charCodeAt(k);
+            if (code === 10) {
+                // Newline
                 x = 0;
                 y -= this.font.layoutData.metrics.lineHeight;
                 previousCharCode = -1;
                 continue;
             }
 
-            const glyph = this.font.glyphLookup?.[code];
+            let glyph = this.font.glyphLookup?.[code];
             if (!glyph) {
-                previousCharCode = -1;
-                continue;
+                // Replace unknown characters with '%' (code 37)
+                code = 37;
+                glyph = this.font.glyphLookup?.[code];
+                if (!glyph) {
+                    previousCharCode = -1;
+                    continue;
+                }
             }
             if (glyph.planeBounds) {
-                const kerning = this.font.kerningLookup?.[previousCharCode]?.[code] ?? 0;
-                x += kerning;
+                // Kerning
+                x += this.font.kerningLookup?.[previousCharCode]?.[code] ?? 0;
 
+                // Compute position of the character rectangle in space
                 const x1 = x + glyph.planeBounds.left;
                 const x2 = x + glyph.planeBounds.right;
                 const y1 = y + glyph.planeBounds.bottom;
                 const y2 = y + glyph.planeBounds.top;
-                const pLeft = pos(x1, 0.5*(y1+y2));
-                const pRight = pos(x2, 0.5*(y1+y2));
-                const pBottom = pos(0.5*(x1+x2), y1);
-                const pTop = pos(0.5*(x1+x2), y2);
-                const p = [
-                    (pLeft[0] + pRight[0] + pBottom[0] + pTop[0]) / 4.0,
-                    (pLeft[1] + pRight[1] + pBottom[1] + pTop[1]) / 4.0,
-                    (pLeft[2] + pRight[2] + pBottom[2] + pTop[2]) / 4.0,
-                ];
-                const e1 = [pRight[0] - pLeft[0], pRight[1] - pLeft[1], pRight[2] - pLeft[2]];
-                const e2 = [pTop[0] - pBottom[0], pTop[1] - pBottom[1], pTop[2] - pBottom[2]];
+
+                xMin = Math.min(xMin, x1);
+                xMax = Math.max(xMax, x2);
+                yMin = Math.min(yMin, y1);
+                yMax = Math.max(yMax, y2);
+
+                previousCharCode = code;
+            } else {
+                previousCharCode = -1;
+            }
+            x += glyph.advance ?? 0;
+        }
+        return [xMin, yMin, xMax, yMax];
+    }
+
+    /**
+     * Prepares text to be rendered. If pos is a function, it is used to 
+     * compute the coordinates of the character rectanges. If pos is a vector,
+     * it is used to position the text block and text is made to always face the camera.
+     * @param anchor anchors for x, y, with [-1,-1] corresponding to bottom left and [-1,1] to top right
+     * @param textSize only used when text is made to face the camera.
+     */
+    addText(
+        text: string, 
+        pos: ((x: number, y: number) => number[]) | number[], 
+        color: number[],
+        anchor: number[],
+        textSize: number = 0
+    ) {
+        const faceCamera = (typeof(pos) !== 'function');
+
+        const bounds = this.computeTextBounds(text);
+        const x0 = -0.5*((1-anchor[0])*bounds[0] + (1+anchor[0])*bounds[2]);
+        const y0 = -0.5*((1-anchor[1])*bounds[1] + (1+anchor[1])*bounds[3]);
+
+        let x = x0;
+        let y = y0;
+        let previousCharCode = -1;
+        for (let k = 0; k < text.length; k++) {
+            let code = text.charCodeAt(k);
+            if (code === 10) {
+                // Newline
+                x = x0;
+                y -= this.font.layoutData.metrics.lineHeight;
+                previousCharCode = -1;
+                continue;
+            }
+
+            let glyph = this.font.glyphLookup?.[code];
+            if (!glyph) {
+                // Replace unknown characters with '%' (code 37)
+                code = 37;
+                glyph = this.font.glyphLookup?.[code];
+                if (!glyph) {
+                    previousCharCode = -1;
+                    continue;
+                }
+            }
+            if (glyph.planeBounds) {
+                // Kerning
+                x += this.font.kerningLookup?.[previousCharCode]?.[code] ?? 0;
+
+                // Compute position of the character rectangle in space
+                let p, e1, e2;
+                const x1 = x + glyph.planeBounds.left;
+                const x2 = x + glyph.planeBounds.right;
+                const y1 = y + glyph.planeBounds.bottom;
+                const y2 = y + glyph.planeBounds.top;
+                if (faceCamera) {
+                    p = pos;
+                    e1 = [textSize*x1, textSize*(x2-x1), 0];
+                    e2 = [textSize*y1, textSize*(y2-y1), 0];
+                } else {
+                    const pLeft = pos(x1, 0.5*(y1+y2));
+                    const pRight = pos(x2, 0.5*(y1+y2));
+                    const pBottom = pos(0.5*(x1+x2), y1);
+                    const pTop = pos(0.5*(x1+x2), y2);
+                    p = [
+                        (pLeft[0] + pRight[0] + pBottom[0] + pTop[0]) / 4,
+                        (pLeft[1] + pRight[1] + pBottom[1] + pTop[1]) / 4,
+                        (pLeft[2] + pRight[2] + pBottom[2] + pTop[2]) / 4,
+                    ];
+                    e1 = [pRight[0] - pLeft[0], pRight[1] - pLeft[1], pRight[2] - pLeft[2]];
+                    e2 = [pTop[0] - pBottom[0], pTop[1] - pBottom[1], pTop[2] - pBottom[2]];
+                }
 
                 if (TextGroup.FLOATS_PER_CHAR*this.numChars >= this.data.length)
-                    this._extendArray();
+                    this.extendArray();
 
                 const m = TextGroup.FLOATS_PER_CHAR * this.numChars;
-
                 // 4 atlas coords
                 this.data[m + 0] = glyph.atlasBounds.left / this.font.layoutData.atlas.width;
                 this.data[m + 1] = glyph.atlasBounds.bottom / this.font.layoutData.atlas.height;
@@ -120,8 +210,8 @@ class TextGroup {
                 this.data[m + 10] = e2[0];
                 this.data[m + 11] = e2[1];
                 this.data[m + 12] = e2[2];
-                // 3 color
-                this.data[m + 13] = color[0];
+                // 3 color, code faceCamera into red channel (hacky)
+                this.data[m + 13] = color[0] + (faceCamera ? 2 : 0);
                 this.data[m + 14] = color[1];
                 this.data[m + 15] = color[2];
                 
@@ -140,7 +230,7 @@ class TextGroup {
     /**
      * Doubles this.data.
      */
-    _extendArray() {
+    private extendArray() {
         const n = this.data.length;
         // Create new arrays with double size
         const newArray = new Float32Array(2*n);
@@ -170,6 +260,12 @@ class TextGroup {
 
     getObject(): THREE.Object3D {
         return this.mesh;
+    }
+
+    dispose() {
+        this.shader.dispose();
+        this.ibGeometry.dispose();
+        this.dataTexture.dispose();
     }
 }
 

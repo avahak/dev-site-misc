@@ -3,6 +3,7 @@
 *.txt
 
 !pap.txt
+!cap.txt
 
 # Logs
 logs

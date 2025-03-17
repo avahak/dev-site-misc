@@ -1,23 +1,31 @@
 import * as THREE from 'three';
 
-class MCDFFont {
+/**
+ * Stores data for multi-channel signed distance field font atlas. Each font is loaded
+ * from two files - the atlas image and a JSON file containing font metadata.
+ * 
+ * The fonts files are generated using https://github.com/Chlumsky/msdf-atlas-gen
+ * NOTE We manually process the atlas after generating it to clean up the padding area,
+ * because without this cleaning mipmapping (and antialiasing) causes artifacts.
+ */
+class MCSDFFont {
     name: string|null;
     layoutData: any;
-    glyphLookup: any;
-    kerningLookup: any;
+    glyphLookup: Record<number, any>;
+    kerningLookup: Record<number, Record<number, number>>;
     atlas: THREE.Texture|null;
 
     constructor() {
         this.name = null;
         this.atlas = null;
-        this.layoutData = null;
-        this.glyphLookup = null;
-        this.kerningLookup = null;
+        this.layoutData = { };
+        this.glyphLookup = { };
+        this.kerningLookup = { };
     }
 
     /**
-     * Loads the font layout data (.json file) and starts loading the atlas,
-     * but does not wait for it.
+     * Loads the font layout data (.json file) fully and starts loading the atlas,
+     * but does not wait for image data to load.
      */
     async load(name: string) {
         this.name = name;
@@ -38,29 +46,32 @@ class MCDFFont {
                 throw new Error('Failed to fetch JSON file');
             }
             this.layoutData = await response.json();
-            this._createLookups();
-            // console.log('glyphLookup', this.glyphLookup);
-            // console.log('kerningLookup', this.kerningLookup);
+            this.createLookups();
         } catch (error) {
             console.error('Error loading JSON:', error);
             throw error;
         }
     }
 
-    _createLookups() {
-        // glyphLookup
+    /**
+     * Computes glyphLookup and kerningLookup.
+     */
+    private createLookups() {
         this.glyphLookup = { };
         this.layoutData.glyphs.forEach((glyph: any) => {
             this.glyphLookup[glyph.unicode] = glyph;
         });
 
-        // kerningLookup
         this.kerningLookup = { };
         this.layoutData.kerning.forEach((entry: any) => {
             this.kerningLookup[entry.unicode1] ??= { };
             this.kerningLookup[entry.unicode1][entry.unicode2] = entry.advance;
         });
     }
+
+    dispose() {
+        this.atlas?.dispose();
+    }
 }
 
-export { MCDFFont };
+export { MCSDFFont };

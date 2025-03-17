@@ -1,8 +1,6 @@
-// TODO How to do colors here?
-
 import * as THREE from 'three';
-import vs from './shaders/vs.glsl?raw';
-import fs from './shaders/fs.glsl?raw';
+import vsSpline from './shaders/vsSpline.glsl?raw';
+import fsSpline from './shaders/fsSpline.glsl?raw';
 
 /**
  * Draws uniform cubic B-splines using instancing.
@@ -16,11 +14,11 @@ class UCBSplineGroup {
     numSegments: number;
 
     ibGeometry!: THREE.InstancedBufferGeometry;
-    controlPointTexture!: THREE.DataTexture;
+    controlPointTexture!: THREE.DataTexture;    // positions and colors for each control point
     indexTexture!: THREE.DataTexture;
-    mesh: THREE.Object3D;
+    mesh: THREE.Line;
 
-    // (x,y,z,0) for each control point, flattened
+    // (x,y,z,0,red,green,blue,0) for each control point, flattened
     controlPointArray: Float32Array;
     // index i for plotting Bezier for control points (i,i+1,i+2,i+3)
     indexArray: Int32Array;
@@ -38,8 +36,8 @@ class UCBSplineGroup {
                 controlPointTexture: { value: null },
                 indexTexture: { value: null },
             },
-            vertexShader: vs,
-            fragmentShader: fs,
+            vertexShader: vsSpline,
+            fragmentShader: fsSpline,
         });
 
         this.ibGeometry = new THREE.InstancedBufferGeometry();
@@ -58,73 +56,86 @@ class UCBSplineGroup {
         this.reset();
     }
 
-    addSpline(controlPoints: THREE.Vector3[], closed: boolean=false) {
+    addSpline(controlPoints: THREE.Vector3[], color: (k: number) => number[], isClosed: boolean=false) {
         if (controlPoints.length < 4)
-            throw new Error('Too few points to create spline, at least 4 needed.');
+            throw new Error('Too few points to create spline, at least 4 are needed.');
 
         // Number of control points after adding
-        const np = this.numControlPoints + 4*controlPoints.length + (closed ? 3 : 0);
+        const np = this.numControlPoints + controlPoints.length + (isClosed ? 3 : 0);
         // Number of indexes after adding
-        const ni = this.numIndexes + controlPoints.length + (closed ? 0 : -3);
+        const ni = this.numIndexes + controlPoints.length + (isClosed ? 0 : -3);
 
-        if (np > this.controlPointArray.length) {
-            // n is smallest power of 2 that is at least np
-            const n = Math.pow(2, Math.ceil(Math.log2(np)));
-            // Create large enough array to hold all data
-            const newArray = new Float32Array(n);
+        if (8*np > this.controlPointArray.length)
+            this.extendControlPointArray(8*np);
+        if (ni > this.indexArray.length)
+            this.extendIndexArray(ni);
 
-            // Copy existing data from previous array
-            newArray.set(this.controlPointArray, 0);
-            this.controlPointArray = newArray;
-
-            // Hook new array into this.controlPointTexture
-            this.controlPointTexture.dispose();
-            const m = this.controlPointArray.length / 4;
-            this.controlPointTexture = new THREE.DataTexture(
-                this.controlPointArray, 
-                Math.min(m, UCBSplineGroup.MAX_WIDTH), 
-                Math.ceil(m / UCBSplineGroup.MAX_WIDTH),
-                THREE.RGBAFormat, THREE.FloatType
-            );
-            this.shader.uniforms.controlPointTexture.value = this.controlPointTexture;
-        }
-        if (ni > this.indexArray.length) {
-            // n is smallest power of 2 that is at least ni
-            const n = Math.pow(2, Math.ceil(Math.log2(ni)));
-            // Create large enough array to hold all data
-            const newArray = new Int32Array(n);
-
-            // Copy existing data from previous array
-            newArray.set(this.indexArray, 0);
-            this.indexArray = newArray;
-
-            // Hook new array into this.controlPointTexture
-            this.indexTexture.dispose();
-            this.indexTexture = new THREE.DataTexture(
-                this.indexArray, 
-                Math.min(this.indexArray.length, UCBSplineGroup.MAX_WIDTH), 
-                Math.ceil(this.indexArray.length / UCBSplineGroup.MAX_WIDTH), 
-                THREE.RedIntegerFormat, THREE.IntType
-            );
-            this.shader.uniforms.indexTexture.value = this.indexTexture;
-        }
-
-        for (let k = 0; k < controlPoints.length + (closed ? 3 : 0); k++) {
-            const p = controlPoints[k % controlPoints.length];
-            this.controlPointArray[this.numControlPoints + 0] = p.x;
-            this.controlPointArray[this.numControlPoints + 1] = p.y;
-            this.controlPointArray[this.numControlPoints + 2] = p.z;
-            // this.controlPointArray[this.numControlPoints + 3] = 0;
-            if (k < controlPoints.length + (closed ? 0 : -3)) {
-                this.indexArray[this.numIndexes] = this.numControlPoints / 4;
+        for (let k = 0; k < controlPoints.length + (isClosed ? 3 : 0); k++) {
+            const j = k % controlPoints.length;
+            const p = controlPoints[j];
+            const c = color(j);
+            const m = 8 * this.numControlPoints;
+            this.controlPointArray[m + 0] = p.x;
+            this.controlPointArray[m + 1] = p.y;
+            this.controlPointArray[m + 2] = p.z;
+            // this.controlPointArray[m + 3] = 0;
+            this.controlPointArray[m + 4] = c[0];
+            this.controlPointArray[m + 5] = c[1];
+            this.controlPointArray[m + 6] = c[2];
+            // this.controlPointArray[m + 7] = 0;
+            if (k < controlPoints.length + (isClosed ? 0 : -3)) {
+                this.indexArray[this.numIndexes] = this.numControlPoints;
                 this.numIndexes += 1;
             }
-            this.numControlPoints += 4;
+            this.numControlPoints += 1;
         }
 
         this.ibGeometry.instanceCount = this.numIndexes * this.numSegments;
         this.controlPointTexture.needsUpdate = true;
         this.indexTexture.needsUpdate = true;
+    }
+
+    private extendControlPointArray(minLength: number) {
+        // n is smallest power of 2 that is at least minLength
+        const n = Math.pow(2, Math.ceil(Math.log2(minLength)));
+        // Create large enough array to hold all data
+        const newArray = new Float32Array(n);
+
+        // Copy existing data from previous array
+        newArray.set(this.controlPointArray, 0);
+        this.controlPointArray = newArray;
+
+        // Hook new array into this.controlPointTexture
+        this.controlPointTexture.dispose();
+        const m = this.controlPointArray.length / 4;
+        this.controlPointTexture = new THREE.DataTexture(
+            this.controlPointArray, 
+            Math.min(m, UCBSplineGroup.MAX_WIDTH), 
+            Math.ceil(m / UCBSplineGroup.MAX_WIDTH),
+            THREE.RGBAFormat, THREE.FloatType
+        );
+        this.shader.uniforms.controlPointTexture.value = this.controlPointTexture;
+    }
+
+    private extendIndexArray(minLength: number) {
+        // n is smallest power of 2 that is at least minLength
+        const n = Math.pow(2, Math.ceil(Math.log2(minLength)));
+        // Create large enough array to hold all data
+        const newArray = new Int32Array(n);
+
+        // Copy existing data from previous array
+        newArray.set(this.indexArray, 0);
+        this.indexArray = newArray;
+
+        // Hook new array into this.indexTexture
+        this.indexTexture.dispose();
+        this.indexTexture = new THREE.DataTexture(
+            this.indexArray, 
+            Math.min(this.indexArray.length, UCBSplineGroup.MAX_WIDTH), 
+            Math.ceil(this.indexArray.length / UCBSplineGroup.MAX_WIDTH), 
+            THREE.RedIntegerFormat, THREE.IntType
+        );
+        this.shader.uniforms.indexTexture.value = this.indexTexture;
     }
 
     reset() {
@@ -133,8 +144,15 @@ class UCBSplineGroup {
         this.ibGeometry.instanceCount = 0;
     }
 
-    getObject(): THREE.Object3D {
+    getObject(): THREE.Line {
         return this.mesh;
+    }
+
+    dispose() {
+        this.shader.dispose();
+        this.controlPointTexture.dispose();
+        this.indexTexture.dispose();
+        this.ibGeometry.dispose();
     }
 }
 

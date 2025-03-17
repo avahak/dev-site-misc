@@ -13,18 +13,16 @@ float median(float r, float g, float b) {
 
 void main() {
     vec3 msd = texture(atlasTexture, atlasCoords).rgb;
-    float sd = median(msd.r, msd.g, msd.b);
+    float sd = median(msd.r, msd.g, msd.b) - 0.5;
     vec2 screenTexSize = vec2(1.0) / fwidth(atlasCoords);
-    float screenPxRange = max(0.5*dot(unitRange, screenTexSize), 1.0);
-    float screenPxDistance = screenPxRange*(sd - 0.5);
+    float screenPxRange = max(dot(unitRange, screenTexSize), 1.0);
+    float screenPxDistance = screenPxRange * sd;
     float alpha = clamp(screenPxDistance + 0.5, 0.0, 1.0);
 
     // Opacity does not work correctly but no easy solution
     if (alpha > 0.2) {
         gl_FragColor = vec4(color, alpha);
     } else {
-        // gl_FragColor = vec4(vec3(0.1, 0.2, 0.3), 1.0);
         discard;
     }
-    // gl_FragColor = vec4(vec3(1.0), 1.0);
 }
