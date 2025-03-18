@@ -131,7 +131,8 @@ const App: React.FC = () => {
             <Box>
                 <Typography sx={{my: 2}}>
                     Rendering text using multi-channel signed distance fields and instancing. 
-                    Rendering uniform cubic B-splines using instancing.
+                    Rendering uniform cubic B-splines using instancing. Fisheye effect is using
+                    stereographic projection.
                 </Typography>
             </Box>
             <Box>

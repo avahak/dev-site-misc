@@ -70,7 +70,12 @@ class TextScene {
     }
 
     createGUI() {
-        this.gui = new GUI();
+        this.gui = new GUI({ container: this.container });
+        this.container.style.position = 'relative';
+        this.gui.domElement.style.position = 'absolute';
+        this.gui.domElement.style.top = '0px';
+        this.gui.domElement.style.right = '0px';
+
         const animateButton = () => {
             const temp = this.isStopped;
             this.isStopped = false;
@@ -83,9 +88,26 @@ class TextScene {
         const myObject = {
             animateButton,
             toggleStop,
+            focalLength: 0.5,
+            useFisheye: false,
         };
-        this.gui.add(myObject, 'animateButton').name("Animate step");
-        this.gui.add(myObject, 'toggleStop').name("Toggle stop/play");
+        this.gui.add(myObject, 'animateButton').name('Animate step');
+        this.gui.add(myObject, 'toggleStop').name('Toggle stop/play');
+        this.gui.add(myObject, 'useFisheye')
+            .name('Switch fisheye/rectilinear')
+            .onChange((value: boolean) => {
+                this.textGroups.forEach((tg: TextGroup) => {
+                    tg.shader.uniforms.useFisheye.value = value ? 1 : 0;
+                    this.bg.visible = !value;
+                });
+            });
+        this.gui.add(myObject, 'focalLength', 0.1, 1.0)
+            .name('Set focal length')
+            .onChange((value: number) => {
+                this.textGroups.forEach((tg: TextGroup) => {
+                    tg.shader.uniforms.focalLength.value = value;
+                });
+            });
         this.gui.close();
     }
 

@@ -35,6 +35,8 @@ class UCBSplineGroup {
                 numSegments: { value: this.numSegments },
                 controlPointTexture: { value: null },
                 indexTexture: { value: null },
+                useFisheye: { value: 0 },
+                focalLength: { value: 0.5 }
             },
             vertexShader: vsSpline,
             fragmentShader: fsSpline,
@@ -52,6 +54,7 @@ class UCBSplineGroup {
         this.shader.uniforms.indexTexture.value = this.indexTexture;
 
         this.mesh = new THREE.Line(this.ibGeometry, this.shader);
+        this.mesh.frustumCulled = false;
 
         this.reset();
     }

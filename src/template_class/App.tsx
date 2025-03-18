@@ -11,7 +11,7 @@ const SceneComponent: React.FC = () => {
         console.log("useEffect: ", containerRef.current);
         const scene = new Scene(containerRef.current!);
         return () => {
-            scene.cleanUp();
+            scene.dispose();
         };
     }, []);
 

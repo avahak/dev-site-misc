@@ -85,11 +85,12 @@ class Scene {
         this.gui.close();
     }
 
-    cleanUp() {
+    dispose() {
         this.container.removeChild(this.renderer.domElement);
         for (const task of this.cleanUpTasks)
             task();
         this.renderer.dispose();
+        this.shader.dispose();
 
         this.gui.destroy();
     }

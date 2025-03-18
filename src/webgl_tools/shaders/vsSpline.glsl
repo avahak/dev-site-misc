@@ -1,11 +1,15 @@
 precision highp float;
 
 uniform vec2 resolution;
+uniform int useFisheye;
+uniform float focalLength;
 uniform int numSegments;
 uniform sampler2D controlPointTexture;
 uniform isampler2D indexTexture;
 
 out vec3 color;
+
+#define PI 3.14159265359
 
 // MAX_WIDTH has to match with value in uniformBSpline.ts
 #define MAX_WIDTH 1024
@@ -17,6 +21,17 @@ vec4 splineCoeffs(float t) {
     float t2 = t*t;
     float t3 = t2*t;
     return vec4(s3, 3.0*t3-6.0*t2+4.0, 3.0*t2*s1+3.0*t+1.0, t3) / 6.0;
+}
+
+vec3 fisheyeStereographic(vec3 p0) {
+    float r0 = length(p0);
+    float r0xy = length(p0.xy);
+    float phi = 0.5 * atan(r0xy, -p0.z);
+    vec3 p = r0 * vec3(2.0*focalLength * sin(phi)*p0.xy/r0xy, -cos(phi));
+    return p;
+    // Now r on image plane is c*|p.xy|/(-p.z) = c*2f*tan(phi) = c*2f*tan(theta/2), 
+    // i.e. r = c*2f tan(theta/2), which is the formula for fisheye lens 
+    // with stereographic projection.
 }
 
 void main() {
@@ -42,5 +57,12 @@ void main() {
     color = w.x*c0 + w.y*c1 + w.z*c2 + w.w*c3;
 
     vec4 vPos = vec4(p, 1.0);
-    gl_Position = projectionMatrix * modelViewMatrix * vPos;
+
+    if (useFisheye == 0) {
+        gl_Position = projectionMatrix * modelViewMatrix * vPos;
+    } else {
+        vec3 q = (modelViewMatrix * vPos).xyz;
+        vec3 qFisheye = fisheyeStereographic(q);
+        gl_Position = projectionMatrix * vec4(qFisheye, 1.0);
+    }
 }

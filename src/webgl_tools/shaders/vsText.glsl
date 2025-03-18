@@ -1,12 +1,25 @@
 precision highp float;
 
 uniform int numChars;
+uniform int useFisheye;
+uniform float focalLength;
 uniform sampler2D dataTexture;
 
 out vec2 atlasCoords;
 out vec3 color;
 
 #define TEXTURE_MAX_WIDTH 1024
+
+vec3 fisheyeStereographic(vec3 p0) {
+    float r0 = length(p0);
+    float r0xy = length(p0.xy);
+    float phi = 0.5 * atan(r0xy, -p0.z);
+    vec3 p = r0 * vec3(2.0*focalLength * sin(phi)*p0.xy/r0xy, -cos(phi));
+    return p;
+    // Now r on image plane is c*|p.xy|/(-p.z) = c*2f*tan(phi) = c*2f*tan(theta/2), 
+    // i.e. r = c*2f tan(theta/2), which is the formula for fisheye lens 
+    // with stereographic projection.
+}
 
 void main() {
     // Read data
@@ -39,19 +52,20 @@ void main() {
         mat4 mat = inverse(projectionMatrix * modelViewMatrix); // could be precomputed
         vec3 w1 = normalize(mat[0].xyz);
         vec3 w2 = normalize(mat[1].xyz);
-        vPos = vec4(posCenter + (e1.x+e1.y*vUv.x)*w1 + (e2.x+e2.y*vUv.y)*w2, 1.0);
+        if (useFisheye == 0) {
+            vPos = vec4(posCenter + (e1.x+e1.y*vUv.x)*w1 + (e2.x+e2.y*vUv.y)*w2, 1.0);
+        } else {
+            posCenter = fisheyeStereographic((modelViewMatrix * vec4(posCenter, 1.0)).xyz);
+            vPos = vec4((e1.x+e1.y*vUv.x)*w1 + (e2.x+e2.y*vUv.y)*w2, 0.0);
+            gl_Position = projectionMatrix * (vec4(posCenter, 1.0) + focalLength*modelViewMatrix * vPos);
+            return;
+        }
     }
-    // } else {
-    //     // Not used, is there even anything of use here?
-    //     const vec3 E3 = vec3(0.0, 0.0, 1.0);
-    //     vec3 cameraPos = (inverse(modelViewMatrix) * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-    //     vec3 cameraToAnchor = posCenter - cameraPos;
-    //     vec3 w1 = normalize(cross(cameraToAnchor, E3));
-    //     vec3 w2 = normalize(cross(cameraToAnchor, -w1));
-    //     posCenter = posCenter + (e1.x+0.5*e1.y)*w1 + (e2.x+0.5*e2.y)*w2;
-    //     e1 = e1.y * w1;
-    //     e2 = e2.y * w2;
-    //     vPos = vec4(posCenter + (vUv.x-0.5)*e1 + (vUv.y-0.5)*e2, 1.0);
-    // } 
-    gl_Position = projectionMatrix * modelViewMatrix * vPos;
+    if (useFisheye == 0) {
+        gl_Position = projectionMatrix * modelViewMatrix * vPos;
+    } else {
+        vec3 q = (modelViewMatrix * vPos).xyz;
+        vec3 qFisheye = fisheyeStereographic(q);
+        gl_Position = projectionMatrix * vec4(qFisheye, 1.0);
+    }
 }

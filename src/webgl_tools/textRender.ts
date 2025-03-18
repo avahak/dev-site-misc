@@ -34,6 +34,8 @@ class TextGroup {
                 atlasTexture: { value: font.atlas },
                 unitRange: { value: [TextGroup.SHARPNESS/this.font.layoutData.atlas.width, TextGroup.SHARPNESS/this.font.layoutData.atlas.height] },
                 numChars: { value: null },
+                useFisheye: { value: 0 },
+                focalLength: { value: 0.5 },
             },
             vertexShader: vsText,
             fragmentShader: fsText,
