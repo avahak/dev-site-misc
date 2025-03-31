@@ -121,7 +121,7 @@ class InputListener {
                     const delta = { x: newMidpoint.x-this.lastMidpoint.x, y: newMidpoint.y-this.lastMidpoint.y };
 
                     if (this.mapper.touch?.dragPair) {
-                        this.mapper.touch.dragPair(newMidpoint.x, newMidpoint.y, delta.x, delta.y, scale, angle);
+                        this.mapper.touch.dragPair(newMidpoint.x-rect.left, newMidpoint.y-rect.top, delta.x, delta.y, scale, angle);
                     }
                     this.lastDistance = newDistance;
                     this.lastAngle = newAngle;

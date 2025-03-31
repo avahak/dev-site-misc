@@ -55,6 +55,7 @@ void main() {
         if (useFisheye == 0) {
             vPos = vec4(posCenter + (e1.x+e1.y*vUv.x)*w1 + (e2.x+e2.y*vUv.y)*w2, 1.0);
         } else {
+            // BUG text size is computed wrong here
             posCenter = fisheyeStereographic((modelViewMatrix * vec4(posCenter, 1.0)).xyz);
             vPos = vec4((e1.x+e1.y*vUv.x)*w1 + (e2.x+e2.y*vUv.y)*w2, 0.0);
             gl_Position = projectionMatrix * (vec4(posCenter, 1.0) + focalLength*modelViewMatrix * vPos);

@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Box, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
@@ -27,9 +27,7 @@ const App: React.FC = () => {
                 </Typography>
             </Box>
             <Box style={{ width: "100%", height: "600px" }}>
-            <Suspense fallback={<Box display="flex" justifyContent="center"><Typography>Loading..</Typography></Box>}>
                 <SceneComponent />
-            </Suspense>
             </Box>
             <MUILink component={RouterLink} to="/" variant="body1" color="primary">
                 Back

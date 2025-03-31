@@ -35,7 +35,6 @@ class Scene {
         this.setupCamera();
         this.setupScene();
         this.setupResizeRenderer();
-        this.resizeRenderer();
         this.createGUI();
 
         this.cleanUpTasks.push(() => { 
