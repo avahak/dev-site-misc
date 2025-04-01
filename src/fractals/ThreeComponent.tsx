@@ -36,29 +36,35 @@ const SceneComponent: React.FC<{
 
         const handler = new InputListener(containerRef.current!, {
             mouse: {
-                drag: (x, y, dx, dy, buttons) => {
-                    if ((buttons & 2) !== 0 || (buttons & 4) !== 0)
-                        scene.pointerInput(dx, dy, 1, 0);
-                    if ((buttons & 1) !== 0)
-                        scene.pointerMove(x, y);
+                drag: (args) => {
+                    if ((args.buttons & 2) !== 0 || (args.buttons & 4) !== 0)
+                        scene.pointerInput(args.dx, args.dy, 1, 0);
+                    if ((args.buttons & 1) !== 0)
+                        scene.pointerMove(args.x, args.y);
                 },
-                wheel: (_x, _y, delta) => scene.pointerInput(0, 0, delta, 0),
-                down: (x, y, button) => (button === 0) && scene.pointerMove(x, y),
+                down: (args) => (args.button === 0) && scene.pointerMove(args.x, args.y),
             },
             touch: {
-                start: (x, y) => scene.pointerMove(x, y),
-                dragSingle: (x, y, _dx, _dy) => scene.pointerMove(x, y),
-                dragPair: (_x, _y, dx, dy, scale, angle) => scene.pointerInput(dx, dy, scale, angle),
+                start: (args) => scene.pointerMove(args.x, args.y),
+                dragSingle: (args) => scene.pointerMove(args.x, args.y),
+                dragPair: (args) => scene.pointerInput(args.dx, args.dy, args.scale, args.angle),
+            },
+            wheel: {
+                zoom: (args) => scene.pointerInput(0, 0, args.delta, 0),
+                pan: (args) => scene.pointerInput(args.dx, args.dy, 1, 0),
+            },
+            safariGesture: {
+                change: (args) => scene.pointerInput(0, 0, args.scale, args.angle),
             },
             keyboard: {
-                keydown: (params) => { 
-                    if (params.key.toUpperCase() === "J") 
+                keydown: (args) => { 
+                    if (args.key.toUpperCase() === "J") 
                         setShowJulia(v => !v);
-                    if (params.key.toUpperCase() === "M")
+                    if (args.key.toUpperCase() === "M")
                         setMandelbrotMode(mode => mode === "off" ? "basic" : (mode === "basic" ? "DEM/M" : "off"));
-                    if (params.key === "-") 
+                    if (args.key === "-") 
                         scene.pointerInput(0, 0, 1.2, 0); 
-                    if (params.key === "+") 
+                    if (args.key === "+") 
                         scene.pointerInput(0, 0, 1.0/1.2, 0); 
                 },
             },
