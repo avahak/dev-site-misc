@@ -50,7 +50,7 @@ const SceneComponent: React.FC<{
                 dragPair: (args) => scene.pointerInput(args.dx, args.dy, args.scale, args.angle),
             },
             wheel: {
-                zoom: (args) => scene.pointerInput(0, 0, args.delta, 0),
+                zoom: (args) => scene.pointerInput(0, 0, 1+0.001*args.delta, 0),
                 pan: (args) => scene.pointerInput(args.dx, args.dy, 1, 0),
             },
             safariGesture: {
