@@ -14,29 +14,41 @@ const SceneComponent: React.FC = () => {
 
         const handler = new InputListener(containerRef.current!, {
             mouse: {
-                drag: (x, y, dx, dy, buttons) => {
+                drag: (args) => {
                     // if ((buttons & 2) !== 0 || (buttons & 4) !== 0)
-                    if ((buttons & 1) !== 0)
-                        scene.inputTransform(x, y, dx, dy, 1, 0);
+                    if ((args.buttons & 1) !== 0)
+                        scene.inputTransform(args.x, args.y, args.dx, args.dy, 1, 0);
                     // if ((buttons & 1) !== 0)
                     //     scene.inputAction(x, y);
                 },
-                wheel: (x, y, delta) => scene.inputTransform(x, y, 0, 0, 1/delta, 0),
-                down: (x, y, button) => (button === 2) && scene.inputAction(x, y),
-                move: (x, y, isInside) => scene.inputMove(x, y),
+                down: (args) => (args.button === 2) && scene.inputAction(args.x, args.y),
+                move: (args) => scene.inputMove(args.x, args.y),
+            },
+            wheel: {
+                zoom: (args) => {
+                    console.log(args);
+                    scene.inputTransform(args.x, args.y, 0, 0, 1-0.001*args.delta, 0);
+                },
+                pan: (args) => {
+                    console.log(args);
+                    scene.inputTransform(args.x, args.y, 0, 0, 1, 0);
+                },
             },
             touch: {
                 // start: (x, y) => scene.inputAction(x, y),
-                dragSingle: (x, y, dx, dy) => scene.inputTransform(x, y, dx, dy, 1, 0),
-                dragPair: (x, y, dx, dy, scale, angle) => scene.inputTransform(x, y, dx, dy, 1/scale, angle),
+                dragSingle: (args) => scene.inputTransform(args.x, args.y, args.dx, args.dy, 1, 0),
+                dragPair: (args) => scene.inputTransform(args.x, args.y, args.dx, args.dy, 1/args.scale, args.angle),
             },
             keyboard: {
-                keydown: (params) => { 
-                    if (params.key === "-") 
+                keydown: (args) => { 
+                    if (args.key === "-") 
                         scene.inputTransform(0, 0, 0, 0, 1.0/1.2, 0); 
-                    if (params.key === "+") 
+                    if (args.key === "+") 
                         scene.inputTransform(0, 0, 0, 0, 1.2, 0); 
                 },
+            },
+            safariGesture: {
+                change: (args) => scene.inputTransform(0, 0, 0, 0, args.scale, args.angle),
             },
         });
 
