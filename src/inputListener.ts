@@ -45,7 +45,7 @@ function getModifiers(event: MouseEvent|PointerEvent|WheelEvent|KeyboardEvent): 
 }
 
 /**
- * Warning: some ChatGPT code here.
+ * Attaches input events to actions in form of InputMapper.
  */
 class InputListener {
     private container: HTMLElement;
@@ -244,4 +244,5 @@ class InputListener {
     }
 }
 
+export type { InputMapper };
 export { InputListener };
