@@ -65,12 +65,12 @@ class InputListener {
         this.container.style.userSelect = 'none';
 
         this.container.addEventListener('pointerdown', this.onPointerDown, { passive: false });
-        window.addEventListener('pointermove', this.onPointerMove, { passive: false });
+        this.container.addEventListener('pointermove', this.onPointerMove, { passive: false });
         this.container.addEventListener('pointerup', this.onPointerUp, { passive: false });
         this.container.addEventListener('pointercancel', this.onPointerUp, { passive: false });
         this.container.addEventListener('wheel', this.onWheel, { passive: false });
         this.container.addEventListener('contextmenu', this.onContextmenu, { passive: false });
-        window.addEventListener('gesturechange', this.onSafariGestureChange, { passive: false });
+        this.container.addEventListener('gesturechange', this.onSafariGestureChange, { passive: false });
 
         document.addEventListener('keydown', this.onKeydown, { passive: false });
         document.addEventListener('keyup', this.onKeyup, { passive: false });
@@ -232,12 +232,12 @@ class InputListener {
 
     public cleanup() {
         this.container.removeEventListener('pointerdown', this.onPointerDown);
-        window.removeEventListener('pointermove', this.onPointerMove);
+        this.container.removeEventListener('pointermove', this.onPointerMove);
         this.container.removeEventListener('pointerup', this.onPointerUp);
         this.container.removeEventListener('pointercancel', this.onPointerUp);
         this.container.removeEventListener('wheel', this.onWheel);
         this.container.removeEventListener('contextmenu', this.onContextmenu);
-        window.removeEventListener('gesturechange', this.onSafariGestureChange);
+        this.container.removeEventListener('gesturechange', this.onSafariGestureChange);
 
         document.removeEventListener('keydown', this.onKeydown);
         document.removeEventListener('keyup', this.onKeyup);

@@ -7,7 +7,7 @@ import fsString from './shaders/fsPoint.glsl?raw';
 import { DataSet, Point } from './types';
 
 
-function createGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, lineMaterials: LineMaterial[]): THREE.Group {
+function createDataSetGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, lineMaterials: LineMaterial[]): THREE.Group {
     const group = new THREE.Group();
     const points = ds.points;
 
@@ -20,11 +20,12 @@ function createGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, lineMater
         
         // Colors (same for all points in dataset)
         const color = new THREE.Color(ds.color);
+        // const color = new THREE.Color('orange');
         const colors = new Float32Array(points.flatMap(() => [color.r, color.g, color.b]));
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
         
         // Sizes (same for all points in dataset)
-        const sizes = new Float32Array(points.length).fill(4 * ds.primitiveScale);
+        const sizes = new Float32Array(points.length).fill(3 * ds.primitiveScale);
         geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
         const pointCloud = new THREE.Points(geometry, pointMaterial);
@@ -39,7 +40,7 @@ function createGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, lineMater
 
         // Create material for the line
         const lineMaterial = new LineMaterial({
-            color: new THREE.Color(ds.color),
+            color: new THREE.Color(ds.color).convertSRGBToLinear(),
             linewidth: ds.primitiveScale,
             resolution: new THREE.Vector2(1, 1),
             worldUnits: false
@@ -55,8 +56,8 @@ function createGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, lineMater
     return group;
 }
 
-function createScene(dsList: DataSet[]): { scene: THREE.Scene, lineMaterials: LineMaterial[] } { 
-    const scene = new THREE.Scene();
+function createGroup(dsList: DataSet[]): { group: THREE.Group, lineMaterials: LineMaterial[] } { 
+    const group = new THREE.Group();
 
     const lineMaterials: LineMaterial[] = [];
 
@@ -69,11 +70,11 @@ function createScene(dsList: DataSet[]): { scene: THREE.Scene, lineMaterials: Li
     });
 
     dsList.forEach((ds: DataSet) => {
-        const group = createGroup(ds, pointMaterial, lineMaterials);
-        scene.add(group);
+        const dsGroup = createDataSetGroup(ds, pointMaterial, lineMaterials);
+        group.add(dsGroup);
     });
     
-    return { scene, lineMaterials };
+    return { group, lineMaterials };
 }
 
-export { createScene };
+export { createGroup };

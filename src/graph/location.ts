@@ -22,6 +22,9 @@ class GraphLocation {
     }
 
     transform(x: number, y: number, dx: number, dy: number, scaleFactor: number, angleDelta: number) {
+        if (!this.useAngle)
+            angleDelta = 0;
+        
         const [width, height] = this.getResolution();
         const resY = height;
     

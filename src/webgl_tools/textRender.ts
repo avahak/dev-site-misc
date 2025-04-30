@@ -124,7 +124,7 @@ class TextGroup {
      * Prepares text to be rendered. If pos is a function, it is used to 
      * compute the coordinates of the character rectanges. If pos is a vector,
      * it is used to position the text block and text is made to always face the camera.
-     * @param anchor anchors for x, y, with [-1,-1] corresponding to bottom left and [-1,1] to top right
+     * @param anchor anchors for x, y, with [-1,-1] corresponding to bottom left and [1,1] to top right
      * @param textSize only used when text is made to face the camera.
      */
     addText(
