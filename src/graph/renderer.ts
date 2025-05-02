@@ -1,19 +1,24 @@
 import * as THREE from 'three';
-import { DataSet, GraphController, GraphProps, GraphText, Point } from "./types";
+import { GraphController, GraphProps, GraphText } from "./types";
 import { GraphLocation } from './location';
 import { createGroup } from './createScene';
 import { LineMaterial } from 'three/examples/jsm/Addons.js';
-import { DebouncedFunction, leadingDebounce } from '../utils';
 import { AxisRenderer } from './coordinateLines';
 import { TextGroup } from '../webgl_tools/textRender';
 import { MCSDFFont } from '../webgl_tools/font';
 
 class GraphRenderer {
+    static renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     static axisRenderer: AxisRenderer = new AxisRenderer();
 
-    camera: THREE.OrthographicCamera;
-    renderer: THREE.WebGLRenderer;
     container: HTMLDivElement;
+    canvas: HTMLCanvasElement;
+    canvasContext: CanvasRenderingContext2D;
+    lastWidth: number;
+    lastHeight: number;
+    lastDpr: number;
+
+    camera: THREE.OrthographicCamera;
     scene: THREE.Scene;
     cleanupTasks: (() => void)[];
     controller!: GraphController;
@@ -21,17 +26,25 @@ class GraphRenderer {
 
     dataGroup: THREE.Group;
     lineMaterials: LineMaterial[];
-    debouncedRender: DebouncedFunction<() => void>;
 
     props: GraphProps;
     textGroup: TextGroup;       // this pool of text is redrawn every time
+    
+    animationFrameHandle: number = -1;
 
     constructor(container: HTMLDivElement, fonts: MCSDFFont[], props: GraphProps) {
         this.container = container;
         this.props = props;
         this.cleanupTasks = [];
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        container.appendChild(this.renderer.domElement);
+        // container.appendChild(this.renderer.domElement);
+
+        this.canvas = document.createElement('canvas');
+        this.canvas.style.display = 'block';
+        this.canvasContext = this.canvas.getContext("2d", { willReadFrequently: false })!;
+        container.appendChild(this.canvas);
+        this.lastDpr = -1;
+        this.lastWidth = -1;
+        this.lastHeight = -1;
 
         this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
         this.camera.position.set(0, 0, 1);
@@ -48,19 +61,31 @@ class GraphRenderer {
 
         this.lineMaterials.forEach((lm) => this.cleanupTasks.push(() => lm.dispose()));
 
-        // this.getResolution = this.getResolution.bind(this);
         this.loc = new GraphLocation(() => this.getResolution(), false);
 
+        this.setupResize();
         this.setupController();
-        this.setupResizeRenderer();
-
-        this.debouncedRender = leadingDebounce(() => this.render(), 10);
+        this.resize();
     }
 
-    resizeRenderer() {
+    resize() {
         const [clientWidth, clientHeight] = this.getResolution();
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        this.renderer.setSize(clientWidth, clientHeight);
+        const dpr = Math.min(window.devicePixelRatio, 2);
+
+        if (clientWidth === 0 || clientHeight === 0)
+            return;
+        if (this.lastWidth === clientWidth && this.lastHeight === clientHeight && this.lastDpr === dpr) 
+            return;
+
+        this.lastDpr = dpr;
+        this.lastWidth = clientWidth;
+        this.lastHeight = clientHeight;
+
+        GraphRenderer.renderer.setPixelRatio(dpr);
+        this.canvas.width = clientWidth * dpr;
+        this.canvas.height = clientHeight * dpr;
+        this.canvas.style.width = `${clientWidth}px`;
+        this.canvas.style.height = `${clientHeight}px`;
 
         const aspect = clientWidth / clientHeight;
         this.camera.left = -aspect;
@@ -76,8 +101,8 @@ class GraphRenderer {
         this.controller.update();
     }
 
-    setupResizeRenderer() {
-        const resizeObserver = new ResizeObserver(() => this.resizeRenderer());
+    setupResize() {
+        const resizeObserver = new ResizeObserver(() => this.resize());
         resizeObserver.observe(this.container);
         this.cleanupTasks.push(() => resizeObserver.disconnect());
     }
@@ -91,14 +116,14 @@ class GraphRenderer {
         this.controller = {
             transform(x: number, y: number, dx: number, dy: number, scale: number, angle: number) {
                 renderer.loc.transform(x, y, dx, dy, scale, angle);
-                renderer.debouncedRender();
+                renderer.requestRender();
             },
             setLocation(x: number, y: number, scale: number) {
                 renderer.loc.setLocation(x, y, scale);
-                renderer.debouncedRender();
+                renderer.requestRender();
             },
             update() {
-                renderer.debouncedRender();
+                renderer.requestRender();
             },
         }
     }
@@ -108,12 +133,15 @@ class GraphRenderer {
     }
 
     cleanup() {
+        if (this.animationFrameHandle !== -1)
+            cancelAnimationFrame(this.animationFrameHandle);
         this.textGroup.dispose();
-        this.debouncedRender.cancel();
-        this.container.removeChild(this.renderer.domElement);
         for (const task of this.cleanupTasks)
             task();
-        this.renderer.dispose();
+        this.cleanupTasks = [];
+        this.container.removeChild(this.canvas);
+        this.canvas.width = 1;
+        this.canvas.height = 1;
     }
 
     render() {
@@ -126,8 +154,8 @@ class GraphRenderer {
         // this.dataGroup.setRotationFromAxisAngle(new THREE.Vector3(0, 0, 1), this.loc.angle);
 
         const [width, height] = this.getResolution();
-        const [x, y] = this.loc.graphFromScreen(0, 0);
-        const [x2, y2] = this.loc.graphFromScreen(width, height);
+        const [x, y] = this.loc.worldFromScreen(0, 0);
+        const [x2, y2] = this.loc.worldFromScreen(width, height);
         const coordGroupX = GraphRenderer.axisRenderer.render({ 
             width: width, 
             height: height, 
@@ -187,7 +215,6 @@ class GraphRenderer {
         this.props.dsArray.forEach((ds) => {
             if (ds.label) {
                 const color = new THREE.Color(ds.color);
-                console.log(ds.label, color);
                 this.textGroup.addText(
                     ds.label, 
                     [width/height-1*AxisRenderer.TICK_SIZE, 1-labelCount*labelSize, 0], 
@@ -197,10 +224,26 @@ class GraphRenderer {
             }
         });
 
-        this.renderer.render(this.scene, this.camera);
+        // this.renderer.render(this.scene, this.camera);
+        if (GraphRenderer.renderer.domElement.width !== width || GraphRenderer.renderer.domElement.height !== height)
+            GraphRenderer.renderer.setSize(width, height);
+        GraphRenderer.renderer.render(this.scene, this.camera);
+        this.canvasContext.globalCompositeOperation = 'copy';
+        this.canvasContext.drawImage(GraphRenderer.renderer.domElement, 0, 0);
+        this.canvasContext.globalCompositeOperation = 'source-over';    // back to default
+
 
         this.scene.remove(coordGroupX, coordGroupY);
         this.textGroup.reset();
+    }
+
+    requestRender() {
+        if (this.animationFrameHandle === -1) {
+            this.animationFrameHandle = requestAnimationFrame(() => {
+                this.render();
+                this.animationFrameHandle = -1;
+            });
+        }
     }
 }
 

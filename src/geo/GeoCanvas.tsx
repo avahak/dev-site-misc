@@ -6,7 +6,7 @@
 
 import * as d3 from "d3";
 import { useEffect, useRef } from "react";
-import { clamp } from "../tools";
+import { clamp } from "../utils";
 import { ProjectionType } from "./geoTypes";
 
 interface MouseState {

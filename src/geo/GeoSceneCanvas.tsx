@@ -7,7 +7,7 @@
 import { Box } from "@mui/material";
 import { useEffect, useState } from "react";
 import { GeoCanvas } from "./GeoCanvas";
-import { useDebounce } from "../tools";
+import { useLeadingDebounce } from "../utils";
 import { CountryInfo, ProjectionType } from "./geoTypes";
 
 const GeoScene: React.FC<{ projectionType: ProjectionType, setCountryInfo: (country: CountryInfo|null) => void }> = ({ projectionType, setCountryInfo }) => {
@@ -28,7 +28,7 @@ const GeoScene: React.FC<{ projectionType: ProjectionType, setCountryInfo: (coun
         }
     };
 
-    const handleFeatureSelect = useDebounce((d: any) => {
+    const handleFeatureSelect = useLeadingDebounce((d: any) => {
         if (!d) {
             setCountryInfo(null);
             return;

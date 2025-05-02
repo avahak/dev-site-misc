@@ -32,8 +32,8 @@ class GraphLocation {
         const e1OldMag = this.scale;
         const e1OldAngle = this.angle;
     
-        // Graph position under mouse BEFORE transform
-        const [zGraphX, zGraphY] = this.graphFromScreen(x, y);
+        // world position under mouse BEFORE transform
+        const [wX, wY] = this.worldFromScreen(x, y);
     
         // Update scale and angle
         const scaleChange = scaleFactor;
@@ -48,11 +48,11 @@ class GraphLocation {
         const cosNew = Math.cos(e1NewAngle);
         const sinNew = Math.sin(e1NewAngle);
     
-        const e1OldZx = e1OldMag * (zGraphX * cosOld - zGraphY * sinOld);
-        const e1OldZy = e1OldMag * (zGraphX * sinOld + zGraphY * cosOld);
+        const e1OldZx = e1OldMag * (wX * cosOld - wY * sinOld);
+        const e1OldZy = e1OldMag * (wX * sinOld + wY * cosOld);
     
-        const e1NewZx = e1NewMag * (zGraphX * cosNew - zGraphY * sinNew);
-        const e1NewZy = e1NewMag * (zGraphX * sinNew + zGraphY * cosNew);
+        const e1NewZx = e1NewMag * (wX * cosNew - wY * sinNew);
+        const e1NewZy = e1NewMag * (wX * sinNew + wY * cosNew);
     
         // delta = (dx, -dy) * (2/resY)
         const deltaX = (2 * dx) / resY;
@@ -68,7 +68,7 @@ class GraphLocation {
     }
     
 
-    graphFromScreen(screenX: number, screenY: number): [number, number] {
+    worldFromScreen(screenX: number, screenY: number): [number, number] {
         const [width, height] = this.getResolution();
 
         // Normalized screen coords
@@ -84,12 +84,12 @@ class GraphLocation {
         return [x/this.scale, y/this.scale];
     }
 
-    screenFromGraph(graphX: number, graphY: number): [number, number] {
+    screenFromWorld(wX: number, wY: number): [number, number] {
         const [width, height] = this.getResolution();
     
         // Reapply scale
-        const xScaled = graphX * this.scale;
-        const yScaled = graphY * this.scale;
+        const xScaled = wX * this.scale;
+        const yScaled = wY * this.scale;
     
         // Apply rotation
         const cos = Math.cos(this.angle);

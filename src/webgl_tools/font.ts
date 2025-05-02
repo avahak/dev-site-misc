@@ -27,18 +27,31 @@ class MCSDFFont {
      * Loads the font layout data (.json file) fully and starts loading the atlas,
      * but does not wait for image data to load.
      */
-    async load(name: string) {
+    async load(name: string, onLoad?: (data: THREE.Texture) => void) {
         this.name = name;
 
-        this.atlas = new THREE.TextureLoader().load(`/dev-site-misc/fonts/${this.name}.png`);
-        // Careful with mipmapping here - need padding in the font atlases and
-        // need to clean up the padding by removing the single color areas in padding zones
-        // (using pad.py).
-        this.atlas.anisotropy = 4;
-        // this.atlas.generateMipmaps = false;
-        // this.atlas.minFilter = THREE.LinearFilter;
-        // this.atlas.magFilter = THREE.LinearFilter;
-        this.atlas.needsUpdate = true;
+        let textureLoaded = false;
+        let metadataLoaded = false;
+        const checkAllLoaded = () => {
+            if (textureLoaded && metadataLoaded && onLoad)
+                onLoad(this.atlas!);
+        };
+
+        this.atlas = new THREE.TextureLoader().load(
+            `/dev-site-misc/fonts/${this.name}.png`, 
+            (texture) => {
+                textureLoaded = true;
+                texture.anisotropy = 4;
+                texture.needsUpdate = true;
+                // Careful with mipmapping here - need padding in the font atlases and
+                // need to clean up the padding by removing the single color areas in padding zones
+                // (using pad.py).
+                // this.atlas.generateMipmaps = false;
+                // this.atlas.minFilter = THREE.LinearFilter;
+                // this.atlas.magFilter = THREE.LinearFilter;
+                checkAllLoaded();
+            }
+        );
 
         try {
             const response = await fetch(`/dev-site-misc/fonts/${this.name}.json`);
@@ -47,6 +60,8 @@ class MCSDFFont {
             }
             this.layoutData = await response.json();
             this.createLookups();
+            metadataLoaded = true;
+            checkAllLoaded();
         } catch (error) {
             console.error('Error loading JSON:', error);
             throw error;

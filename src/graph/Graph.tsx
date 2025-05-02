@@ -53,38 +53,42 @@ function inputConnection(gc: GraphController): InputMapper {
 
 const Graph: React.FC<GraphProps> = (props) => {
     const containerRef = useRef<HTMLDivElement>(null);
-    const [font1, setFont1] = useState<MCSDFFont | null>(null);
-    const [font2, setFont2] = useState<MCSDFFont | null>(null);
+    const [fonts, setFonts] = useState<[MCSDFFont, MCSDFFont] | null>(null);
     const [renderer, setRenderer] = useState<GraphRenderer>();
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
 
-        const loadFonts = async () => {
-            try {
-                // times64 consola64 gara64 (cmunci64) cmunrm64
-                const font1 = new MCSDFFont();
-                await font1.load('times64');
-                // await font1.load('gara64');
-                const font2 = new MCSDFFont();
-                await font2.load('consola64');
-                // await font2.load('cmunrm64');
-                setFont1(font1);
-                setFont2(font2);
-            } catch (error) {
-                console.error("Failed to load text resources:", error);
-            }
+        const font1 = new MCSDFFont();
+        const font2 = new MCSDFFont();
+        let loadedCount = 0;
+
+        const checkIfFontsReady = () => {
+            if (loadedCount === 2)
+                setFonts([font1, font2]);
         };
 
-        loadFonts();
+        font1.load('times64', () => {
+            loadedCount++;
+            checkIfFontsReady();
+        });
+        font2.load('consola64', () => {
+            loadedCount++;
+            checkIfFontsReady();
+        });
+
+        return () => {
+            font1.dispose();
+            font2.dispose();
+        };
     }, []);
 
 
     useEffect(() => {
-        if (!containerRef.current || !font1 || !font2) 
+        if (!containerRef.current || !fonts) 
             return;
 
-        const r: GraphRenderer = new GraphRenderer(containerRef.current, [font1, font2], props);
+        const r: GraphRenderer = new GraphRenderer(containerRef.current, fonts, props);
         setRenderer(r);
 
         const controller = r.getController();
@@ -98,10 +102,8 @@ const Graph: React.FC<GraphProps> = (props) => {
             r.cleanup();
             if (props.controllerRef) 
                 props.controllerRef.current = null;
-            font1.dispose();
-            font2.dispose();
         };
-    }, [props, font1, font2]);
+    }, [props, fonts]);
 
 
     return (<>
