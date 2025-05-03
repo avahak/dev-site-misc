@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-import { Complex } from './complex';
+import { PlaneView } from '../graph/planeView';
+// import { Complex } from './complex';
 
 function randomGaussian(stdev: number=1) {
     const phi = 2*Math.PI*Math.random();
@@ -20,11 +21,12 @@ class Scene {
     isStopped: boolean = false;
 
     centerMesh!: THREE.Mesh;
-    mousePos: Complex = Complex.ZERO;
+    mousePos: [number, number] = [0, 0];
     mouseMesh!: THREE.Mesh;
 
-    z0: Complex = Complex.ZERO;
-    e1: Complex = Complex.ONE;
+    // z0: Complex = Complex.ZERO;
+    // e1: Complex = Complex.ONE;
+    loc: PlaneView;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -39,6 +41,14 @@ class Scene {
         this.setupScene();
         this.setupResizeRenderer();
         this.createGUI();
+
+        this.loc = new PlaneView(
+            () => {
+                const { clientWidth, clientHeight } = this.container;
+                return [clientWidth, clientHeight];
+            },
+            true
+        );
 
         this.cleanUpTasks.push(() => { 
             if (this.animationRequestID)
@@ -107,7 +117,7 @@ class Scene {
 
         for (let k = 0; k < 1000; k++) {
             const r = Math.abs(0.1 + randomGaussian(0.1).x);
-            const p = randomGaussian(3.0);
+            const p = randomGaussian(5.0);
             const ballGeometry = new THREE.SphereGeometry(r);
             const ballMaterial = new THREE.MeshNormalMaterial();
             const ball = new THREE.Mesh(ballGeometry, ballMaterial);
@@ -133,43 +143,20 @@ class Scene {
     }
 
     inputTransform(x: number, y: number, dx: number, dy: number, scale: number, angle: number) {
-        console.log("inputTransform", dx, dy, scale, angle);
-        const res = Complex.fromVector2(this.getResolution());
-        const e1Old = this.e1;
-        const z0Old = this.z0;
-        const e1f = new Complex(scale*Math.cos(-angle), scale*Math.sin(-angle));
-        const e1New = e1Old.mul(e1f);
-        // z0_new + e1_new*z = z0_old + e1_old*z + (dx,dy)
-        // => z0_new = z0_old + (dx,dy) + e1_old*z - e1_new*z
-        const z = this.computePosInScene(new Complex(x, y));
-        const delta = new Complex(dx, -dy).scale(2.0/res.y);
-        const z0New = z0Old.add(delta).add(e1Old.mul(z)).sub(e1New.mul(z));
-
-        this.e1 = e1New;
-        this.z0 = z0New;
-        this.mousePos = new Complex(x, y);
+        this.loc.transform(x, y, dx, dy, scale, angle);
     }
 
-    computePosInScene(screenPos: Complex): Complex {
-        // Compute position in scene space from screen (container) coordinates
-        const res = Complex.fromVector2(this.getResolution());
-        const w = new Complex(screenPos.x-res.x/2, -(screenPos.y-res.y/2)).scale(2.0/res.y);
-        // z0 + e1*z = w
-        // z = (w-z0)/e1
-        return w.sub(this.z0).div(this.e1);
-    }
-
-    inputAction(x: number, y: number) {
-        console.log("inputAction", x, y);
-        const res = Complex.fromVector2(this.getResolution());
-        this.z0 = new Complex(2.0*(x-res.x/2)/res.y, -2.0*(y-res.y/2)/res.y);
-        console.log(this.z0);
-    }
+    // inputAction(x: number, y: number) {
+    //     console.log("inputAction", x, y);
+    //     const res = Complex.fromVector2(this.getResolution());
+    //     this.z0 = new Complex(2.0*(x-res.x/2)/res.y, -2.0*(y-res.y/2)/res.y);
+    //     console.log(this.z0);
+    // }
 
     inputMove(x: number, y: number) {
         const resolution = this.getResolution();
         // console.log("inputMove", x, y);
-        this.mousePos = new Complex(x, y);
+        this.mousePos = [x, y];
     }
 
     animate() {
@@ -179,24 +166,29 @@ class Scene {
     }
 
     animateStep() {
+        const { clientWidth, clientHeight } = this.container;
+
         const currentTime = (this.lastTime ?? 0.0) + 1.0;
         this.lastTime = currentTime;
 
         const t = this.lastTime*0.002;
 
-        const r = this.e1.abs();
-        const phi = this.e1.arg();
-        this.scene.position.set(this.z0.x, this.z0.y, 0);
-        this.scene.scale.set(r, r, r);
-        this.scene.setRotationFromAxisAngle(new THREE.Vector3(0, 0, 1), phi);
+        const r = this.loc.scale;
+        const phi = this.loc.angle;
+        this.scene.scale.set(1/r, 1/r, 1/r);
+        this.scene.setRotationFromAxisAngle(new THREE.Vector3(0, 0, 1), -phi);
+        const [cos, sin] = [Math.cos(-this.loc.angle), Math.sin(-this.loc.angle)];
+        const [x, y] = [-this.loc.x/r, -this.loc.y/r];
+        const [x2, y2] = [cos*x - sin*y, sin*x + cos*y];
+        this.scene.position.set(x2, y2, 0);
         // this.e1 = new Complex(Math.log(r), phi+0.001).exp();
         // this.e1 = new Complex(Math.log(r)-0.01, phi).exp();
 
-        const wc = this.computePosInScene(Complex.fromVector2(this.getResolution()).scale(0.5));
-        this.centerMesh.position.set(wc.x, wc.y, 0.0);
+        const wc = this.loc.localFromWorld(0, 0);
+        this.centerMesh.position.set(wc[0], wc[1], 0.0);
 
-        const wm = this.computePosInScene(this.mousePos);
-        this.mouseMesh.position.set(wm.x, wm.y, 0);
+        const wm = this.loc.localFromScreen(...this.mousePos);
+        this.mouseMesh.position.set(wm[0], wm[1], 0);
 
         this.renderer.render(this.scene, this.camera);
     }

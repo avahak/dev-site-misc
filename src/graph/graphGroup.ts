@@ -4,10 +4,10 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import vsString from './shaders/vsPoint.glsl?raw';
 import fsString from './shaders/fsPoint.glsl?raw';
-import { DataSet, Point } from './types';
+import { DataSet } from './types';
 
 
-function createDataSetGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, lineMaterials: LineMaterial[]): THREE.Group {
+function createDataSetGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, lineMaterials: LineMaterial[], cleanupTasks: (() => void)[]): THREE.Group {
     const group = new THREE.Group();
     const points = ds.points;
 
@@ -30,6 +30,8 @@ function createDataSetGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, li
 
         const pointCloud = new THREE.Points(geometry, pointMaterial);
         group.add(pointCloud);
+
+        cleanupTasks.push(() => geometry.dispose());
     }
 
     if (ds.drawLines && points.length >= 2) {
@@ -51,30 +53,32 @@ function createDataSetGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, li
         // Create the line and add to group
         const line = new Line2(lineGeometry, lineMaterial);
         group.add(line);
+        cleanupTasks.push(() => lineGeometry.dispose());
+        cleanupTasks.push(() => lineMaterial.dispose());
     }
 
     return group;
 }
 
-function createGroup(dsList: DataSet[]): { group: THREE.Group, lineMaterials: LineMaterial[] } { 
+function createGroup(dsList: DataSet[]): { group: THREE.Group, lineMaterials: LineMaterial[], cleanupTasks: (() => void)[] } { 
     const group = new THREE.Group();
+    const cleanupTasks: (() => void)[] = [];
 
     const lineMaterials: LineMaterial[] = [];
 
     const pointMaterial = new THREE.ShaderMaterial({
-        uniforms: {
-        },
+        uniforms: {},
         vertexShader: vsString,
         fragmentShader: fsString,
         transparent: true
     });
 
     dsList.forEach((ds: DataSet) => {
-        const dsGroup = createDataSetGroup(ds, pointMaterial, lineMaterials);
+        const dsGroup = createDataSetGroup(ds, pointMaterial, lineMaterials, cleanupTasks);
         group.add(dsGroup);
     });
     
-    return { group, lineMaterials };
+    return { group, lineMaterials, cleanupTasks };
 }
 
 export { createGroup };

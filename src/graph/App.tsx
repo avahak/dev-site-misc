@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { Box, Container, Typography } from '@mui/material';
+import { Box, Button, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
 import { Graph } from './Graph';
-import { DataSet, GraphText, Point } from './types';
+import { DataSet, GraphController, GraphText, Point } from './types';
 
 function randomGaussian(stdev: number=1): Point {
     const phi = 2*Math.PI*Math.random();
@@ -12,6 +12,8 @@ function randomGaussian(stdev: number=1): Point {
 }
 
 const App: React.FC = () => {
+    const controllerRef = useRef<GraphController>(null);
+
     const points1: Point[] = [];
     const points2: Point[] = [];
     const points3: Point[] = [];
@@ -19,7 +21,7 @@ const App: React.FC = () => {
     for (let k = 0; k < num; k++) {
         const t = randomGaussian(1).x;
         points1.push({ x: t, y: Math.sin(5*t)+randomGaussian(0.2).x });
-        points2.push({ x: t, y: Math.sin(10*t)+randomGaussian(0.1).x });
+        points2.push({ x: t, y: t*t + randomGaussian(0.1).x });
         points3.push({ x: t, y: Math.sin(20*t)+randomGaussian(0.05).x });
     }
     points1.sort((p1, p2) => p2.x - p1.x);
@@ -35,16 +37,39 @@ const App: React.FC = () => {
         text: `Text_${k}`,
         visibleScale: Math.exp(randomGaussian(1).x),
     }));
+    texts.push({ 
+        p: { x: 2, y: 1 }, 
+        size: 0.05, 
+        color: [1, 1, 1], 
+        text: `(2, 1)`,
+        anchor: [0, 0],
+    });
+    texts.push({ 
+        p: { x: -1, y: -1 }, 
+        size: 0.05, 
+        color: [1, 1, 1], 
+        text: `(-1, -1)`,
+        anchor: [0, 0],
+    });
 
     return (
         <Container maxWidth="xl">
             <Box display="flex" justifyContent="center" sx={{py: 2}}>
                 <Typography variant="h2">
-                    ._Graph (three.js)
+                    Graph (three.js)
                 </Typography>
             </Box>
+            <Button onClick={() => controllerRef.current?.setLocation(1, 1, 0.1)}>
+                Go to (1, 1, 0.1)
+            </Button>
+            <Button onClick={() => controllerRef.current?.setLocation(-5, -2, 5)}>
+                Go to (-5, -2, 10)
+            </Button>
+            <Button onClick={() => controllerRef.current?.setLocation(5, 1, 2)}>
+                Go to (5, 1, 2)
+            </Button>
             <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
+                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label!" yLabel="y-label!" controllerRef={controllerRef} />
             </Box>
             <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
                 <Graph dsArray={[ds2, ds3]} texts={texts} />
@@ -56,162 +81,7 @@ const App: React.FC = () => {
             <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
                 <Graph dsArray={[ds2, ds3]} texts={texts} />
             </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
+
 
             <MUILink component={RouterLink} to="/" variant="body1" color="primary">
                 Back

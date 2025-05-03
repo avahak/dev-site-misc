@@ -1,42 +1,45 @@
 import * as THREE from 'three';
-import { GraphController, GraphProps, GraphText } from "./types";
-import { GraphLocation } from './location';
-import { createGroup } from './createScene';
+import { GraphController, GraphProps } from "./types";
+import { PlaneView } from './planeView';
+import { createGroup } from './graphGroup';
 import { LineMaterial } from 'three/examples/jsm/Addons.js';
-import { AxisRenderer } from './coordinateLines';
+import { GraphDecorator } from './graphDecorator';
 import { TextGroup } from '../webgl_tools/textRender';
 import { MCSDFFont } from '../webgl_tools/font';
+import { SharedResource } from './sharedResource';
 
 class GraphRenderer {
-    static renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    static axisRenderer: AxisRenderer = new AxisRenderer();
-
     container: HTMLDivElement;
     canvas: HTMLCanvasElement;
     canvasContext: CanvasRenderingContext2D;
+
     lastWidth: number;
     lastHeight: number;
     lastDpr: number;
+    
+    renderer: THREE.WebGLRenderer;
+    graphDecorator: GraphDecorator;
 
     camera: THREE.OrthographicCamera;
     scene: THREE.Scene;
     cleanupTasks: (() => void)[];
     controller!: GraphController;
-    loc: GraphLocation;
+    loc: PlaneView;
 
     dataGroup: THREE.Group;
     lineMaterials: LineMaterial[];
+    textGroup: TextGroup;               // this pool of text is redrawn every time
+    animationFrameHandle: number = 0;
 
     props: GraphProps;
-    textGroup: TextGroup;       // this pool of text is redrawn every time
     
-    animationFrameHandle: number = -1;
 
     constructor(container: HTMLDivElement, fonts: MCSDFFont[], props: GraphProps) {
         this.container = container;
         this.props = props;
         this.cleanupTasks = [];
-        // container.appendChild(this.renderer.domElement);
+        this.renderer = SharedResource.acquire('webgl-renderer', () => new THREE.WebGLRenderer({ antialias: true, alpha: true }));
+        this.graphDecorator = SharedResource.acquire('axis-renderer', () => new GraphDecorator());
 
         this.canvas = document.createElement('canvas');
         this.canvas.style.display = 'block';
@@ -50,18 +53,17 @@ class GraphRenderer {
         this.camera.position.set(0, 0, 1);
         this.camera.lookAt(new THREE.Vector3(0, 0, 0));
 
-        const cs = createGroup(props.dsArray);        // this takes ~100ms for 100k points
-        this.dataGroup = cs.group;
-        this.lineMaterials = cs.lineMaterials;
+        const cg = createGroup(props.dsArray);        // this takes ~100ms for 100k points
+        this.dataGroup = cg.group;
+        this.lineMaterials = cg.lineMaterials;
+        this.cleanupTasks.push(...cg.cleanupTasks);
         this.scene = new THREE.Scene();
         this.scene.add(this.dataGroup);
 
         this.textGroup = new TextGroup(fonts[0]);
         this.scene.add(this.textGroup.getObject());
 
-        this.lineMaterials.forEach((lm) => this.cleanupTasks.push(() => lm.dispose()));
-
-        this.loc = new GraphLocation(() => this.getResolution(), false);
+        this.loc = new PlaneView(() => this.getResolution(), false);
 
         this.setupResize();
         this.setupController();
@@ -81,7 +83,6 @@ class GraphRenderer {
         this.lastWidth = clientWidth;
         this.lastHeight = clientHeight;
 
-        GraphRenderer.renderer.setPixelRatio(dpr);
         this.canvas.width = clientWidth * dpr;
         this.canvas.height = clientHeight * dpr;
         this.canvas.style.width = `${clientWidth}px`;
@@ -132,8 +133,8 @@ class GraphRenderer {
         return this.controller;
     }
 
-    cleanup() {
-        if (this.animationFrameHandle !== -1)
+    dispose() {
+        if (this.animationFrameHandle)
             cancelAnimationFrame(this.animationFrameHandle);
         this.textGroup.dispose();
         for (const task of this.cleanupTasks)
@@ -142,6 +143,8 @@ class GraphRenderer {
         this.container.removeChild(this.canvas);
         this.canvas.width = 1;
         this.canvas.height = 1;
+        SharedResource.release('webgl-renderer');
+        SharedResource.release('axis-renderer');
     }
 
     render() {
@@ -149,99 +152,31 @@ class GraphRenderer {
 
         // PROBLEM: Low precision (32-bit) in shader restricts zooming
         const r = this.loc.scale;
-        this.dataGroup.position.set(this.loc.x, this.loc.y, 0);
-        this.dataGroup.scale.set(r, r, r);
-        // this.dataGroup.setRotationFromAxisAngle(new THREE.Vector3(0, 0, 1), this.loc.angle);
+        this.dataGroup.scale.set(1/r, 1/r, 1/r);
+        this.dataGroup.position.set(-this.loc.x/r, -this.loc.y/r, 0);
 
         const [width, height] = this.getResolution();
-        const [x, y] = this.loc.worldFromScreen(0, 0);
-        const [x2, y2] = this.loc.worldFromScreen(width, height);
-        const coordGroupX = GraphRenderer.axisRenderer.render({ 
-            width: width, 
-            height: height, 
-            tMin: x,
-            tMax: x2,
-            orientation: "horizontal",
-            color: "rgba(100, 100, 100, 1.0)",
-            displayGrid: true,
-            textGroup: this.textGroup,
-        });
-        const coordGroupY = GraphRenderer.axisRenderer.render({ 
-            width: width, 
-            height: height, 
-            tMin: -y,
-            tMax: -y2,
-            orientation: "vertical",
-            color: "rgba(100, 100, 100, 1.0)",
-            displayGrid: true,
-            textGroup: this.textGroup,
-        });
-        this.scene.add(coordGroupX, coordGroupY);
+        const group = this.graphDecorator.createGroup(this.props, this.loc, [width, height], this.textGroup);
+        this.scene.add(group);
 
-        // Add texts:
-        if (this.props.texts) {
-            this.props.texts.forEach((text: GraphText) => {
-                if (text.visibleScale !== undefined && this.loc.scale < text.visibleScale)
-                    return;
-                this.textGroup.addText(
-                    text.text, 
-                    [this.loc.x+text.p.x*this.loc.scale, this.loc.y-text.p.y*this.loc.scale, 0], 
-                    text.color ?? [1, 1, 1], 
-                    text.anchor ?? [0, 0], 
-                    text.size
-                );
-            });
-        }
-
-        // Add axis labels:
-        if (this.props.xLabel) {
-            this.textGroup.addText(
-                this.props.xLabel, 
-                [width/height, -1+3*AxisRenderer.TICK_SIZE, 0], 
-                [1, 1, 1], [1, -1], 2*AxisRenderer.TICK_SIZE
-            );
-        }
-        if (this.props.yLabel) {
-            this.textGroup.addText(
-                this.props.yLabel, 
-                [-width/height+2*AxisRenderer.TICK_SIZE, 1, 0], 
-                [1, 1, 1], [-1, 1], 2*AxisRenderer.TICK_SIZE
-            );
-        }
-
-        // Add graph labels:
-        let labelCount = 0;
-        const labelSize = 1.5*AxisRenderer.TICK_SIZE;
-        this.props.dsArray.forEach((ds) => {
-            if (ds.label) {
-                const color = new THREE.Color(ds.color);
-                this.textGroup.addText(
-                    ds.label, 
-                    [width/height-1*AxisRenderer.TICK_SIZE, 1-labelCount*labelSize, 0], 
-                    [color.r, color.g, color.b], [1, 1], labelSize
-                );
-                labelCount++;
-            }
-        });
-
-        // this.renderer.render(this.scene, this.camera);
-        if (GraphRenderer.renderer.domElement.width !== width || GraphRenderer.renderer.domElement.height !== height)
-            GraphRenderer.renderer.setSize(width, height);
-        GraphRenderer.renderer.render(this.scene, this.camera);
+        if (this.renderer.domElement.width !== width || this.renderer.domElement.height !== height)
+            this.renderer.setSize(width, height);
+        if (this.renderer.pixelRatio !== this.lastDpr)
+            this.renderer.setPixelRatio(this.lastDpr);
+        this.renderer.render(this.scene, this.camera);
         this.canvasContext.globalCompositeOperation = 'copy';
-        this.canvasContext.drawImage(GraphRenderer.renderer.domElement, 0, 0);
+        this.canvasContext.drawImage(this.renderer.domElement, 0, 0);
         this.canvasContext.globalCompositeOperation = 'source-over';    // back to default
 
-
-        this.scene.remove(coordGroupX, coordGroupY);
+        this.scene.remove(group);
         this.textGroup.reset();
     }
 
     requestRender() {
-        if (this.animationFrameHandle === -1) {
+        if (!this.animationFrameHandle) {
             this.animationFrameHandle = requestAnimationFrame(() => {
                 this.render();
-                this.animationFrameHandle = -1;
+                this.animationFrameHandle = 0;
             });
         }
     }

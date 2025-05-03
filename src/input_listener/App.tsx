@@ -21,7 +21,7 @@ const SceneComponent: React.FC = () => {
                     // if ((buttons & 1) !== 0)
                     //     scene.inputAction(x, y);
                 },
-                down: (args) => (args.button === 2) && scene.inputAction(args.x, args.y),
+                // down: (args) => (args.button === 2) && scene.inputAction(args.x, args.y),
                 move: (args) => scene.inputMove(args.x, args.y),
             },
             wheel: {
@@ -41,10 +41,15 @@ const SceneComponent: React.FC = () => {
             },
             keyboard: {
                 keydown: (args) => { 
+                    console.log('key', args);
                     if (args.key === "-") 
                         scene.inputTransform(0, 0, 0, 0, 1.0/1.2, 0); 
                     if (args.key === "+") 
                         scene.inputTransform(0, 0, 0, 0, 1.2, 0); 
+                    if (args.key == "ArrowLeft")
+                        scene.inputTransform(scene.getResolution().x/2, scene.getResolution().y/2, 0, 0, 1, -Math.PI/64); 
+                    if (args.key == "ArrowRight")
+                        scene.inputTransform(scene.getResolution().x/2, scene.getResolution().y/2, 0, 0, 1, Math.PI/64); 
                 },
             },
             safariGesture: {

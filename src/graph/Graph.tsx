@@ -99,7 +99,7 @@ const Graph: React.FC<GraphProps> = (props) => {
 
         return () => {
             inputHandler.cleanup();
-            r.cleanup();
+            r.dispose();
             if (props.controllerRef) 
                 props.controllerRef.current = null;
         };
