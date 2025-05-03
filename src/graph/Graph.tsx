@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { GraphController, GraphProps } from "./types";
 import { InputListener, InputMapper } from "../inputListener";
 import { GraphRenderer } from "./renderer";
-import { Box } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { MCSDFFont } from "../webgl_tools/font";
 
 /**
@@ -108,7 +108,30 @@ const Graph: React.FC<GraphProps> = (props) => {
 
     return (<>
         {!renderer && "Loading..."}
-        <Box ref={containerRef} sx={{ width: "100%", height: "100%" }}>
+        <Box sx={{ 
+            width: props.width ?? "100%", 
+            height: props.height ?? "500px",
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+        }}>
+            <Box ref={containerRef} sx={{ width: "100%", height: "100%" }} />
+            {props.title && 
+            <Typography
+                variant="caption"
+                align="center"
+                sx={{
+                    color: "text.primary",
+                    whiteSpace: "pre-line",
+                    padding: "2px 0 0 0",
+                    margin: "0px",
+                    width: "100%"
+                }}
+            >
+                {props.title}
+            </Typography>
+            }
         </Box>
         </>
     );

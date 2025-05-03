@@ -53,7 +53,7 @@ class GraphRenderer {
         this.camera.position.set(0, 0, 1);
         this.camera.lookAt(new THREE.Vector3(0, 0, 0));
 
-        const cg = createGroup(props.dsArray);        // this takes ~100ms for 100k points
+        const cg = createGroup(props.data);        // this takes ~100ms for 100k points
         this.dataGroup = cg.group;
         this.lineMaterials = cg.lineMaterials;
         this.cleanupTasks.push(...cg.cleanupTasks);

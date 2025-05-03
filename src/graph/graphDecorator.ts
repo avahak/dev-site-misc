@@ -21,10 +21,10 @@ class GraphDecorator {
     private axisMaterial: LineMaterial;
     private minorGridMaterial: LineMaterial;
     private majorGridMaterial: LineMaterial;
-    tickSize: number;
+    baseTickSize: number;
 
-    constructor(tickSize: number=0.05) {
-        this.tickSize = tickSize;
+    constructor(baseTickSize: number=0.05) {
+        this.baseTickSize = baseTickSize;
         this.axisMaterial = new LineMaterial({
             color: new THREE.Color(0xff8000),
             linewidth: 1,
@@ -53,6 +53,8 @@ class GraphDecorator {
         const { tMin, tMax, orientation, color = '#ff8000', width, height, 
                 displayGrid = false, gridColor, majorGridColor, textGroup } = params;
         this.setResolution(width, height);
+
+        const tickSize = this.baseTickSize * (500 / height);
     
         // Update materials
         this.axisMaterial.color.set(new THREE.Color(color));
@@ -67,10 +69,10 @@ class GraphDecorator {
         const getLocalPos = (t: number): [number, number] => {
             if (orientation === "horizontal") {
                 const x = (t - tMin) / (tMax - tMin) * 2 - 1;
-                return [x * (width/height), -1 + this.tickSize];
+                return [x * (width/height), -1 + tickSize];
             } else {
                 const y = 1 - (tMax - t) / (tMax - tMin) * 2;
-                return [-width/height + this.tickSize, y];
+                return [-width/height + tickSize, y];
             }
         };
     
@@ -113,15 +115,15 @@ class GraphDecorator {
             // Major tick
             if (orientation === "horizontal") {
                 axisSegments.push(
-                    posX, posY - this.tickSize, 0,
-                    posX, posY + this.tickSize, 0
+                    posX, posY - tickSize, 0,
+                    posX, posY + tickSize, 0
                 );
                 textGroup.addText(
                     `${t}`, 
-                    [posX, posY+this.tickSize/4, 0], 
+                    [posX, posY+tickSize/4, 0], 
                     [1, 1, 1], 
                     [0, -1], 
-                    1.5*this.tickSize
+                    1.5*tickSize
                 );
                 
                 if (displayGrid) {
@@ -133,15 +135,15 @@ class GraphDecorator {
 
             } else {
                 axisSegments.push(
-                    posX - this.tickSize, posY, 0,
-                    posX + this.tickSize, posY, 0
+                    posX - tickSize, posY, 0,
+                    posX + tickSize, posY, 0
                 );
                 textGroup.addText(
                     `${t}`, 
-                    [posX+this.tickSize/4, posY, 0], 
+                    [posX+tickSize/4, posY, 0], 
                     [1, 1, 1], 
                     [-1, 0], 
-                    1.5*this.tickSize
+                    1.5*tickSize
                 );
                 
                 if (displayGrid) {
@@ -159,8 +161,8 @@ class GraphDecorator {
                 
                 if (orientation === "horizontal") {
                     axisSegments.push(
-                        posX2, posY2 - this.tickSize/2, 0,
-                        posX2, posY2 + this.tickSize/2, 0
+                        posX2, posY2 - tickSize/2, 0,
+                        posX2, posY2 + tickSize/2, 0
                     );
                     
                     if (displayGrid) {
@@ -171,8 +173,8 @@ class GraphDecorator {
                     }
                 } else {
                     axisSegments.push(
-                        posX2 - this.tickSize/2, posY2, 0,
-                        posX2 + this.tickSize/2, posY2, 0
+                        posX2 - tickSize/2, posY2, 0,
+                        posX2 + tickSize/2, posY2, 0
                     );
                     
                     if (displayGrid) {
@@ -230,6 +232,9 @@ class GraphDecorator {
     createGroup(props: GraphProps, loc: PlaneView, resolution: number[], textGroup: TextGroup) {
         const group = new THREE.Group();
         const [width, height] = resolution;
+
+        const tickSize = this.baseTickSize * (700 / height);
+
         const [x, y] = loc.localFromScreen(0, height);
         const [x2, y2] = loc.localFromScreen(width, 0);
         const coordGroupX = this.createAxisGroup({ 
@@ -261,10 +266,10 @@ class GraphDecorator {
                     return;
                 textGroup.addText(
                     text.text, 
-                    [-loc.x/loc.scale+text.p.x/loc.scale, -loc.y/loc.scale+text.p.y/loc.scale, 0], 
+                    [(text.p.x-loc.x)/loc.scale, (text.p.y-loc.y)/loc.scale, 0], 
                     text.color ?? [1, 1, 1], 
                     text.anchor ?? [0, 0], 
-                    text.size
+                    text.size*tickSize
                 );
             });
         }
@@ -273,27 +278,27 @@ class GraphDecorator {
         if (props.xLabel) {
             textGroup.addText(
                 props.xLabel, 
-                [width/height, -1+3*this.tickSize, 0], 
-                [1, 1, 1], [1, -1], 2*this.tickSize
+                [width/height, -1+2*tickSize, 0], 
+                [1, 1, 1], [1, -1], 1.5*tickSize
             );
         }
         if (props.yLabel) {
             textGroup.addText(
                 props.yLabel, 
-                [-width/height+2*this.tickSize, 1, 0], 
-                [1, 1, 1], [-1, 1], 2*this.tickSize
+                [-width/height+2*tickSize, 1, 0], 
+                [1, 1, 1], [-1, 1], 1.5*tickSize
             );
         }
 
         // Add graph labels:
         let labelCount = 0;
-        const labelSize = 1.5*this.tickSize;
-        props.dsArray.forEach((ds) => {
+        const labelSize = 1.5*tickSize;
+        props.data.forEach((ds) => {
             if (ds.label) {
                 const color = new THREE.Color(ds.color);
                 textGroup.addText(
                     ds.label, 
-                    [width/height-1*this.tickSize, 1-labelCount*labelSize, 0], 
+                    [width/height-1*tickSize, 1-labelCount*labelSize, 0], 
                     [color.r, color.g, color.b], [1, 1], labelSize
                 );
                 labelCount++;

@@ -25,7 +25,7 @@ function createDataSetGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, li
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
         
         // Sizes (same for all points in dataset)
-        const sizes = new Float32Array(points.length).fill(3 * ds.primitiveScale);
+        const sizes = new Float32Array(points.length).fill(3 * ds.scale);
         geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
 
         const pointCloud = new THREE.Points(geometry, pointMaterial);
@@ -43,7 +43,7 @@ function createDataSetGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, li
         // Create material for the line
         const lineMaterial = new LineMaterial({
             color: new THREE.Color(ds.color).convertSRGBToLinear(),
-            linewidth: ds.primitiveScale,
+            linewidth: ds.scale,
             resolution: new THREE.Vector2(1, 1),
             worldUnits: false
         });

@@ -27,26 +27,26 @@ const App: React.FC = () => {
     points1.sort((p1, p2) => p2.x - p1.x);
     points2.sort((p1, p2) => p2.x - p1.x);
     points3.sort((p1, p2) => p2.x - p1.x);
-    const ds1: DataSet = { points: points1, drawPoints: true, drawLines: false, color: 'red', primitiveScale: 1, label: "Graph red" };
-    const ds2: DataSet = { points: points2, drawPoints: true, drawLines: true, color: 'orange', primitiveScale: 2, label: "Graph orange" };
-    const ds3: DataSet = { points: points3, drawPoints: false, drawLines: true, color: 'green', primitiveScale: 3 };
+    const ds1: DataSet = { points: points1, drawPoints: true, drawLines: false, color: 'red', scale: 1, label: "Graph red" };
+    const ds2: DataSet = { points: points2, drawPoints: true, drawLines: true, color: 'orange', scale: 2, label: "Graph orange" };
+    const ds3: DataSet = { points: points3, drawPoints: false, drawLines: true, color: 'green', scale: 3 };
     const texts: GraphText[] = Array.from({ length: 1000 }).map((_, k) => ({ 
         p: randomGaussian(10), 
-        size: 0.05, 
+        size: 1, 
         color: [1, 1, 1], 
         text: `Text_${k}`,
         visibleScale: Math.exp(randomGaussian(1).x),
     }));
     texts.push({ 
         p: { x: 2, y: 1 }, 
-        size: 0.05, 
+        size: 1, 
         color: [1, 1, 1], 
         text: `(2, 1)`,
         anchor: [0, 0],
     });
     texts.push({ 
         p: { x: -1, y: -1 }, 
-        size: 0.05, 
+        size: 2, 
         color: [1, 1, 1], 
         text: `(-1, -1)`,
         anchor: [0, 0],
@@ -62,25 +62,29 @@ const App: React.FC = () => {
             <Button onClick={() => controllerRef.current?.setLocation(1, 1, 0.1)}>
                 Go to (1, 1, 0.1)
             </Button>
-            <Button onClick={() => controllerRef.current?.setLocation(-5, -2, 5)}>
-                Go to (-5, -2, 10)
+            <Button onClick={() => controllerRef.current?.setLocation(-5, -2, 3)}>
+                Go to (-5, -2, 3)
             </Button>
             <Button onClick={() => controllerRef.current?.setLocation(5, 1, 2)}>
                 Go to (5, 1, 2)
             </Button>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label!" yLabel="y-label!" controllerRef={controllerRef} />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
-
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds1, ds2]} texts={texts} xLabel="x-label" yLabel="y-label" />
-            </Box>
-            <Box style={{ width: "100%", height: "600px", padding: "20px" }}>
-                <Graph dsArray={[ds2, ds3]} texts={texts} />
-            </Box>
+            <Graph 
+                data={[ds1, ds2]} 
+                texts={texts} 
+                xLabel="x-label!" 
+                yLabel="y-label!" 
+                controllerRef={controllerRef} 
+                title={"First Graph component"}
+            />
+            <Graph 
+                data={[ds2, ds3]} 
+                texts={texts} 
+                xLabel="x-label." 
+                yLabel="y-label." 
+                width="50%"
+                height="200px" 
+                title={"Second 626262"}
+            />
 
 
             <MUILink component={RouterLink} to="/" variant="body1" color="primary">

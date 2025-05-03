@@ -5,11 +5,14 @@ type GraphController = {
 };
 
 type GraphProps = {
-    dsArray: DataSet[];
+    data: DataSet[];
     texts?: GraphText[];
-    controllerRef?: React.MutableRefObject<GraphController|null>;
+    controllerRef?: { current: GraphController | null };
     xLabel?: string;
     yLabel?: string;
+    width?: string;
+    height?: string;
+    title?: string;
 };
 
 type Point = {
@@ -28,10 +31,10 @@ type GraphText = {
 
 type DataSet = {
     points: Point[];
-    drawPoints: boolean;
-    drawLines: boolean;
+    scale: number;              // width of lines / diameter of points in screen space
     color: string;
-    primitiveScale: number;     // width of lines / diameter of points in screen space
+    drawPoints?: boolean;
+    drawLines?: boolean;
     label?: string;
 };
 
