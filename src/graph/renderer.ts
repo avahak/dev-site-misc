@@ -58,12 +58,18 @@ class GraphRenderer {
         this.lineMaterials = cg.lineMaterials;
         this.cleanupTasks.push(...cg.cleanupTasks);
         this.scene = new THREE.Scene();
+        this.dataGroup.renderOrder = 10;
         this.scene.add(this.dataGroup);
 
         this.textGroup = new TextGroup(fonts[0]);
         this.scene.add(this.textGroup.getObject());
 
         this.loc = new PlaneView(() => this.getResolution(), false);
+        if (props.location) {
+            this.loc.x = props.location.x;
+            this.loc.y = props.location.y;
+            this.loc.scale = props.location.scale;
+        }
 
         this.setupResize();
         this.setupController();
@@ -148,7 +154,7 @@ class GraphRenderer {
     }
 
     render() {
-        console.log('GraphRenderer.render()', Math.random());
+        // console.log('GraphRenderer.render()', Math.random());
 
         // PROBLEM: Low precision (32-bit) in shader restricts zooming
         const r = this.loc.scale;
@@ -157,6 +163,8 @@ class GraphRenderer {
 
         const [width, height] = this.getResolution();
         const group = this.graphDecorator.createGroup(this.props, this.loc, [width, height], this.textGroup);
+        group.renderOrder = -1;
+        this.textGroup.getObject().renderOrder = 1000;
         this.scene.add(group);
 
         if (this.renderer.domElement.width !== width || this.renderer.domElement.height !== height)

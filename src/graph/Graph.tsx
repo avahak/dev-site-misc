@@ -7,12 +7,19 @@ import { GraphController, GraphProps } from "./types";
 import { InputListener, InputMapper } from "../inputListener";
 import { GraphRenderer } from "./renderer";
 import { Box, Typography } from "@mui/material";
+import { Tooltip } from "./Tooltip";
 import { MCSDFFont } from "../webgl_tools/font";
+
+type TooltipState = {
+    x: number;
+    y: number;
+    isVisible: boolean;
+};
 
 /**
  * Create an InputMapper that feeds transformations into the given GraphController.
  */
-function inputConnection(gc: GraphController): InputMapper {
+function inputConnection(gc: GraphController, setTooltipState: React.Dispatch<React.SetStateAction<TooltipState|null>>): InputMapper {
     return (
         {
             mouse: {
@@ -20,12 +27,16 @@ function inputConnection(gc: GraphController): InputMapper {
                     if ((args.buttons & 1) !== 0)
                         gc.transform(args.x, args.y, args.dx, args.dy, 1, 0);
                 },
-                down: (args) => (args.button === 2) && console.log('ACTION'),
+                down: (args) => {
+                    (args.button === 0) && setTooltipState(null);
+                    (args.button === 2) && setTooltipState({ x: args.x, y: args.y, isVisible: true });
+                },
                 // move: (args) => gc.transform(args.x, args.y, 0, 0, 1, 0),
             },
             wheel: {
                 zoom: (args) => {
                     gc.transform(args.x, args.y, 0, 0, 1-0.001*args.delta, 0);
+                    setTooltipState(null);
                 },
                 pan: (args) => {
                     gc.transform(args.x, args.y, 0, 0, 1, 0);
@@ -33,7 +44,10 @@ function inputConnection(gc: GraphController): InputMapper {
             },
             touch: {
                 // start: (x, y) => scene.inputAction(x, y),
-                dragSingle: (args) => gc.transform(args.x, args.y, args.dx, args.dy, 1, 0),
+                dragSingle: (args) => {
+                    gc.transform(args.x, args.y, args.dx, args.dy, 1, 0);
+                    setTooltipState(null);
+                },
                 dragPair: (args) => gc.transform(args.x, args.y, args.dx, args.dy, 1/args.scale, args.angle),
             },
             keyboard: {
@@ -55,6 +69,7 @@ const Graph: React.FC<GraphProps> = (props) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [fonts, setFonts] = useState<[MCSDFFont, MCSDFFont] | null>(null);
     const [renderer, setRenderer] = useState<GraphRenderer>();
+    const [tooltipState, setTooltipState] = useState<TooltipState|null>(null);
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
@@ -95,7 +110,7 @@ const Graph: React.FC<GraphProps> = (props) => {
         if (props.controllerRef)
             props.controllerRef.current = controller;
 
-        const inputHandler = new InputListener(containerRef.current, inputConnection(controller));
+        const inputHandler = new InputListener(containerRef.current, inputConnection(controller, setTooltipState));
 
         return () => {
             inputHandler.cleanup();
@@ -116,6 +131,14 @@ const Graph: React.FC<GraphProps> = (props) => {
             flexDirection: "column",
             overflow: "hidden",
         }}>
+            {renderer && <Tooltip 
+                x={tooltipState?.x ?? 0} 
+                y={tooltipState?.y ?? 0} 
+                visible={tooltipState?.isVisible ?? false} 
+                graphProps={props}
+                renderer={renderer}
+            />
+            }
             <Box ref={containerRef} sx={{ width: "100%", height: "100%" }} />
             {props.title && 
             <Typography

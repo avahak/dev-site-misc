@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { LineMaterial, LineSegments2, LineSegmentsGeometry } from "three/examples/jsm/Addons.js";
-import { TextGroup } from '../webgl_tools/textRender';
 import { PlaneView } from './planeView';
 import { GraphProps, GraphText } from './types';
+import { TextGroup } from '../webgl_tools/textRender';
 
 type AxisParams = {
     tMin: number;
@@ -18,6 +18,10 @@ type AxisParams = {
 };
 
 class GraphDecorator {
+    static Z_OFFSET_BOTTOM = -0.6;
+    static Z_OFFSET_TEXTS = 0.5;
+    static Z_OFFSET_TOP = 0.6;
+
     private axisMaterial: LineMaterial;
     private minorGridMaterial: LineMaterial;
     private majorGridMaterial: LineMaterial;
@@ -85,11 +89,11 @@ class GraphDecorator {
         if (orientation === "horizontal") {
             const [x1, y] = getLocalPos(tMin);
             const [x2, _] = getLocalPos(tMax);
-            axisSegments.push(x1, y, 0, x2, y, 0);
+            axisSegments.push(x1, y, GraphDecorator.Z_OFFSET_TOP, x2, y, GraphDecorator.Z_OFFSET_TOP);
         } else {
             const [x, y1] = getLocalPos(tMin);
             const [_, y2] = getLocalPos(tMax);
-            axisSegments.push(x, y1, 0, x, y2, 0);
+            axisSegments.push(x, y1, GraphDecorator.Z_OFFSET_TOP, x, y2, GraphDecorator.Z_OFFSET_TOP);
         }
     
         // Tick calculation
@@ -115,12 +119,12 @@ class GraphDecorator {
             // Major tick
             if (orientation === "horizontal") {
                 axisSegments.push(
-                    posX, posY - tickSize, 0,
-                    posX, posY + tickSize, 0
+                    posX, posY - tickSize, GraphDecorator.Z_OFFSET_TOP,
+                    posX, posY + tickSize, GraphDecorator.Z_OFFSET_TOP
                 );
                 textGroup.addText(
                     `${t}`, 
-                    [posX, posY+tickSize/4, 0], 
+                    [posX, posY+tickSize/4, GraphDecorator.Z_OFFSET_TOP], 
                     [1, 1, 1], 
                     [0, -1], 
                     1.5*tickSize
@@ -128,19 +132,19 @@ class GraphDecorator {
                 
                 if (displayGrid) {
                     majorGridSegments.push(
-                        posX, -1, 0,  // Full height
-                        posX, 1, 0
+                        posX, -1, GraphDecorator.Z_OFFSET_BOTTOM,
+                        posX, 1, GraphDecorator.Z_OFFSET_BOTTOM
                     );
                 }
 
             } else {
                 axisSegments.push(
-                    posX - tickSize, posY, 0,
-                    posX + tickSize, posY, 0
+                    posX - tickSize, posY, GraphDecorator.Z_OFFSET_TOP,
+                    posX + tickSize, posY, GraphDecorator.Z_OFFSET_TOP
                 );
                 textGroup.addText(
                     `${t}`, 
-                    [posX+tickSize/4, posY, 0], 
+                    [posX+tickSize/4, posY, GraphDecorator.Z_OFFSET_TOP], 
                     [1, 1, 1], 
                     [-1, 0], 
                     1.5*tickSize
@@ -148,8 +152,8 @@ class GraphDecorator {
                 
                 if (displayGrid) {
                     majorGridSegments.push(
-                        -width/height, posY, 0,  // Full width
-                        width/height, posY, 0
+                        -width/height, posY, GraphDecorator.Z_OFFSET_BOTTOM,
+                        width/height, posY, GraphDecorator.Z_OFFSET_BOTTOM
                     );
                 }
             }
@@ -161,26 +165,26 @@ class GraphDecorator {
                 
                 if (orientation === "horizontal") {
                     axisSegments.push(
-                        posX2, posY2 - tickSize/2, 0,
-                        posX2, posY2 + tickSize/2, 0
+                        posX2, posY2 - tickSize/2, GraphDecorator.Z_OFFSET_TOP,
+                        posX2, posY2 + tickSize/2, GraphDecorator.Z_OFFSET_TOP
                     );
                     
                     if (displayGrid) {
                         minorGridSegments.push(
-                            posX2, -1, 0,
-                            posX2, 1, 0
+                            posX2, -1, GraphDecorator.Z_OFFSET_BOTTOM,
+                            posX2, 1, GraphDecorator.Z_OFFSET_BOTTOM
                         );
                     }
                 } else {
                     axisSegments.push(
-                        posX2 - tickSize/2, posY2, 0,
-                        posX2 + tickSize/2, posY2, 0
+                        posX2 - tickSize/2, posY2, GraphDecorator.Z_OFFSET_TOP,
+                        posX2 + tickSize/2, posY2, GraphDecorator.Z_OFFSET_TOP
                     );
                     
                     if (displayGrid) {
                         minorGridSegments.push(
-                            -width/height, posY2, 0,
-                            width/height, posY2, 0
+                            -width/height, posY2, GraphDecorator.Z_OFFSET_BOTTOM,
+                            width/height, posY2, GraphDecorator.Z_OFFSET_BOTTOM
                         );
                     }
                 }
@@ -200,7 +204,6 @@ class GraphDecorator {
                 const majorGridGeometry = new LineSegmentsGeometry();
                 majorGridGeometry.setPositions(majorGridSegments);
                 const majorGrid = new LineSegments2(majorGridGeometry, this.majorGridMaterial);
-                majorGrid.renderOrder = -2;
                 group.add(majorGrid);
             }
             
@@ -209,7 +212,6 @@ class GraphDecorator {
                 const minorGridGeometry = new LineSegmentsGeometry();
                 minorGridGeometry.setPositions(minorGridSegments);
                 const minorGrid = new LineSegments2(minorGridGeometry, this.minorGridMaterial);
-                minorGrid.renderOrder = -1;
                 group.add(minorGrid);
             }
         }
@@ -266,7 +268,7 @@ class GraphDecorator {
                     return;
                 textGroup.addText(
                     text.text, 
-                    [(text.p.x-loc.x)/loc.scale, (text.p.y-loc.y)/loc.scale, 0], 
+                    [(text.p.x-loc.x)/loc.scale, (text.p.y-loc.y)/loc.scale, GraphDecorator.Z_OFFSET_TEXTS], 
                     text.color ?? [1, 1, 1], 
                     text.anchor ?? [0, 0], 
                     text.size*tickSize
@@ -278,14 +280,14 @@ class GraphDecorator {
         if (props.xLabel) {
             textGroup.addText(
                 props.xLabel, 
-                [width/height, -1+2*tickSize, 0], 
+                [width/height, -1+2*tickSize, GraphDecorator.Z_OFFSET_TOP], 
                 [1, 1, 1], [1, -1], 1.5*tickSize
             );
         }
         if (props.yLabel) {
             textGroup.addText(
                 props.yLabel, 
-                [-width/height+2*tickSize, 1, 0], 
+                [-width/height+2*tickSize, 1, GraphDecorator.Z_OFFSET_TOP], 
                 [1, 1, 1], [-1, 1], 1.5*tickSize
             );
         }
@@ -298,7 +300,7 @@ class GraphDecorator {
                 const color = new THREE.Color(ds.color);
                 textGroup.addText(
                     ds.label, 
-                    [width/height-1*tickSize, 1-labelCount*labelSize, 0], 
+                    [width/height-1*tickSize, 1-labelCount*labelSize, GraphDecorator.Z_OFFSET_TOP], 
                     [color.r, color.g, color.b], [1, 1], labelSize
                 );
                 labelCount++;

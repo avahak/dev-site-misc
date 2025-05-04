@@ -13,6 +13,7 @@ type GraphProps = {
     width?: string;
     height?: string;
     title?: string;
+    location?: { x: number, y: number, scale: number };     // initial location
 };
 
 type Point = {
@@ -33,6 +34,7 @@ type DataSet = {
     points: Point[];
     scale: number;              // width of lines / diameter of points in screen space
     color: string;
+    opacity?: number;
     drawPoints?: boolean;
     drawLines?: boolean;
     label?: string;
