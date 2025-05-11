@@ -3,12 +3,12 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { GraphController, GraphProps } from "./types";
+import { DataSet, GraphController, GraphProps } from "./types";
 import { InputListener, InputMapper } from "../inputListener";
 import { GraphRenderer } from "./renderer";
-import { Box, Typography } from "@mui/material";
+import { Box, Button, FormControlLabel, FormGroup, Switch, Typography } from "@mui/material";
+import { MCSDFFont } from "../primitives/font";
 import { Tooltip } from "./Tooltip";
-import { MCSDFFont } from "../webgl_tools/font";
 
 type TooltipState = {
     x: number;
@@ -65,11 +65,59 @@ function inputConnection(gc: GraphController, setTooltipState: React.Dispatch<Re
     );
 }
 
+interface GroupToggleUIProps {
+    groups: Map<string, DataSet[]>;
+    onToggle: (groupName: string, value: boolean) => void;
+}
+  
+const GroupToggleUI: React.FC<GroupToggleUIProps> = ({ groups, onToggle }) => {
+    return (
+        <Box sx={{ 
+            p: 2,
+            bgcolor: 'background.paper',
+            borderRadius: 1,
+            boxShadow: 1,
+            mb: 2,
+            position: "absolute",
+            right: 10,
+            bottom: "5%",
+        }}>
+        <Typography variant="subtitle1" gutterBottom>
+            Toggle Plot Groups
+        </Typography>
+        <FormGroup>
+            {Array.from(groups.keys()).map((key, k) => (
+            <FormControlLabel
+                key={k}
+                control={
+                <Switch
+                    checked={groups.get(key)![0].isVisible}
+                    onChange={(e) => onToggle(key, !groups.get(key)![0].isVisible)}
+                    color="primary"
+                />
+                }
+                label={key}
+                sx={{
+                '& .MuiFormControlLabel-label': {
+                    textTransform: 'capitalize',
+                    minWidth: '40px' // Ensures consistent alignment
+                }
+                }}
+            />
+            ))}
+        </FormGroup>
+        </Box>
+    );
+};
+
 const Graph: React.FC<GraphProps> = (props) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [fonts, setFonts] = useState<[MCSDFFont, MCSDFFont] | null>(null);
     const [renderer, setRenderer] = useState<GraphRenderer>();
     const [tooltipState, setTooltipState] = useState<TooltipState|null>(null);
+
+    const [showOptions, setShowOptions] = useState<boolean>(false);
+    const [groups, setGroups] = useState<Map<string, DataSet[]>>(new Map());
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
@@ -103,6 +151,22 @@ const Graph: React.FC<GraphProps> = (props) => {
         if (!containerRef.current || !fonts) 
             return;
 
+        // Set default values for undefined properties
+        for (const ds of props.data) {
+            if (ds.groupName === undefined)
+                ds.groupName = "Undefined";
+            if (ds.isVisible === undefined)
+                ds.isVisible = true;
+        }
+
+        const newGroups: Map<string, DataSet[]> = new Map();
+        for (const ds of props.data) {
+            if (!newGroups.has(ds.groupName!)) 
+                newGroups.set(ds.groupName!, []);
+            newGroups.get(ds.groupName!)!.push(ds);
+        }
+        setGroups(newGroups);
+
         const r: GraphRenderer = new GraphRenderer(containerRef.current, fonts, props);
         setRenderer(r);
 
@@ -119,6 +183,23 @@ const Graph: React.FC<GraphProps> = (props) => {
                 props.controllerRef.current = null;
         };
     }, [props, fonts]);
+
+
+    /**
+     * Handle when group is toggled visible/invisible
+     */
+    const handleToggle = (groupName: string, newValue: boolean) => {
+        if (!groups || !renderer)
+            return;
+        renderer.setIsVisible(groupName, newValue);
+        for (const ds of props.data) {
+            if (ds.groupName === groupName)
+                ds.isVisible = newValue;
+        }
+
+        // Trigger re-render
+        setGroups(new Map(groups));
+    };
 
 
     return (<>
@@ -139,22 +220,30 @@ const Graph: React.FC<GraphProps> = (props) => {
                 renderer={renderer}
             />
             }
-            <Box ref={containerRef} sx={{ width: "100%", height: "100%" }} />
-            {props.title && 
-            <Typography
-                variant="caption"
-                align="center"
-                sx={{
-                    color: "text.primary",
-                    whiteSpace: "pre-line",
-                    padding: "2px 0 0 0",
-                    margin: "0px",
-                    width: "100%"
-                }}
-            >
-                {props.title}
-            </Typography>
+            {showOptions && 
+                <GroupToggleUI groups={groups!} onToggle={(s, val) => handleToggle(s, val)} />
             }
+            <Box ref={containerRef} sx={{ width: "100%", height: "100%" }} />
+            <Box display="flex">
+                <Typography
+                    variant="subtitle1"
+                    align="center"
+                    sx={{
+                        color: "text.primary",
+                        whiteSpace: "pre-line",
+                        padding: "2px",
+                        margin: "0px",
+                        width: "100%"
+                    }}
+                >
+                    {props.title ?? "Graph"}
+                </Typography>
+                {groups && groups.size > 1 &&
+                <Button onClick={(e) => setShowOptions((v) => !v)}>
+                    Filters
+                </Button>
+                }
+            </Box>
         </Box>
         </>
     );

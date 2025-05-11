@@ -6,7 +6,8 @@
 class PlaneView {
     x: number = 0;
     y: number = 0;
-    scale: number = 1;
+    scaleX: number = 1;     // scaleX is scaling for x-coordinate in local space
+    scaleY: number = 1;     // scaleY is scaling for y-coordinate in local space
     angle: number = 0;
     useAngle: boolean;
 
@@ -17,17 +18,19 @@ class PlaneView {
         this.useAngle = useAngle;
     }
 
-    setLocation(x: number, y: number, scale: number, angle: number=0) {
+    setLocation(x: number, y: number, scaleX: number, scaleY: number, angle: number=0) {
         this.x = x;
         this.y = y;
-        this.scale = scale;
+        this.scaleX = scaleX;
+        this.scaleY = scaleY;
         this.angle = this.useAngle ? angle : 0;
     }
 
     transform(screenX: number, screenY: number, screenDx: number, screenDy: number, scaleFactor: number, angleDelta: number): void {
         const [lx, ly] = this.localFromScreen(screenX, screenY);
-        
-        this.scale = this.scale / scaleFactor;
+
+        this.scaleX /= scaleFactor;
+        this.scaleY /= scaleFactor;
         this.angle = this.useAngle ? this.angle + angleDelta : 0;
         
         const [lx2, ly2] = this.localFromScreen(screenX + screenDx, screenY + screenDy);
@@ -51,8 +54,8 @@ class PlaneView {
         const [width, height] = this.getResolution();
         const aspect = width / height;
         return [
-            (worldX / aspect + 1) * 0.5 * width,
-            (1 - worldY) * 0.5 * height
+            (worldX / aspect + 1)/2 * width,
+            (1 - worldY)/2 * height
         ];
     }
     
@@ -60,28 +63,26 @@ class PlaneView {
         const [width, height] = this.getResolution();
         const aspect = width / height;
         return [
-            ((screenX / width) * 2 - 1) * aspect,
-            1 - (screenY / height) * 2
+            ((screenX / width)*2 - 1) * aspect,
+            1 - (screenY / height)*2
         ];
     }
     
     worldFromLocal(localX: number, localY: number): [number, number] {
-        const r = this.scale;
         const cos = Math.cos(-this.angle);
         const sin = Math.sin(-this.angle);
-        const wx = (localX - this.x) * cos - (localY - this.y) * sin;
-        const wy = (localX - this.x) * sin + (localY - this.y) * cos;
-        return [wx/r, wy/r];
+        const wx = (localX - this.x)*cos - (localY - this.y)*sin;
+        const wy = (localX - this.x)*sin + (localY - this.y)*cos;
+        return [wx/this.scaleX, wy/this.scaleY];
     }
     
     localFromWorld(worldX: number, worldY: number): [number, number] {
-        const r = this.scale;
         const cos = Math.cos(this.angle);
         const sin = Math.sin(this.angle);
-        const tx = worldX*r;
-        const ty = worldY*r;
-        const lx = tx * cos - ty * sin;
-        const ly = tx * sin + ty * cos;
+        const tx = worldX * this.scaleX;
+        const ty = worldY * this.scaleY;
+        const lx = tx*cos - ty*sin;
+        const ly = tx*sin + ty*cos;
         return [lx + this.x, ly + this.y];
     }
 }

@@ -173,12 +173,11 @@ class Scene {
 
         const t = this.lastTime*0.002;
 
-        const r = this.loc.scale;
         const phi = this.loc.angle;
-        this.scene.scale.set(1/r, 1/r, 1/r);
+        this.scene.scale.set(1/this.loc.scaleX, 1/this.loc.scaleY, 1);
         this.scene.setRotationFromAxisAngle(new THREE.Vector3(0, 0, 1), -phi);
         const [cos, sin] = [Math.cos(-this.loc.angle), Math.sin(-this.loc.angle)];
-        const [x, y] = [-this.loc.x/r, -this.loc.y/r];
+        const [x, y] = [-this.loc.x/this.loc.scaleX, -this.loc.y/this.loc.scaleY];
         const [x2, y2] = [cos*x - sin*y, sin*x + cos*y];
         this.scene.position.set(x2, y2, 0);
         // this.e1 = new Complex(Math.log(r), phi+0.001).exp();

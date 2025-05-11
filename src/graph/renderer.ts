@@ -4,8 +4,8 @@ import { PlaneView } from './planeView';
 import { createGroup } from './graphGroup';
 import { LineMaterial } from 'three/examples/jsm/Addons.js';
 import { GraphDecorator } from './graphDecorator';
-import { TextGroup } from '../webgl_tools/textRender';
-import { MCSDFFont } from '../webgl_tools/font';
+import { TextGroup } from '../primitives/textRender';
+import { MCSDFFont } from '../primitives/font';
 import { SharedResource } from './sharedResource';
 
 class GraphRenderer {
@@ -57,8 +57,8 @@ class GraphRenderer {
         this.dataGroup = cg.group;
         this.lineMaterials = cg.lineMaterials;
         this.cleanupTasks.push(...cg.cleanupTasks);
+
         this.scene = new THREE.Scene();
-        this.dataGroup.renderOrder = 10;
         this.scene.add(this.dataGroup);
 
         this.textGroup = new TextGroup(fonts[0]);
@@ -68,7 +68,8 @@ class GraphRenderer {
         if (props.location) {
             this.loc.x = props.location.x;
             this.loc.y = props.location.y;
-            this.loc.scale = props.location.scale;
+            this.loc.scaleX = props.location.scaleX;
+            this.loc.scaleY = props.location.scaleY;
         }
 
         this.setupResize();
@@ -126,7 +127,7 @@ class GraphRenderer {
                 renderer.requestRender();
             },
             setLocation(x: number, y: number, scale: number) {
-                renderer.loc.setLocation(x, y, scale);
+                renderer.loc.setLocation(x, y, scale, scale);
                 renderer.requestRender();
             },
             update() {
@@ -157,14 +158,11 @@ class GraphRenderer {
         // console.log('GraphRenderer.render()', Math.random());
 
         // PROBLEM: Low precision (32-bit) in shader restricts zooming
-        const r = this.loc.scale;
-        this.dataGroup.scale.set(1/r, 1/r, 1/r);
-        this.dataGroup.position.set(-this.loc.x/r, -this.loc.y/r, 0);
+        this.dataGroup.scale.set(1/this.loc.scaleX, 1/this.loc.scaleY, 1);
+        this.dataGroup.position.set(-this.loc.x/this.loc.scaleX, -this.loc.y/this.loc.scaleY, 0);
 
         const [width, height] = this.getResolution();
         const group = this.graphDecorator.createGroup(this.props, this.loc, [width, height], this.textGroup);
-        group.renderOrder = -1;
-        this.textGroup.getObject().renderOrder = 1000;
         this.scene.add(group);
 
         if (this.renderer.domElement.width !== width || this.renderer.domElement.height !== height)
@@ -187,6 +185,14 @@ class GraphRenderer {
                 this.animationFrameHandle = 0;
             });
         }
+    }
+
+    setIsVisible(groupName: string, value: boolean) {
+        this.scene.traverse((object) => {
+            if (object.userData.groupName === groupName)
+                object.visible = value;
+        });
+        this.requestRender();
     }
 }
 

@@ -30,6 +30,8 @@ function createDataSetGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, li
 
         const pointCloud = new THREE.Points(geometry, pointMaterial);
         pointCloud.frustumCulled = false;
+        pointCloud.userData.groupName = ds.groupName;
+        pointCloud.visible = ds.isVisible ?? true;
         group.add(pointCloud);
 
         cleanupTasks.push(() => geometry.dispose());
@@ -56,6 +58,8 @@ function createDataSetGroup(ds: DataSet, pointMaterial: THREE.ShaderMaterial, li
         // Create the line and add to group
         const line = new Line2(lineGeometry, lineMaterial);
         line.frustumCulled = false;
+        line.userData.groupName = ds.groupName;
+        line.visible = ds.isVisible ?? true;
         group.add(line);
         cleanupTasks.push(() => lineGeometry.dispose());
         cleanupTasks.push(() => lineMaterial.dispose());
@@ -75,6 +79,8 @@ function createGroup(dsList: DataSet[]): { group: THREE.Group, lineMaterials: Li
         vertexShader: vsString,
         fragmentShader: fsString,
         transparent: true,
+        depthTest: true,
+        depthWrite: false,
     });
 
     dsList.forEach((ds: DataSet, index: number) => {

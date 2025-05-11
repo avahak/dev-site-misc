@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { LineMaterial, LineSegments2, LineSegmentsGeometry } from "three/examples/jsm/Addons.js";
+import { TextGroup } from '../primitives/textRender';
 import { PlaneView } from './planeView';
 import { GraphProps, GraphText } from './types';
-import { TextGroup } from '../webgl_tools/textRender';
 
 type AxisParams = {
     tMin: number;
@@ -264,11 +264,11 @@ class GraphDecorator {
         // Add texts:
         if (props.texts) {
             props.texts.forEach((text: GraphText) => {
-                if (text.visibleScale !== undefined && loc.scale > text.visibleScale)
+                if (text.visibleScaleX !== undefined && loc.scaleX > text.visibleScaleX)
                     return;
                 textGroup.addText(
                     text.text, 
-                    [(text.p.x-loc.x)/loc.scale, (text.p.y-loc.y)/loc.scale, GraphDecorator.Z_OFFSET_TEXTS], 
+                    [...loc.worldFromLocal(text.p.x, text.p.y), GraphDecorator.Z_OFFSET_TEXTS], 
                     text.color ?? [1, 1, 1], 
                     text.anchor ?? [0, 0], 
                     text.size*tickSize
@@ -296,7 +296,7 @@ class GraphDecorator {
         let labelCount = 0;
         const labelSize = 1.5*tickSize;
         props.data.forEach((ds) => {
-            if (ds.label) {
+            if (ds.label && ds.isVisible) {
                 const color = new THREE.Color(ds.color);
                 textGroup.addText(
                     ds.label, 

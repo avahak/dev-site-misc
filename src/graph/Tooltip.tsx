@@ -1,10 +1,12 @@
 import { Box, Typography } from "@mui/material";
-import { GraphProps, Point } from "./types";
+import { DataSet, GraphProps, Point } from "./types";
 import { GraphRenderer } from "./renderer";
+import { PlaneView } from "./planeView";
 
 type InspectionResult = {
     dist: number;
     p: Point;
+    ds?: DataSet;
     index?: number;
     isHit?: boolean;
     type?: "Point" | "Linesegment" | "Text";
@@ -19,13 +21,14 @@ type TooltipProps = {
     renderer: GraphRenderer;
 };
 
-const getClosestPoint = (lx: number, ly: number, points: Point[]): InspectionResult => {
+const getClosestPoint = (worldX: number, worldY: number, points: Point[], loc: PlaneView): InspectionResult => {
     let minDist = Infinity;
     let closestPoint: Point = points[0];
     let closestIndex = 0;
 
     points.forEach((point, index) => {
-        const dist = Math.hypot(lx - point.x, ly - point.y);
+        const [wx, wy] = loc.worldFromLocal(point.x, point.y);
+        const dist = Math.hypot(worldX-wx, worldY-wy);
         if (dist < minDist) {
             minDist = dist;
             closestPoint = point;
@@ -40,30 +43,31 @@ const getClosestPoint = (lx: number, ly: number, points: Point[]): InspectionRes
     };
 };
 
-const getClosestLineSegment = (lx: number, ly: number, points: Point[]): InspectionResult => {
+const getClosestLineSegment = (worldX: number, worldY: number, points: Point[], loc: PlaneView): InspectionResult => {
     let minDist = Infinity;
     let closestPoint: Point = { x: 0, y: 0 };
     let closestIndex = 0;
 
     for (let i = 0; i < points.length - 1; i++) {
-        const p1 = points[i];
-        const p2 = points[i + 1];
+        const [p1x, p1y] = loc.worldFromLocal(points[i].x, points[i].y);
+        const [p2x, p2y] = loc.worldFromLocal(points[i+1].x, points[i+1].y);
         
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        const len2 = dx * dx + dy * dy;
+        const dx = p2x - p1x;
+        const dy = p2y - p1y;
+        const len2 = dx*dx + dy*dy;
 
         if (len2 === 0) 
             continue;
 
-        const t = Math.max(0, Math.min(1, ((lx - p1.x) * dx + (ly - p1.y) * dy) / len2));
-        const cx = p1.x + t * dx;
-        const cy = p1.y + t * dy;
-        const dist = Math.hypot(lx - cx, ly - cy);
+        const t = Math.max(0, Math.min(1, ((worldX - p1x) * dx + (worldY - p1y) * dy) / len2));
+        const cx = p1x + t*dx;
+        const cy = p1y + t*dy;
+        const dist = Math.hypot(worldX-cx, worldY-cy);
 
         if (dist < minDist) {
+            const [lcx, lcy] = loc.localFromWorld(cx, cy);
             minDist = dist;
-            closestPoint = { x: cx, y: cy };
+            closestPoint = { x: lcx, y: lcy };
             closestIndex = i;
         }
     }
@@ -76,8 +80,8 @@ const getClosestLineSegment = (lx: number, ly: number, points: Point[]): Inspect
 };
 
 const Tooltip: React.FC<TooltipProps> = ({ x, y, visible, graphProps, renderer }) => {
-    const [screenX, screenY] = [x, y];
     const [localX, localY] = renderer.loc.localFromScreen(x, y);
+    const [worldX, worldY] = renderer.loc.worldFromScreen(x, y);
     const [width, height] = renderer.getResolution();
 
     let minDist = Infinity;
@@ -85,14 +89,15 @@ const Tooltip: React.FC<TooltipProps> = ({ x, y, visible, graphProps, renderer }
 
     // Check points
     graphProps.data.forEach((dataset, datasetIndex) => {
-        if (dataset.drawPoints) {
-            const result = getClosestPoint(localX, localY, dataset.points);
-            const threshold = 0.05 * renderer.loc.scale;
+        if (dataset.drawPoints && dataset.isVisible) {
+            const result = getClosestPoint(worldX, worldY, dataset.points, renderer.loc);
+            const threshold = 0.05;
             
             if (result.dist < minDist && result.dist < threshold) {
                 minDist = result.dist;
                 inspectionResult = {
                     ...result,
+                    ds: dataset,
                     isHit: true,
                     type: "Point",
                     text: dataset.label || `Dataset ${datasetIndex}`
@@ -103,14 +108,15 @@ const Tooltip: React.FC<TooltipProps> = ({ x, y, visible, graphProps, renderer }
 
     // Check lines
     graphProps.data.forEach((dataset, datasetIndex) => {
-        if (dataset.drawLines) {
-            const result = getClosestLineSegment(localX, localY, dataset.points);
-            const threshold = 0.02 * renderer.loc.scale;
+        if (dataset.drawLines && dataset.isVisible) {
+            const result = getClosestLineSegment(worldX, worldY, dataset.points, renderer.loc);
+            const threshold = 0.02;
             
             if (result.dist < 0.5 * minDist && result.dist < threshold) {
                 minDist = result.dist;
                 inspectionResult = {
                     ...result,
+                    ds: dataset,
                     isHit: true,
                     type: "Linesegment",
                     text: dataset.label || `Dataset ${datasetIndex}`
@@ -121,9 +127,10 @@ const Tooltip: React.FC<TooltipProps> = ({ x, y, visible, graphProps, renderer }
 
     // Check texts
     graphProps.texts?.forEach((text, index) => {
-        if (!text.visibleScale || text.visibleScale > renderer.loc.scale) {
-            const dist = Math.hypot(localX - text.p.x, localY - text.p.y);
-            const threshold = 0.05 * renderer.loc.scale;
+        if (!text.visibleScaleX || text.visibleScaleX > renderer.loc.scaleX) {
+            const [wx, wy] = renderer.loc.worldFromLocal(text.p.x, text.p.y);
+            const dist = Math.hypot(worldX-wx, worldY-wy);
+            const threshold = 0.05;
             
             if (dist < minDist && dist < threshold) {
                 minDist = dist;
@@ -141,6 +148,19 @@ const Tooltip: React.FC<TooltipProps> = ({ x, y, visible, graphProps, renderer }
 
     const displayPoint = inspectionResult?.p || { x: localX, y: localY };
     const [displayScreenX, displayScreenY] = renderer.loc.screenFromLocal(displayPoint.x, displayPoint.y);
+
+    // console.log the result with possible extra info from inspectInfo:
+    if (visible) {
+        console.log('Inspection:', inspectionResult.p);
+        if (inspectionResult.ds && inspectionResult.ds.inspectInfo) {
+            if (inspectionResult.type == "Linesegment") {
+                console.log('Line point 1:', inspectionResult.ds.inspectInfo(inspectionResult.index!));
+                console.log('Line point 2:', inspectionResult.ds.inspectInfo(inspectionResult.index!+1));
+            } else 
+                console.log('Point:', inspectionResult.ds.inspectInfo(inspectionResult.index!));
+        }
+    }
+
 
     return (
         <>

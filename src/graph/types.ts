@@ -13,7 +13,7 @@ type GraphProps = {
     width?: string;
     height?: string;
     title?: string;
-    location?: { x: number, y: number, scale: number };     // initial location
+    location?: { x: number, y: number, scaleX: number, scaleY: number };     // initial location
 };
 
 type Point = {
@@ -27,7 +27,7 @@ type GraphText = {
     anchor?: number[];
     text: string;
     color?: number[];
-    visibleScale?: number;      // scale level required for the text to be rendered
+    visibleScaleX?: number;      // scale level required for the text to be rendered
 };
 
 type DataSet = {
@@ -38,6 +38,11 @@ type DataSet = {
     drawPoints?: boolean;
     drawLines?: boolean;
     label?: string;
+
+    groupName?: string;         // name for DataSet, for hiding groups if needed
+    isVisible?: boolean;
+
+    inspectInfo?: (k: number) => void;       // extra info sent to console.log on inspect
 };
 
 export type { GraphController, GraphProps, Point, GraphText, DataSet };

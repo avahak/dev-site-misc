@@ -7,7 +7,7 @@ import { App as GeoParticlesApp } from './geo_particles/App.tsx';
 import { App as RegionJsonApp } from './region_json/App.tsx';
 import { App as FractalApp } from './fractals/App.tsx';
 import { App as ClassTemplateApp } from './template_class/App.tsx';
-import { App as WebGLApp } from './webgl_tools/App.tsx';
+import { App as WebGLApp } from './primitives/App.tsx';
 import { App as InputListenerApp } from './input_listener/App.tsx';
 import { App as GraphApp } from './graph/App.tsx';
 import { FrontPage } from './FrontPage.tsx';
