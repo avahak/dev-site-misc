@@ -27,7 +27,7 @@ interface InputMapper {
         keyup?: (args: { key: string, code: string } & Modifiers) => void;
     }
     safariGesture?: {
-        change?: (args: { scale: number, angle: number } & Modifiers) => void;
+        change?: (args: { x: number, y: number, scale: number, angle: number } & Modifiers) => void;
     }
 };
 
@@ -56,6 +56,7 @@ class InputListener {
     private lastDistance: number | null = null;
     private lastAngle: number | null = null;
     private lastMidpoint: { x: number, y: number } | null = null;
+    private lastPointer: { x: number, y: number } | null = null;
 
     // Safari gesture tracking
     private lastGestureScale: number | null = null;
@@ -65,6 +66,7 @@ class InputListener {
         this.container = container;
         this.mapper = mapper;
 
+        // Needed to prevent default touch behaviors such as scrolling and zooming
         this.container.style.touchAction = 'none';
         this.container.style.userSelect = 'none';
 
@@ -97,6 +99,10 @@ class InputListener {
         const rect = this.container.getBoundingClientRect();
 
         this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        this.lastPointer = {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top
+        };
 
         if (event.pointerType === 'mouse' && this.mapper.mouse?.down) {
             this.mapper.mouse.down({
@@ -135,6 +141,10 @@ class InputListener {
 
         // update first to avoid stale data
         this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        this.lastPointer = {
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top
+        };
 
         if (event.pointerType === 'mouse') {
             if (this.mapper.mouse?.move) {
@@ -289,7 +299,22 @@ class InputListener {
         this.lastGestureScale = event.scale;
         this.lastGestureRotation = event.rotation;
 
+        // --- synthesize pivot ---
+        let x: number;
+        let y: number;
+
+        if (this.lastPointer) {
+            x = this.lastPointer.x;
+            y = this.lastPointer.y;
+        } else {
+            const rect = this.container.getBoundingClientRect();
+            x = rect.width / 2;
+            y = rect.height / 2;
+        }
+
         this.mapper.safariGesture?.change?.({
+            x,
+            y,
             scale: scaleDelta,
             angle: angleDelta,
             ...modifiers

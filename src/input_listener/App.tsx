@@ -27,7 +27,7 @@ const SceneComponent: React.FC = () => {
             wheel: {
                 zoom: (args) => {
                     console.log(args);
-                    scene.inputTransform(args.x, args.y, 0, 0, 1-0.001*args.delta, 0);
+                    scene.inputTransform(args.x, args.y, 0, 0, 1 - 0.001 * args.delta, 0);
                 },
                 pan: (args) => {
                     console.log(args);
@@ -37,23 +37,23 @@ const SceneComponent: React.FC = () => {
             touch: {
                 // start: (x, y) => scene.inputAction(x, y),
                 dragSingle: (args) => scene.inputTransform(args.x, args.y, args.dx, args.dy, 1, 0),
-                dragPair: (args) => scene.inputTransform(args.x, args.y, args.dx, args.dy, 1/args.scale, args.angle),
+                dragPair: (args) => scene.inputTransform(args.x, args.y, args.dx, args.dy, args.scale, args.angle),
             },
             keyboard: {
-                keydown: (args) => { 
+                keydown: (args) => {
                     console.log('key', args);
-                    if (args.key === "-") 
-                        scene.inputTransform(0, 0, 0, 0, 1.0/1.2, 0); 
-                    if (args.key === "+") 
-                        scene.inputTransform(0, 0, 0, 0, 1.2, 0); 
+                    if (args.key === "-")
+                        scene.inputTransform(0, 0, 0, 0, 1.0 / 1.2, 0);
+                    if (args.key === "+")
+                        scene.inputTransform(0, 0, 0, 0, 1.2, 0);
                     if (args.key == "ArrowLeft")
-                        scene.inputTransform(scene.getResolution().x/2, scene.getResolution().y/2, 0, 0, 1, -Math.PI/64); 
+                        scene.inputTransform(scene.getResolution().x / 2, scene.getResolution().y / 2, 0, 0, 1, -Math.PI / 64);
                     if (args.key == "ArrowRight")
-                        scene.inputTransform(scene.getResolution().x/2, scene.getResolution().y/2, 0, 0, 1, Math.PI/64); 
+                        scene.inputTransform(scene.getResolution().x / 2, scene.getResolution().y / 2, 0, 0, 1, Math.PI / 64);
                 },
             },
             safariGesture: {
-                change: (args) => scene.inputTransform(0, 0, 0, 0, args.scale, args.angle),
+                change: (args) => scene.inputTransform(args.x, args.y, 0, 0, args.scale, args.angle),
             },
         });
 
@@ -69,7 +69,7 @@ const SceneComponent: React.FC = () => {
 const App: React.FC = () => {
     return (
         <Container maxWidth="xl">
-            <Box display="flex" justifyContent="center" sx={{py: 2}}>
+            <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                 <Typography variant="h2">
                     Input listener
                 </Typography>
