@@ -16,7 +16,7 @@ class GraphRenderer {
     lastWidth: number;
     lastHeight: number;
     lastDpr: number;
-    
+
     renderer: THREE.WebGLRenderer;
     graphDecorator: GraphDecorator;
 
@@ -32,7 +32,7 @@ class GraphRenderer {
     animationFrameHandle: number = 0;
 
     props: GraphProps;
-    
+
 
     constructor(container: HTMLDivElement, fonts: MCSDFFont[], props: GraphProps) {
         this.container = container;
@@ -83,7 +83,7 @@ class GraphRenderer {
 
         if (clientWidth === 0 || clientHeight === 0)
             return;
-        if (this.lastWidth === clientWidth && this.lastHeight === clientHeight && this.lastDpr === dpr) 
+        if (this.lastWidth === clientWidth && this.lastHeight === clientHeight && this.lastDpr === dpr)
             return;
 
         this.lastDpr = dpr;
@@ -158,8 +158,8 @@ class GraphRenderer {
         // console.log('GraphRenderer.render()', Math.random());
 
         // PROBLEM: Low precision (32-bit) in shader restricts zooming
-        this.dataGroup.scale.set(1/this.loc.scaleX, 1/this.loc.scaleY, 1);
-        this.dataGroup.position.set(-this.loc.x/this.loc.scaleX, -this.loc.y/this.loc.scaleY, 0);
+        this.dataGroup.scale.set(1 / this.loc.scaleX, 1 / this.loc.scaleY, 1);
+        this.dataGroup.position.set(-this.loc.x / this.loc.scaleX, -this.loc.y / this.loc.scaleY, 0);
 
         const [width, height] = this.getResolution();
         const group = this.graphDecorator.createGroup(this.props, this.loc, [width, height], this.textGroup);
@@ -167,7 +167,7 @@ class GraphRenderer {
 
         if (this.renderer.domElement.width !== width || this.renderer.domElement.height !== height)
             this.renderer.setSize(width, height);
-        if (this.renderer.pixelRatio !== this.lastDpr)
+        if (this.renderer.getPixelRatio() !== this.lastDpr)
             this.renderer.setPixelRatio(this.lastDpr);
         this.renderer.render(this.scene, this.camera);
         this.canvasContext.globalCompositeOperation = 'copy';

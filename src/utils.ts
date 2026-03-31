@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef } from "react";
 
-type DebouncedFunction<T extends (...args: any[]) => void> = 
+type DebouncedFunction<T extends (...args: any[]) => void> =
     ((...args: Parameters<T>) => void) & { cancel: () => boolean };
 
 /**
  * Trailing-edge debounce - executes only after the delay when calls stop
  */
 function useTrailingDebounce<T extends (...args: any[]) => void>(cb: T, delay: number) {
-    const timer = useRef<ReturnType<typeof setTimeout>>();
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const callbackRef = useRef(cb);
     const delayRef = useRef(delay);
 
@@ -19,7 +19,7 @@ function useTrailingDebounce<T extends (...args: any[]) => void>(cb: T, delay: n
 
     const debouncedFunction = useCallback((...args: Parameters<T>) => {
         // Clear any existing timer
-        if (timer.current) 
+        if (timer.current !== null)
             clearTimeout(timer.current);
 
         // Set new timer
@@ -31,7 +31,7 @@ function useTrailingDebounce<T extends (...args: any[]) => void>(cb: T, delay: n
     debouncedFunction.cancel = () => {
         if (timer.current) {
             clearTimeout(timer.current);
-            timer.current = undefined;
+            timer.current = null;
             return true;
         }
         return false;
@@ -56,7 +56,7 @@ function useTrailingDebounce<T extends (...args: any[]) => void>(cb: T, delay: n
  * 3. Executes the queued call after delay
  */
 function useLeadingDebounce<T extends (...args: any[]) => void>(cb: T, delay: number) {
-    const timer = useRef<ReturnType<typeof setTimeout>>();
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const callbackRef = useRef(cb);
     const lastArgs = useRef<Parameters<T> | null>(null);
     const delayRef = useRef(delay);
@@ -84,14 +84,14 @@ function useLeadingDebounce<T extends (...args: any[]) => void>(cb: T, delay: nu
                 callbackRef.current(...lastArgs.current);
                 lastArgs.current = null;
             }
-            timer.current = undefined;
+            timer.current = null;
         }, delayRef.current);
     }, []) as DebouncedFunction<T>;
 
     debouncedFunction.cancel = () => {
         if (timer.current) {
             clearTimeout(timer.current);
-            timer.current = undefined;
+            timer.current = null;
             lastArgs.current = null;
             return true;
         }
