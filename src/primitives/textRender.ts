@@ -22,7 +22,7 @@ class TextGroup {
     dataTexture: THREE.Texture;
     mesh: THREE.Object3D;
 
-    data: Float32Array;
+    data: Float32Array<ArrayBuffer>;
     numChars!: number;
 
     constructor(font: MCSDFFont) {
@@ -32,7 +32,7 @@ class TextGroup {
             uniforms: {
                 dataTexture: { value: null },
                 atlasTexture: { value: font.atlas },
-                unitRange: { value: [TextGroup.SHARPNESS/this.font.layoutData.atlas.width, TextGroup.SHARPNESS/this.font.layoutData.atlas.height] },
+                unitRange: { value: [TextGroup.SHARPNESS / this.font.layoutData.atlas.width, TextGroup.SHARPNESS / this.font.layoutData.atlas.height] },
                 numChars: { value: null },
                 useFisheye: { value: 0 },
                 focalLength: { value: 0.5 },
@@ -51,8 +51,8 @@ class TextGroup {
         this.ibGeometry.setAttribute('position', new THREE.BufferAttribute(square, 3));
         this.ibGeometry.setIndex(new THREE.BufferAttribute(squareIndices, 1));
 
-        this.data = new Float32Array(Math.floor(TextGroup.TEXTURE_MAX_WIDTH/TextGroup.FLOATS_PER_CHAR));
-        this.dataTexture = new THREE.DataTexture(this.data, this.data.length/4, 1, THREE.RGBAFormat, THREE.FloatType);
+        this.data = new Float32Array(Math.floor(TextGroup.TEXTURE_MAX_WIDTH / TextGroup.FLOATS_PER_CHAR));
+        this.dataTexture = new THREE.DataTexture(this.data, this.data.length / 4, 1, THREE.RGBAFormat, THREE.FloatType);
         this.shader.uniforms.dataTexture.value = this.dataTexture;
         this.dataTexture.needsUpdate = true;
 
@@ -66,7 +66,7 @@ class TextGroup {
      * Returns bounding box [xMin, yMin, xMax, yMax] for given text.
      */
     private computeTextBounds(
-        text: string, 
+        text: string,
     ) {
         let xMin = 0;
         let yMin = 0;
@@ -128,17 +128,17 @@ class TextGroup {
      * @param textSize only used when text is made to face the camera.
      */
     addText(
-        text: string, 
-        pos: ((x: number, y: number) => number[]) | number[], 
+        text: string,
+        pos: ((x: number, y: number) => number[]) | number[],
         color: number[],
         anchor: number[],
         textSize: number = 0
     ) {
-        const faceCamera = (typeof(pos) !== 'function');
+        const faceCamera = (typeof (pos) !== 'function');
 
         const bounds = this.computeTextBounds(text);
-        const x0 = -0.5*((1-anchor[0])*bounds[0] + (1+anchor[0])*bounds[2]);
-        const y0 = -0.5*((1-anchor[1])*bounds[1] + (1+anchor[1])*bounds[3]);
+        const x0 = -0.5 * ((1 - anchor[0]) * bounds[0] + (1 + anchor[0]) * bounds[2]);
+        const y0 = -0.5 * ((1 - anchor[1]) * bounds[1] + (1 + anchor[1]) * bounds[3]);
 
         let x = x0;
         let y = y0;
@@ -175,13 +175,13 @@ class TextGroup {
                 const y2 = y + glyph.planeBounds.top;
                 if (faceCamera) {
                     p = pos;
-                    e1 = [textSize*x1, textSize*(x2-x1), 0];
-                    e2 = [textSize*y1, textSize*(y2-y1), 0];
+                    e1 = [textSize * x1, textSize * (x2 - x1), 0];
+                    e2 = [textSize * y1, textSize * (y2 - y1), 0];
                 } else {
-                    const pLeft = pos(x1, 0.5*(y1+y2));
-                    const pRight = pos(x2, 0.5*(y1+y2));
-                    const pBottom = pos(0.5*(x1+x2), y1);
-                    const pTop = pos(0.5*(x1+x2), y2);
+                    const pLeft = pos(x1, 0.5 * (y1 + y2));
+                    const pRight = pos(x2, 0.5 * (y1 + y2));
+                    const pBottom = pos(0.5 * (x1 + x2), y1);
+                    const pTop = pos(0.5 * (x1 + x2), y2);
                     p = [
                         (pLeft[0] + pRight[0] + pBottom[0] + pTop[0]) / 4,
                         (pLeft[1] + pRight[1] + pBottom[1] + pTop[1]) / 4,
@@ -191,7 +191,7 @@ class TextGroup {
                     e2 = [pTop[0] - pBottom[0], pTop[1] - pBottom[1], pTop[2] - pBottom[2]];
                 }
 
-                if (TextGroup.FLOATS_PER_CHAR*this.numChars >= this.data.length)
+                if (TextGroup.FLOATS_PER_CHAR * this.numChars >= this.data.length)
                     this.extendArray();
 
                 const m = TextGroup.FLOATS_PER_CHAR * this.numChars;
@@ -216,7 +216,7 @@ class TextGroup {
                 this.data[m + 13] = color[0] + (faceCamera ? 2 : 0);
                 this.data[m + 14] = color[1];
                 this.data[m + 15] = color[2];
-                
+
                 this.numChars++;
                 previousCharCode = code;
             } else {
@@ -235,18 +235,18 @@ class TextGroup {
     private extendArray() {
         const n = this.data.length;
         // Create new arrays with double size
-        const newArray = new Float32Array(2*n);
-        
+        const newArray = new Float32Array(2 * n);
+
         // Copy existing data from previous array
         newArray.set(this.data, 0);
         this.data = newArray;
 
         // Hook new arrays into textures
         this.dataTexture.dispose();
-        const m = 2*n / 4;
+        const m = 2 * n / 4;
         this.dataTexture = new THREE.DataTexture(
-            this.data, 
-            Math.min(m, TextGroup.TEXTURE_MAX_WIDTH), 
+            this.data,
+            Math.min(m, TextGroup.TEXTURE_MAX_WIDTH),
             Math.ceil(m / TextGroup.TEXTURE_MAX_WIDTH),
             THREE.RGBAFormat, THREE.FloatType
         );

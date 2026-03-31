@@ -9,36 +9,36 @@ import * as THREE from 'three';
  * because without this cleaning mipmapping (and antialiasing) causes artifacts.
  */
 class MCSDFFont {
-    name: string|null;
+    name: string | null;
     layoutData: any;
     glyphLookup: Record<number, any>;
     kerningLookup: Record<number, Record<number, number>>;
-    atlas: THREE.Texture|null;
+    atlas: THREE.Texture | null;
 
     constructor() {
         this.name = null;
         this.atlas = null;
-        this.layoutData = { };
-        this.glyphLookup = { };
-        this.kerningLookup = { };
+        this.layoutData = {};
+        this.glyphLookup = {};
+        this.kerningLookup = {};
     }
 
     /**
      * Loads the font layout data (.json file) fully and starts loading the atlas,
      * but does not wait for image data to load.
      */
-    async load(name: string, onLoad?: (data: THREE.Texture) => void) {
+    async load(name: string, onLoad?: () => void): Promise<void> {
         this.name = name;
 
         let textureLoaded = false;
         let metadataLoaded = false;
         const checkAllLoaded = () => {
             if (textureLoaded && metadataLoaded && onLoad)
-                onLoad(this.atlas!);
+                onLoad();
         };
 
         this.atlas = new THREE.TextureLoader().load(
-            `/dev-site-misc/fonts/${this.name}.png`, 
+            `/dev-site-misc/fonts/${this.name}.png`,
             (texture) => {
                 textureLoaded = true;
                 texture.anisotropy = 4;
@@ -72,14 +72,14 @@ class MCSDFFont {
      * Computes glyphLookup and kerningLookup.
      */
     private createLookups() {
-        this.glyphLookup = { };
+        this.glyphLookup = {};
         this.layoutData.glyphs.forEach((glyph: any) => {
             this.glyphLookup[glyph.unicode] = glyph;
         });
 
-        this.kerningLookup = { };
+        this.kerningLookup = {};
         this.layoutData.kerning.forEach((entry: any) => {
-            this.kerningLookup[entry.unicode1] ??= { };
+            this.kerningLookup[entry.unicode1] ??= {};
             this.kerningLookup[entry.unicode1][entry.unicode2] = entry.advance;
         });
     }

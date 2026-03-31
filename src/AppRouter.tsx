@@ -10,6 +10,7 @@ import { App as ClassTemplateApp } from './template_class/App.tsx';
 import { App as WebGLApp } from './primitives/App.tsx';
 import { App as InputListenerApp } from './input_listener/App.tsx';
 import { App as GraphApp } from './graph/App.tsx';
+import { App as SolidApp } from './solid/App.tsx';
 import { FrontPage } from './FrontPage.tsx';
 
 const AppRouter = () => {
@@ -27,6 +28,7 @@ const AppRouter = () => {
                 <Route path="/webgl_tools" element={<WebGLApp />} />
                 <Route path="/input_listener" element={<InputListenerApp />} />
                 <Route path="/graph" element={<GraphApp />} />
+                <Route path="/solid" element={<SolidApp />} />
                 <Route path="/" element={<FrontPage />} />
             </Routes>
         </HashRouter>

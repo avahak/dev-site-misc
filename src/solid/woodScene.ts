@@ -1,19 +1,20 @@
 /**
- * Basic template for a three.js scene decoupling three.js and React by writing
- * a standalone class to handle three.js.
- * 
- * Draws a cube and a square with custom shader.
+ * Solid texture test.
  */
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import vs from './shaders/vs.glsl?raw';
-import fs from './shaders/fs.glsl?raw';
+import fs from './shaders/fsWood.glsl?raw';
+import sCommon from './shaders/sCommon.glsl?raw';
+
 
 class Scene {
     container: HTMLDivElement;
     camera!: THREE.Camera;
     scene!: THREE.Scene;
     renderer: THREE.WebGLRenderer;
+    controls!: OrbitControls;
     cleanUpTasks: (() => void)[];
     animationRequestID: number|null = null;
     lastTime: number|null = null;
@@ -21,7 +22,7 @@ class Scene {
     isStopped: boolean = false;
 
     shader!: THREE.ShaderMaterial;
-    cube!: THREE.Mesh;
+    cylinder!: THREE.Mesh;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -73,7 +74,12 @@ class Scene {
     }
 
     createGUI() {
-        this.gui = new GUI();
+        this.gui = new GUI({ container: this.container });
+        this.container.style.position = 'relative';
+        this.gui.domElement.style.position = 'absolute';
+        this.gui.domElement.style.top = '0px';
+        this.gui.domElement.style.right = '0px';
+
         const animateButton = () => this.animateStep();
         const toggleStop = () => { 
             this.isStopped = !this.isStopped;
@@ -81,9 +87,45 @@ class Scene {
         const myObject = {
             animateButton,
             toggleStop,
+            radius: 1,
+            height: 2,
+            debug1: 1.0, 
+            debug2: 1.0,
+            debug3: 1.0,
+            debug4: 1.0,
         };
         this.gui.add(myObject, 'animateButton').name("Animate step");
         this.gui.add(myObject, 'toggleStop').name("Toggle stop/play");
+        this.gui.add(myObject, 'radius', 0.25, 1)
+            .name('Radius')
+            .onChange((r: number) => {
+                this.addCylinder(r, myObject.height);
+            });
+        this.gui.add(myObject, 'height', 0.05, 5)
+            .name('Height')
+            .onChange((h: number) => {
+                this.addCylinder(myObject.radius, h);
+            });
+        this.gui.add(myObject, 'debug1', 0.1, 2.0)
+            .name('Debug1 (H)')
+            .onChange((h: number) => {
+                this.shader.uniforms.debug1.value = h;
+            });
+        this.gui.add(myObject, 'debug2', 0.1, 6.0)
+            .name('Debug2 (WARP*10)')
+            .onChange((h: number) => {
+                this.shader.uniforms.debug2.value = h;
+            });
+        this.gui.add(myObject, 'debug3', 0.1, 2.0)
+            .name('Debug3 (-)')
+            .onChange((h: number) => {
+                this.shader.uniforms.debug3.value = h;
+            });
+        this.gui.add(myObject, 'debug4', 0.1, 2.0)
+            .name('Debug4 (-)')
+            .onChange((h: number) => {
+                this.shader.uniforms.debug4.value = h;
+            });
         this.gui.close();
     }
 
@@ -93,35 +135,57 @@ class Scene {
             task();
         this.renderer.dispose();
         this.shader.dispose();
+        this.controls.dispose();
 
         this.gui.destroy();
     }
 
     setupCamera() {
-        this.camera = new THREE.OrthographicCamera();
+        this.camera = new THREE.PerspectiveCamera();
 
-        this.camera.position.set(0, 0, 1);
-        this.camera.lookAt(new THREE.Vector3(0, 0, 0));
+        this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+
+        this.camera.position.set(0, 0, 5);
+        // this.camera.lookAt(new THREE.Vector3(0, 0, 0));
+    }
+
+    addCylinder(r: number, h: number) {
+        if (this.cylinder)
+            this.scene.remove(this.cylinder);
+        const cGeometry = new THREE.CylinderGeometry(r, r, h);
+        cGeometry.rotateX(Math.PI/2);
+        this.cylinder = new THREE.Mesh(cGeometry, this.shader);
+        this.scene.add(this.cylinder);
+        this.render();
     }
 
     setupScene() {
         this.scene = new THREE.Scene();
-        const cubeGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-        const cubeMaterial = new THREE.MeshNormalMaterial();
-        this.cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-        this.scene.add(this.cube);
 
         this.shader = new THREE.ShaderMaterial({
             uniforms: {
                 resolution: { value: null },
+                debug1: { value: 1.0 },
+                debug2: { value: 1.0 },
+                debug3: { value: 1.0 },
+                debug4: { value: 1.0 },
             },
             vertexShader: vs,
-            fragmentShader: fs,
+            fragmentShader: sCommon + '\n' + fs,
         });
 
-        const geometry = new THREE.PlaneGeometry(2, 2);
-        let mesh = new THREE.Mesh(geometry, this.shader);
-        this.scene.add(mesh);
+        this.addCylinder(1, 2);
+
+        // this.scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI/2.0);   // just for camera angles
+
+        // const cGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1);
+        // this.cylinder = new THREE.Mesh(cGeometry, this.shader);
+        // this.scene.add(this.cylinder);
+
+
+        // const geometry = new THREE.PlaneGeometry(2, 2);
+        // let mesh = new THREE.Mesh(geometry, this.shader);
+        // this.scene.add(mesh);
     }
 
     getResolution() {
@@ -131,6 +195,7 @@ class Scene {
 
     animate() {
         this.animationRequestID = requestAnimationFrame(this.animate);
+        this.controls.update();
         if (!this.isStopped)
             this.animateStep();
     }
@@ -139,9 +204,14 @@ class Scene {
         const currentTime = (this.lastTime ?? 0.0) + 1.0;
         this.lastTime = currentTime;
 
-        const t = this.lastTime*0.002;
-        this.cube.setRotationFromEuler(new THREE.Euler(t, 2.0*t, 3.0*t));
+        this.render();
+    }
 
+    render() {
+        if (!this.lastTime)
+            return;
+        const t = this.lastTime*0.002;
+        // this.cylinder.setRotationFromEuler(new THREE.Euler(t, 2.0*t, 3.0*t));
         this.renderer.render(this.scene, this.camera);
     }
 }

@@ -19,14 +19,14 @@ class UCBSplineGroup {
     mesh: THREE.Line;
 
     // (x,y,z,0,red,green,blue,0) for each control point, flattened
-    controlPointArray: Float32Array;
+    controlPointArray: Float32Array<ArrayBuffer>;
     // index i for plotting Bezier for control points (i,i+1,i+2,i+3)
-    indexArray: Int32Array;
+    indexArray: Int32Array<ArrayBuffer>;
 
     numControlPoints: number = 0;
     numIndexes: number = 0;
 
-    constructor(numSegments: number=16) {
+    constructor(numSegments: number = 16) {
         this.numSegments = numSegments;
 
         this.shader = new THREE.ShaderMaterial({
@@ -48,7 +48,7 @@ class UCBSplineGroup {
         this.controlPointArray = new Float32Array(0);
         this.indexArray = new Int32Array(0);
 
-        this.controlPointTexture = new THREE.DataTexture(this.controlPointArray, this.controlPointArray.length/4, 1, THREE.RGBAFormat, THREE.FloatType);
+        this.controlPointTexture = new THREE.DataTexture(this.controlPointArray, this.controlPointArray.length / 4, 1, THREE.RGBAFormat, THREE.FloatType);
         this.indexTexture = new THREE.DataTexture(this.indexArray, this.indexArray.length, 1, THREE.RedIntegerFormat, THREE.IntType);
         this.shader.uniforms.controlPointTexture.value = this.controlPointTexture;
         this.shader.uniforms.indexTexture.value = this.indexTexture;
@@ -59,7 +59,7 @@ class UCBSplineGroup {
         this.reset();
     }
 
-    addSpline(controlPoints: THREE.Vector3[], color: (k: number) => number[], isClosed: boolean=false) {
+    addSpline(controlPoints: THREE.Vector3[], color: (k: number) => number[], isClosed: boolean = false) {
         if (controlPoints.length < 4)
             throw new Error('Too few points to create spline, at least 4 are needed.');
 
@@ -68,8 +68,8 @@ class UCBSplineGroup {
         // Number of indexes after adding
         const ni = this.numIndexes + controlPoints.length + (isClosed ? 0 : -3);
 
-        if (8*np > this.controlPointArray.length)
-            this.extendControlPointArray(8*np);
+        if (8 * np > this.controlPointArray.length)
+            this.extendControlPointArray(8 * np);
         if (ni > this.indexArray.length)
             this.extendIndexArray(ni);
 
@@ -112,8 +112,8 @@ class UCBSplineGroup {
         this.controlPointTexture.dispose();
         const m = this.controlPointArray.length / 4;
         this.controlPointTexture = new THREE.DataTexture(
-            this.controlPointArray, 
-            Math.min(m, UCBSplineGroup.MAX_WIDTH), 
+            this.controlPointArray,
+            Math.min(m, UCBSplineGroup.MAX_WIDTH),
             Math.ceil(m / UCBSplineGroup.MAX_WIDTH),
             THREE.RGBAFormat, THREE.FloatType
         );
@@ -133,9 +133,9 @@ class UCBSplineGroup {
         // Hook new array into this.indexTexture
         this.indexTexture.dispose();
         this.indexTexture = new THREE.DataTexture(
-            this.indexArray, 
-            Math.min(this.indexArray.length, UCBSplineGroup.MAX_WIDTH), 
-            Math.ceil(this.indexArray.length / UCBSplineGroup.MAX_WIDTH), 
+            this.indexArray,
+            Math.min(this.indexArray.length, UCBSplineGroup.MAX_WIDTH),
+            Math.ceil(this.indexArray.length / UCBSplineGroup.MAX_WIDTH),
             THREE.RedIntegerFormat, THREE.IntType
         );
         this.shader.uniforms.indexTexture.value = this.indexTexture;
