@@ -5,7 +5,7 @@ uniform sampler2D controlPointTexture;
 uniform isampler2D capDataTexture;
 uniform vec2 resolution;
 uniform int vSegments;
-uniform vec3 radii;     // tube radii (world, screen_min_pixels, screen_max_pixels)
+uniform float minPixelRadius;
 uniform int TEXTURE_WIDTH;
 
 out vec3 v_color;
@@ -36,15 +36,27 @@ void main() {
     int side = data.g;
 
     // --- Control points and colors ---
-    vec3 p0 = texelFetch(controlPointTexture, ivec2(index % TEXTURE_WIDTH, index / TEXTURE_WIDTH), 0).rgb;
-    vec3 p1 = texelFetch(controlPointTexture, ivec2((index+2) % TEXTURE_WIDTH, (index+2) / TEXTURE_WIDTH), 0).rgb;
-    vec3 p2 = texelFetch(controlPointTexture, ivec2((index+4) % TEXTURE_WIDTH, (index+4) / TEXTURE_WIDTH), 0).rgb;
-    vec3 p3 = texelFetch(controlPointTexture, ivec2((index+6) % TEXTURE_WIDTH, (index+6) / TEXTURE_WIDTH), 0).rgb;
+    vec4 texel0 = texelFetch(controlPointTexture, ivec2(index % TEXTURE_WIDTH, index / TEXTURE_WIDTH), 0);
+    vec4 texel1 = texelFetch(controlPointTexture, ivec2((index+1) % TEXTURE_WIDTH, (index+1) / TEXTURE_WIDTH), 0);
+    vec4 texel2 = texelFetch(controlPointTexture, ivec2((index+2) % TEXTURE_WIDTH, (index+2) / TEXTURE_WIDTH), 0);
+    vec4 texel3 = texelFetch(controlPointTexture, ivec2((index+3) % TEXTURE_WIDTH, (index+3) / TEXTURE_WIDTH), 0);
+    vec4 texel4 = texelFetch(controlPointTexture, ivec2((index+4) % TEXTURE_WIDTH, (index+4) / TEXTURE_WIDTH), 0);
+    vec4 texel5 = texelFetch(controlPointTexture, ivec2((index+5) % TEXTURE_WIDTH, (index+5) / TEXTURE_WIDTH), 0);
+    vec4 texel6 = texelFetch(controlPointTexture, ivec2((index+6) % TEXTURE_WIDTH, (index+6) / TEXTURE_WIDTH), 0);
+    vec4 texel7 = texelFetch(controlPointTexture, ivec2((index+7) % TEXTURE_WIDTH, (index+7) / TEXTURE_WIDTH), 0);
 
-    vec3 c0 = texelFetch(controlPointTexture, ivec2((index+1) % TEXTURE_WIDTH, (index+1) / TEXTURE_WIDTH), 0).rgb;
-    vec3 c1 = texelFetch(controlPointTexture, ivec2((index+3) % TEXTURE_WIDTH, (index+3) / TEXTURE_WIDTH), 0).rgb;
-    vec3 c2 = texelFetch(controlPointTexture, ivec2((index+5) % TEXTURE_WIDTH, (index+5) / TEXTURE_WIDTH), 0).rgb;
-    vec3 c3 = texelFetch(controlPointTexture, ivec2((index+7) % TEXTURE_WIDTH, (index+7) / TEXTURE_WIDTH), 0).rgb;
+    vec3 p0 = texel0.rgb;
+    vec3 p1 = texel2.rgb;
+    vec3 p2 = texel4.rgb;
+    vec3 p3 = texel6.rgb;
+
+    vec3 c0 = texel1.rgb;
+    vec3 c1 = texel3.rgb;
+    vec3 c2 = texel5.rgb;
+    vec3 c3 = texel7.rgb;
+
+    vec4 worldRadii = vec4(texel0.a, texel2.a, texel4.a, texel6.a);
+    vec4 maxPixelRadii = vec4(texel1.a, texel3.a, texel5.a, texel7.a);
 
     // --- Topology ---
     int tri = gl_VertexID / 3;
@@ -94,9 +106,12 @@ void main() {
         : (sin(lat) * radial + cos(lat) * T);
 
     // --- Radius (screen-space capped) ---
+    float worldRadius = dot(w, worldRadii);
+    vec2 pixelRadiusBounds = vec2(minPixelRadius, dot(w, maxPixelRadii));
     vec3 viewPos = (modelViewMatrix * vec4(center, 1.0)).xyz;
-    vec2 r_screen = (radii.yz * 2.0 / resolution.y) * (-viewPos.z) / projectionMatrix[1][1];
-    float r = clamp(radii.x, r_screen.x, r_screen.y);
+    vec2 worldRadiusBounds = (pixelRadiusBounds * 2.0 / resolution.y) * (-viewPos.z) / projectionMatrix[1][1];
+    // Not using clamp here to make sure lower bound to dominates
+    float r = max(min(worldRadius, worldRadiusBounds.y), worldRadiusBounds.x);  
 
     vec3 pos = center + r * dir;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);

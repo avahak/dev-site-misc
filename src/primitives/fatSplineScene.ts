@@ -13,6 +13,12 @@ function randomColor2(k: number) {
     return [f(3 * k + 42) * 0.25, f(2 * k + 51) * 0.25, f(k + 73)];
 }
 
+function randomRadii(k: number) {
+    const prf = (j: number) => (Math.abs(Math.sin(j) * 43758.5453) % 1);
+    const r = prf(k) * prf(k + 1) * prf(k + 2);
+    return [0.02 * r, 10.0 * r];
+}
+
 class FatSplineScene {
     container: HTMLDivElement;
     camera!: THREE.Camera;
@@ -134,7 +140,7 @@ class FatSplineScene {
                 p.multiplyScalar(0.3);
                 pList.push(p);
             }
-            this.splineGroup.addSpline(pList, (k) => randomColor2(j + k / num), false, true, true);
+            this.splineGroup.addSpline(pList, (k) => randomColor2(j + k / num), (k) => randomRadii(k), false, true, true);
         }
     }
 
@@ -165,7 +171,7 @@ class FatSplineScene {
                 const p = new THREE.Vector3(x, y, z);
                 pList.push(p);
             }
-            this.splineGroup.addSpline(pList, (k) => randomColor(0.02 * (j + k / n)), false, true, true);
+            this.splineGroup.addSpline(pList, (g) => randomColor(0.02 * (j + g / n)), (g) => randomRadii(g + j), false, true, true);
         }
     }
 
@@ -216,7 +222,7 @@ class FatSplineScene {
                         p.multiplyScalar(0.2);
                         pList.push(p);
                     }
-                    this.splineGroup.addSpline(pList, (k) => randomColor(m * 100 + sj), true, false, false);
+                    this.splineGroup.addSpline(pList, (k) => randomColor(m * 100 + sj), (k) => randomRadii(k), false, false);
                 }
             }
         } else if (mode == 1) {
@@ -239,7 +245,7 @@ class FatSplineScene {
                     p.multiplyScalar(0.3);
                     pList.push(p);
                 }
-                this.splineGroup.addSpline(pList, (k) => randomColor(K * sm + k / K), true, false, false);
+                this.splineGroup.addSpline(pList, (k) => randomColor(K * sm + k / K), (k) => randomRadii(k), true, false, false);
             }
         } else if (mode == 2) {
             const I = 4;
@@ -264,7 +270,7 @@ class FatSplineScene {
                         p.multiplyScalar(0.1);
                         pList.push(p);
                     }
-                    this.splineGroup.addSpline(pList, (k) => randomColor(si + sm), true, false, false);
+                    this.splineGroup.addSpline(pList, (k) => randomColor(si + sm), (k) => randomRadii(k), true, false, false);
                 }
             }
         } else if (mode == 3) {
@@ -291,7 +297,7 @@ class FatSplineScene {
                         const omega = 0.05 * Math.sin(30 * t);
                         pList.push(new THREE.Vector3(p.x, Math.cos(omega) * p.y - Math.sin(omega) * p.z, Math.sin(omega) * p.y + Math.cos(omega) * p.z));
                     }
-                    this.splineGroup.addSpline(pList, (k) => randomColor(sm), true, false, false);
+                    this.splineGroup.addSpline(pList, (k) => randomColor(sm), (k) => randomRadii(k), true, false, false);
                 }
             }
         }

@@ -8,9 +8,6 @@ import fsSpline from './shaders/fsSpline.glsl?raw';
  */
 class FatUCBSplineGroup {
     static readonly TEXTURE_WIDTH = 1024;
-    static readonly TUBE_V_SEGMENTS = 8;
-    // tube radii (world, screen_min_pixels, screen_max_pixels)
-    static readonly DEFAULT_RADII = [0.005, 0.5, 5];
 
     tubeShader: THREE.ShaderMaterial;
     capShader: THREE.ShaderMaterial;
@@ -36,22 +33,22 @@ class FatUCBSplineGroup {
     /**
      * Creates a new fat uniform cubic b-spline group.
      * @param numSegments Number of segments each spline segment is split into.
-     * @param radii Tube radii in form of tube radii (world_radius, min_screen_pixel_width, max_screen_pixel_width).
-     * The tube radius in world coordinates is `radii[0]` clamped between `radii[1]` and `radii[2]` in pixels.
+     * @param vSegments Number of radial segments in the tubes.
+     * @param minPixelRadius Minimum spline tube radius in pixels.
      */
-    constructor(numSegments: number = 16, radii: number[] = FatUCBSplineGroup.DEFAULT_RADII) {
+    constructor(numSegments: number = 16, vSegments: number = 8, minPixelRadius: number = 0.5) {
         this.numSegments = numSegments;
 
-        // --- Shader Materials ---
+        // --- Shaders ---
         this.tubeShader = new THREE.ShaderMaterial({
             uniforms: {
+                controlPointTexture: { value: null },
+                indexTexture: { value: null },
                 TEXTURE_WIDTH: { value: FatUCBSplineGroup.TEXTURE_WIDTH },
                 resolution: { value: new THREE.Vector2() },
                 uSegments: { value: this.numSegments },
-                vSegments: { value: FatUCBSplineGroup.TUBE_V_SEGMENTS },
-                controlPointTexture: { value: null },
-                indexTexture: { value: null },
-                radii: { value: new THREE.Vector3(...radii) },
+                vSegments: { value: vSegments },
+                minPixelRadius: { value: minPixelRadius },
             },
             vertexShader: vsSpline,
             fragmentShader: fsSpline,
@@ -61,12 +58,12 @@ class FatUCBSplineGroup {
 
         this.capShader = new THREE.ShaderMaterial({
             uniforms: {
-                TEXTURE_WIDTH: { value: FatUCBSplineGroup.TEXTURE_WIDTH },
-                resolution: { value: new THREE.Vector2() },
                 controlPointTexture: { value: null },
                 capDataTexture: { value: null },
-                vSegments: { value: FatUCBSplineGroup.TUBE_V_SEGMENTS },
-                radii: { value: new THREE.Vector3(...radii) },
+                TEXTURE_WIDTH: { value: FatUCBSplineGroup.TEXTURE_WIDTH },
+                resolution: { value: new THREE.Vector2() },
+                vSegments: { value: vSegments },
+                minPixelRadius: { value: minPixelRadius },
             },
             vertexShader: vsCap,
             fragmentShader: fsSpline,
@@ -76,8 +73,8 @@ class FatUCBSplineGroup {
 
         // --- Geometry ---
         // Each instanced geometry uses a dummy position buffer; actual positions are computed in shader
-        this.tubeGeometry = this.createInstancedGeometry(this.numSegments * FatUCBSplineGroup.TUBE_V_SEGMENTS * 6);
-        this.capGeometry = this.createInstancedGeometry(FatUCBSplineGroup.TUBE_V_SEGMENTS * FatUCBSplineGroup.TUBE_V_SEGMENTS * 6);
+        this.tubeGeometry = this.createInstancedGeometry(this.numSegments * vSegments * 6);
+        this.capGeometry = this.createInstancedGeometry(vSegments * vSegments * 6);
 
         // --- Data Arrays and Textures ---
         this.controlPointArray = new Float32Array(0);
@@ -129,13 +126,15 @@ class FatUCBSplineGroup {
      * Adds a new spline.
      * @param controlPoints Array of 3D points.
      * @param color Function mapping control point index to [r,g,b].
+     * @param radii Function mapping control point index to [world_radius, max_pixel_radius].
      * @param isClosed Whether the spline forms a closed loop.
      * @param startCap If true, add a hemisphere cap at the start (ignored if isClosed).
      * @param endCap If true, add a hemisphere cap at the end (ignored if isClosed).
      */
     addSpline(
         controlPoints: THREE.Vector3[],
-        color: (k: number) => number[],
+        color: (k: number) => number[],     // (k) => (r, g, b)
+        radii: (k: number) => number[],     // (k) => (world_radius, max_pixel_radius)
         isClosed: boolean = false,
         startCap: boolean = false,
         endCap: boolean = false
@@ -154,15 +153,18 @@ class FatUCBSplineGroup {
             const j = k % controlPoints.length;
             const p = controlPoints[j];
             const c = color(j);
+            const r = radii(j);
             const offset = 8 * this.numControlPoints;
 
-            // Store (x, y, z, 0, r, g, b, 0) per control point
+            // Store (x, y, z, world_radius, r, g, b, max_pixel_radius) per control point
             this.controlPointArray[offset + 0] = p.x;
             this.controlPointArray[offset + 1] = p.y;
             this.controlPointArray[offset + 2] = p.z;
+            this.controlPointArray[offset + 3] = r[0];
             this.controlPointArray[offset + 4] = c[0];
             this.controlPointArray[offset + 5] = c[1];
             this.controlPointArray[offset + 6] = c[2];
+            this.controlPointArray[offset + 7] = r[1];
 
             if (k < controlPoints.length + (isClosed ? 0 : -3))
                 this.indexArray[this.numIndexes++] = this.numControlPoints;
