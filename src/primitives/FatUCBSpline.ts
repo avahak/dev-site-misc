@@ -1,41 +1,57 @@
 import * as THREE from 'three';
 import vsSpline from './shaders/vsFatSpline.glsl?raw';
-import fsSpline from './shaders/fsFatSpline.glsl?raw';
+import vsCap from './shaders/vsFatSplineCap.glsl?raw';
+import fsSpline from './shaders/fsSpline.glsl?raw';
 
 /**
- * Draws uniform cubic B-splines using instancing.
+ * Instanced tubular uniform cubic B-spline renderer with optional round endcaps.
  */
 class FatUCBSplineGroup {
-    // MAX_WIDTH has to match value in vs.glsl.
-    // This is used to avoid limitations on texture dimensions.
-    static MAX_WIDTH = 1024;
+    static readonly TEXTURE_WIDTH = 1024;
+    static readonly TUBE_V_SEGMENTS = 8;
+    // tube radii (world, screen_min_pixels, screen_max_pixels)
+    static readonly DEFAULT_RADII = [0.005, 0.5, 5];
 
-    shader: THREE.ShaderMaterial;
-    numSegments: number;
+    tubeShader: THREE.ShaderMaterial;
+    capShader: THREE.ShaderMaterial;
 
-    ibGeometry!: THREE.InstancedBufferGeometry;
-    controlPointTexture!: THREE.DataTexture;    // positions and colors for each control point
-    indexTexture!: THREE.DataTexture;
-    mesh: THREE.Mesh;
+    tubeGeometry!: THREE.InstancedBufferGeometry;
+    capGeometry!: THREE.InstancedBufferGeometry;
 
-    // (x,y,z,0,red,green,blue,0) for each control point, flattened
     controlPointArray: Float32Array;
-    // index i for plotting Bezier for control points (i,i+1,i+2,i+3)
     indexArray: Int32Array;
+    capDataArray: Int32Array;
 
-    numControlPoints: number = 0;
-    numIndexes: number = 0;
+    controlPointTexture!: THREE.DataTexture;
+    indexTexture!: THREE.DataTexture;
+    capDataTexture!: THREE.DataTexture;
 
-    constructor(numSegments: number = 16) {
+    numSegments: number;
+    numControlPoints = 0;
+    numIndexes = 0;
+    numCaps = 0;
+
+    group: THREE.Group;
+
+    /**
+     * Creates a new fat uniform cubic b-spline group.
+     * @param numSegments Number of segments each spline segment is split into.
+     * @param radii Tube radii in form of tube radii (world_radius, min_screen_pixel_width, max_screen_pixel_width).
+     * The tube radius in world coordinates is `radii[0]` clamped between `radii[1]` and `radii[2]` in pixels.
+     */
+    constructor(numSegments: number = 16, radii: number[] = FatUCBSplineGroup.DEFAULT_RADII) {
         this.numSegments = numSegments;
 
-        this.shader = new THREE.ShaderMaterial({
+        // --- Shader Materials ---
+        this.tubeShader = new THREE.ShaderMaterial({
             uniforms: {
+                TEXTURE_WIDTH: { value: FatUCBSplineGroup.TEXTURE_WIDTH },
                 resolution: { value: new THREE.Vector2() },
-                numSegments: { value: this.numSegments },
+                uSegments: { value: this.numSegments },
+                vSegments: { value: FatUCBSplineGroup.TUBE_V_SEGMENTS },
                 controlPointTexture: { value: null },
                 indexTexture: { value: null },
-                inverseProjectionMatrix: { value: new THREE.Matrix4() }
+                radii: { value: new THREE.Vector3(...radii) },
             },
             vertexShader: vsSpline,
             fragmentShader: fsSpline,
@@ -43,120 +59,242 @@ class FatUCBSplineGroup {
             depthTest: true,
         });
 
-        this.ibGeometry = new THREE.InstancedBufferGeometry();
-        this.ibGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6 * 3), 3));
+        this.capShader = new THREE.ShaderMaterial({
+            uniforms: {
+                TEXTURE_WIDTH: { value: FatUCBSplineGroup.TEXTURE_WIDTH },
+                resolution: { value: new THREE.Vector2() },
+                controlPointTexture: { value: null },
+                capDataTexture: { value: null },
+                vSegments: { value: FatUCBSplineGroup.TUBE_V_SEGMENTS },
+                radii: { value: new THREE.Vector3(...radii) },
+            },
+            vertexShader: vsCap,
+            fragmentShader: fsSpline,
+            depthWrite: true,
+            depthTest: true,
+        });
 
+        // --- Geometry ---
+        // Each instanced geometry uses a dummy position buffer; actual positions are computed in shader
+        this.tubeGeometry = this.createInstancedGeometry(this.numSegments * FatUCBSplineGroup.TUBE_V_SEGMENTS * 6);
+        this.capGeometry = this.createInstancedGeometry(FatUCBSplineGroup.TUBE_V_SEGMENTS * FatUCBSplineGroup.TUBE_V_SEGMENTS * 6);
+
+        // --- Data Arrays and Textures ---
         this.controlPointArray = new Float32Array(0);
         this.indexArray = new Int32Array(0);
+        this.capDataArray = new Int32Array(0);
 
-        this.controlPointTexture = new THREE.DataTexture(this.controlPointArray, this.controlPointArray.length / 4, 1, THREE.RGBAFormat, THREE.FloatType);
-        this.indexTexture = new THREE.DataTexture(this.indexArray, this.indexArray.length, 1, THREE.RedIntegerFormat, THREE.IntType);
-        this.shader.uniforms.controlPointTexture.value = this.controlPointTexture;
-        this.shader.uniforms.indexTexture.value = this.indexTexture;
+        this.controlPointTexture = new THREE.DataTexture(this.controlPointArray, 1, 1, THREE.RGBAFormat, THREE.FloatType);
+        this.indexTexture = new THREE.DataTexture(this.indexArray, 1, 1, THREE.RedIntegerFormat, THREE.IntType);
+        this.capDataTexture = new THREE.DataTexture(this.capDataArray, 1, 1, THREE.RGIntegerFormat, THREE.IntType);
 
-        this.mesh = new THREE.Mesh(this.ibGeometry, this.shader);
-        this.mesh.frustumCulled = false;
+        this.tubeShader.uniforms.controlPointTexture.value = this.controlPointTexture;
+        this.tubeShader.uniforms.indexTexture.value = this.indexTexture;
+        this.capShader.uniforms.controlPointTexture.value = this.controlPointTexture;
+        this.capShader.uniforms.capDataTexture.value = this.capDataTexture;
+
+        // --- Grouping Meshes ---
+        const tubeMesh = new THREE.Mesh(this.tubeGeometry, this.tubeShader);
+        tubeMesh.frustumCulled = false;
+
+        const capMesh = new THREE.Mesh(this.capGeometry, this.capShader);
+        capMesh.frustumCulled = false;
+
+        this.group = new THREE.Group();
+        this.group.add(tubeMesh);
+        this.group.add(capMesh);
 
         this.reset();
     }
 
-    addSpline(controlPoints: THREE.Vector3[], color: (k: number) => number[], isClosed: boolean = false) {
-        if (controlPoints.length < 4)
-            throw new Error('Too few points to create spline, at least 4 are needed.');
+    /** 
+     * Create instanced geometry with a dummy position buffer 
+     */
+    private createInstancedGeometry(vertexCount: number): THREE.InstancedBufferGeometry {
+        const geometry = new THREE.InstancedBufferGeometry();
+        const dummyPositions = new Float32Array(vertexCount * 3);
+        geometry.setAttribute('position', new THREE.BufferAttribute(dummyPositions, 3));
+        return geometry;
+    }
 
-        // Number of control points after adding
+    /**
+     * Must be called whenever pixel ratio or canvas size changes.
+     */
+    setResolution(renderer: THREE.WebGLRenderer) {
+        renderer.getDrawingBufferSize(this.tubeShader.uniforms.resolution.value);
+        renderer.getDrawingBufferSize(this.capShader.uniforms.resolution.value);
+    }
+
+    /**
+     * Adds a new spline.
+     * @param controlPoints Array of 3D points.
+     * @param color Function mapping control point index to [r,g,b].
+     * @param isClosed Whether the spline forms a closed loop.
+     * @param startCap If true, add a hemisphere cap at the start (ignored if isClosed).
+     * @param endCap If true, add a hemisphere cap at the end (ignored if isClosed).
+     */
+    addSpline(
+        controlPoints: THREE.Vector3[],
+        color: (k: number) => number[],
+        isClosed: boolean = false,
+        startCap: boolean = false,
+        endCap: boolean = false
+    ) {
+        if (controlPoints.length < 4)
+            throw new Error('At least 4 control points required.');
+
+        const startIndex = this.numIndexes;
         const np = this.numControlPoints + controlPoints.length + (isClosed ? 3 : 0);
-        // Number of indexes after adding
         const ni = this.numIndexes + controlPoints.length + (isClosed ? 0 : -3);
 
-        if (8 * np > this.controlPointArray.length)
-            this.extendControlPointArray(8 * np);
-        if (ni > this.indexArray.length)
-            this.extendIndexArray(ni);
+        this.ensureCapacityControlPointArray(8 * np);
+        this.ensureCapacityIndexArray(ni);
 
         for (let k = 0; k < controlPoints.length + (isClosed ? 3 : 0); k++) {
             const j = k % controlPoints.length;
             const p = controlPoints[j];
             const c = color(j);
-            const m = 8 * this.numControlPoints;
-            this.controlPointArray[m + 0] = p.x;
-            this.controlPointArray[m + 1] = p.y;
-            this.controlPointArray[m + 2] = p.z;
-            // this.controlPointArray[m + 3] = 0;
-            this.controlPointArray[m + 4] = c[0];
-            this.controlPointArray[m + 5] = c[1];
-            this.controlPointArray[m + 6] = c[2];
-            // this.controlPointArray[m + 7] = 0;
-            if (k < controlPoints.length + (isClosed ? 0 : -3)) {
-                this.indexArray[this.numIndexes] = this.numControlPoints;
-                this.numIndexes += 1;
-            }
-            this.numControlPoints += 1;
+            const offset = 8 * this.numControlPoints;
+
+            // Store (x, y, z, 0, r, g, b, 0) per control point
+            this.controlPointArray[offset + 0] = p.x;
+            this.controlPointArray[offset + 1] = p.y;
+            this.controlPointArray[offset + 2] = p.z;
+            this.controlPointArray[offset + 4] = c[0];
+            this.controlPointArray[offset + 5] = c[1];
+            this.controlPointArray[offset + 6] = c[2];
+
+            if (k < controlPoints.length + (isClosed ? 0 : -3))
+                this.indexArray[this.numIndexes++] = this.numControlPoints;
+
+            this.numControlPoints++;
         }
 
-        this.ibGeometry.instanceCount = this.numIndexes * this.numSegments;
+        this.tubeGeometry.instanceCount = this.numIndexes;
         this.controlPointTexture.needsUpdate = true;
         this.indexTexture.needsUpdate = true;
+
+        if (!isClosed) {
+            if (startCap)
+                this.addCapInstance(startIndex, 0);
+            if (endCap)
+                this.addCapInstance(this.numIndexes - 1, 1);
+        }
     }
 
-    private extendControlPointArray(minLength: number) {
-        // n is smallest power of 2 that is at least minLength
-        const n = Math.pow(2, Math.ceil(Math.log2(minLength)));
-        // Create large enough array to hold all data
-        const newArray = new Float32Array(n);
+    /**
+     * Adds a single cap instance for a given spline segment.
+     * @param segmentStartIndex Index into the indexTexture pointing to the first control point of the segment.
+     * @param side 0 = start cap, 1 = end cap.
+     */
+    private addCapInstance(segmentStartIndex: number, side: number) {
+        this.ensureCapacityCapDataArray(2 * this.numCaps + 2);
 
-        // Copy existing data from previous array
-        newArray.set(this.controlPointArray, 0);
-        this.controlPointArray = newArray;
+        this.capDataArray[2 * this.numCaps] = this.indexArray[segmentStartIndex];
+        this.capDataArray[2 * this.numCaps + 1] = side;
+        this.numCaps++;
 
-        // Hook new array into this.controlPointTexture
+        this.capGeometry.instanceCount = this.numCaps;
+        this.capDataTexture.needsUpdate = true;
+    }
+
+    private growArray<T extends Float32Array | Int32Array>(array: T, minLength: number): T {
+        const newLength = Math.pow(2, Math.ceil(Math.log2(minLength)));
+        const newArray = new (array.constructor as { new(size: number): T })(newLength);
+        newArray.set(array, 0);
+        return newArray;
+    }
+
+    private ensureCapacityControlPointArray(minLength: number) {
+        if (minLength <= this.controlPointArray.length)
+            return;
+
+        this.controlPointArray = this.growArray(this.controlPointArray, minLength);
+
         this.controlPointTexture.dispose();
-        const m = this.controlPointArray.length / 4;
+
+        const texels = this.controlPointArray.length / 4;       // Using THREE.RGBAFormat
         this.controlPointTexture = new THREE.DataTexture(
             this.controlPointArray,
-            Math.min(m, FatUCBSplineGroup.MAX_WIDTH),
-            Math.ceil(m / FatUCBSplineGroup.MAX_WIDTH),
-            THREE.RGBAFormat, THREE.FloatType
+            Math.min(texels, FatUCBSplineGroup.TEXTURE_WIDTH),
+            Math.ceil(texels / FatUCBSplineGroup.TEXTURE_WIDTH),
+            THREE.RGBAFormat,
+            THREE.FloatType
         );
-        this.shader.uniforms.controlPointTexture.value = this.controlPointTexture;
+
+        this.tubeShader.uniforms.controlPointTexture.value = this.controlPointTexture;
+        this.capShader.uniforms.controlPointTexture.value = this.controlPointTexture;
     }
 
-    private extendIndexArray(minLength: number) {
-        // n is smallest power of 2 that is at least minLength
-        const n = Math.pow(2, Math.ceil(Math.log2(minLength)));
-        // Create large enough array to hold all data
-        const newArray = new Int32Array(n);
+    private ensureCapacityIndexArray(minLength: number) {
+        if (minLength <= this.indexArray.length)
+            return;
 
-        // Copy existing data from previous array
-        newArray.set(this.indexArray, 0);
-        this.indexArray = newArray;
+        this.indexArray = this.growArray(this.indexArray, minLength);
 
-        // Hook new array into this.indexTexture
         this.indexTexture.dispose();
+
+        const texels = this.indexArray.length;      // Using THREE.RedIntegerFormat
         this.indexTexture = new THREE.DataTexture(
             this.indexArray,
-            Math.min(this.indexArray.length, FatUCBSplineGroup.MAX_WIDTH),
-            Math.ceil(this.indexArray.length / FatUCBSplineGroup.MAX_WIDTH),
-            THREE.RedIntegerFormat, THREE.IntType
+            Math.min(texels, FatUCBSplineGroup.TEXTURE_WIDTH),
+            Math.ceil(texels / FatUCBSplineGroup.TEXTURE_WIDTH),
+            THREE.RedIntegerFormat,
+            THREE.IntType
         );
-        this.shader.uniforms.indexTexture.value = this.indexTexture;
+
+        this.tubeShader.uniforms.indexTexture.value = this.indexTexture;
     }
 
+    private ensureCapacityCapDataArray(minLength: number) {
+        if (minLength <= this.capDataArray.length)
+            return;
+
+        this.capDataArray = this.growArray(this.capDataArray, minLength);
+
+        this.capDataTexture.dispose();
+
+        const texels = this.capDataArray.length / 2;    // Using THREE.RGIntegerFormat
+        this.capDataTexture = new THREE.DataTexture(
+            this.capDataArray,
+            Math.min(texels, FatUCBSplineGroup.TEXTURE_WIDTH),
+            Math.ceil(texels / FatUCBSplineGroup.TEXTURE_WIDTH),
+            THREE.RGIntegerFormat,
+            THREE.IntType
+        );
+
+        this.capShader.uniforms.capDataTexture.value = this.capDataTexture;
+    }
+
+    /** 
+     * Resets all spline and cap data 
+     */
     reset() {
         this.numControlPoints = 0;
         this.numIndexes = 0;
-        this.ibGeometry.instanceCount = 0;
+        this.numCaps = 0;
+        this.tubeGeometry.instanceCount = 0;
+        this.capGeometry.instanceCount = 0;
     }
 
-    getObject(): THREE.Mesh {
-        return this.mesh;
+    /** 
+     * Returns a THREE.Group containing both the tube and cap meshes 
+     */
+    getObject(): THREE.Group {
+        return this.group;
     }
 
+    /** 
+     * Dispose all geometries, textures, and materials 
+     */
     dispose() {
-        this.shader.dispose();
+        this.tubeShader.dispose();
+        this.capShader.dispose();
         this.controlPointTexture.dispose();
         this.indexTexture.dispose();
-        this.ibGeometry.dispose();
+        this.capDataTexture.dispose();
+        this.tubeGeometry.dispose();
+        this.capGeometry.dispose();
     }
 }
 

@@ -1,11 +1,16 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/examples/jsm/Addons.js';
-import { FatUCBSplineGroup2 } from './FatUCBSpline2';
+import { FatUCBSplineGroup } from './FatUCBSpline';
 
 function randomColor(k: number) {
     const f = (j: number) => 1 - Math.sin(Math.PI * 2 * j) ** 2;
     return [f(3 * k + 42), f(2 * k + 51), f(k + 73)];
+}
+
+function randomColor2(k: number) {
+    const f = (j: number) => 1 - Math.sin(Math.PI * 2 * j) ** 2;
+    return [f(3 * k + 42) * 0.25, f(2 * k + 51) * 0.25, f(k + 73)];
 }
 
 class FatSplineScene {
@@ -20,7 +25,7 @@ class FatSplineScene {
     isStopped: boolean = false;
     controls!: OrbitControls;
 
-    splineGroup!: FatUCBSplineGroup2;
+    splineGroup!: FatUCBSplineGroup;
     splineObject!: THREE.Object3D;
 
     constructor(container: HTMLDivElement) {
@@ -38,11 +43,9 @@ class FatSplineScene {
         this.resizeRenderer();
         this.createGUI();
 
-        this.cleanUpTasks.push(() => {
-            if (this.animationRequestID)
-                cancelAnimationFrame(this.animationRequestID);
-            this.splineGroup.dispose();
-        });
+        // this.cleanUpTasks.push(() => {
+        // });
+
         this.animate = this.animate.bind(this);
         this.animate();
     }
@@ -96,6 +99,10 @@ class FatSplineScene {
     }
 
     dispose() {
+        if (this.animationRequestID !== null)
+            cancelAnimationFrame(this.animationRequestID);
+        this.splineGroup.dispose();
+
         this.container.removeChild(this.renderer.domElement);
         for (const task of this.cleanUpTasks)
             task();
@@ -127,7 +134,7 @@ class FatSplineScene {
                 p.multiplyScalar(0.3);
                 pList.push(p);
             }
-            this.splineGroup.addSpline(pList, (k) => randomColor(j + k / num), false, true, true);
+            this.splineGroup.addSpline(pList, (k) => randomColor2(j + k / num), false, true, true);
         }
     }
 
@@ -138,10 +145,10 @@ class FatSplineScene {
         const R = 0.3; // Major radius (distance from center to tube center)
         const r = 0.2; // Minor radius (radius of the tube)
 
-        const n = 15;
-        for (let j = 0; j < n + 1; j++) {
+        const [n, m] = [50, 12];
+        for (let j = 0; j < n; j++) {
             const pList = [];
-            for (let k = 0; k < n; k++) {
+            for (let k = 0; k < m; k++) {
                 const sj = 0.75 * j;
                 const sk = 2.0 * k;
                 const st = 10.0 * t;
@@ -293,7 +300,7 @@ class FatSplineScene {
     setupScene() {
         this.scene = new THREE.Scene();
 
-        this.splineGroup = new FatUCBSplineGroup2(32);
+        this.splineGroup = new FatUCBSplineGroup(32);
         this.fillSplineGroup3(0, 3, true);
 
         this.splineObject = this.splineGroup.getObject();
@@ -317,8 +324,8 @@ class FatSplineScene {
 
         const t = this.lastTime * 0.001;
 
-        // this.fillSplineGroup1(0.1 * t, true);
-        this.fillSplineGroup2(t, true);
+        this.fillSplineGroup1(0.1 * t, true);
+        this.fillSplineGroup2(t, false);
         // this.fillSplineGroup3(t, 3, true);
 
         // this.splineObject.setRotationFromEuler(new THREE.Euler(3.0+3.0*t, 2.0+5.0*t, 5.0+2.0*t));

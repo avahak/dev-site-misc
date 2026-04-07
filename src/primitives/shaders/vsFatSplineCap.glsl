@@ -1,10 +1,9 @@
-// Vertex shader for tube parts of fat b-splines. Geometry is generated fully here.
+// Vertex shader for endcap parts of fat b-splines. Geometry is generated fully here.
 precision highp float;
 
 uniform sampler2D controlPointTexture;
-uniform isampler2D indexTexture;
+uniform isampler2D capDataTexture;
 uniform vec2 resolution;
-uniform int uSegments;
 uniform int vSegments;
 uniform vec3 radii;     // tube radii (world, screen_min_pixels, screen_max_pixels)
 uniform int TEXTURE_WIDTH;
@@ -15,25 +14,12 @@ out vec3 v_color;
 #define PI_OVER_2 0.5*PI
 #define TAU 2.0*PI
 
-const int LUT[6] = int[6](
-    0, 2, 1,   // first tri
-    0, 3, 2    // second tri
+const int LUT[12] = int[12](
+    0, 2, 1,    // first tri, side = 0
+    0, 1, 2,    // first tri, side = 1
+    0, 3, 2,    // second tri, side = 0
+    0, 2, 3     // second tri, side = 1
 );
-
-vec4 splineCoeffs(float t) {
-    float s1 = 1.0 - t;
-    float s2 = s1*s1;
-    float s3 = s2*s1;
-    float t2 = t*t;
-    float t3 = t2*t;
-    return vec4(s3, 3.0*t3 - 6.0*t2 + 4.0, 3.0*t2*s1 + 3.0*t + 1.0, t3) / 6.0;
-}
-
-vec4 splineDerivCoeffs(float t) {
-    float s1 = 1.0 - t;
-    float t2 = t*t;
-    return vec4(-s1*s1, 3.0*t2 - 4.0*t, -3.0*t2 + 2.0*t + 1.0, t2) / 2.0;
-}
 
 vec3 buildNormal(vec3 T) {
     // NOTE: this has to match between caps and tube shaders
@@ -43,7 +29,11 @@ vec3 buildNormal(vec3 T) {
 
 void main() {
     int instanceID = gl_InstanceID;
-    int index = 2 * texelFetch(indexTexture, ivec2(instanceID % TEXTURE_WIDTH, instanceID / TEXTURE_WIDTH), 0).r;
+    ivec2 capDataCoord = ivec2(instanceID % TEXTURE_WIDTH, instanceID / TEXTURE_WIDTH);
+    ivec2 data = texelFetch(capDataTexture, capDataCoord, 0).rg;
+
+    int index = 2 * data.r;
+    int side = data.g;
 
     // --- Control points and colors ---
     vec3 p0 = texelFetch(controlPointTexture, ivec2(index % TEXTURE_WIDTH, index / TEXTURE_WIDTH), 0).rgb;
@@ -57,10 +47,12 @@ void main() {
     vec3 c3 = texelFetch(controlPointTexture, ivec2((index+7) % TEXTURE_WIDTH, (index+7) / TEXTURE_WIDTH), 0).rgb;
 
     // --- Topology ---
-    int tri  = gl_VertexID / 3;
+    int tri = gl_VertexID / 3;
     int vert = gl_VertexID % 3;
 
     int quad = tri >> 1;
+    int secondTri = tri & 1;
+
     int u = quad / vSegments;
     int v = quad % vSegments;
 
@@ -71,45 +63,41 @@ void main() {
         ivec2(u, (v + 1) % vSegments)
     );
 
-    int cornerIndex = LUT[(tri & 1) * 3 + vert];
+    int cornerIndex = LUT[((secondTri << 1) | side) * 3 + vert];
     ivec2 uv = quadCorners[cornerIndex];
 
-    float fu = float(uv.x) / float(uSegments);
-    float fv = float(uv.y) / float(vSegments) * TAU;
+    float lat = float(uv.x) / float(vSegments) * PI_OVER_2;
+    float lon = float(uv.y) / float(vSegments) * TAU;
 
-    // --- Spline evaluation ---
-    vec4 w = splineCoeffs(fu);
-    vec4 dw = splineDerivCoeffs(fu);
-    vec4 dw0 = vec4(-0.5, 0.0, 0.5, 0.0);       // splineDerivCoeffs(0.0)
-    vec4 dw1 = vec4(0.0, -0.5, 0.0, 0.5);       // splineDerivCoeffs(1.0)
+    // --- Endpoint ---
+    vec4 w = (side == 0) 
+        ? vec4(1.0, 4.0, 1.0, 0.0) / 6.0    // splineCoeffs(0.0)
+        : vec4(0.0, 1.0, 4.0, 1.0) / 6.0;   // splineCoeffs(1.0)
+    vec4 dw = (side == 0) 
+        ? vec4(-0.5, 0.0, 0.5, 0.0)     // splineDerivCoeffs(0.0)
+        : vec4(0.0, -0.5, 0.0, 0.5);    // splineDerivCoeffs(1.0)
 
     v_color = w.x*c0 + w.y*c1 + w.z*c2 + w.w*c3;
 
     vec3 center = w.x*p0 + w.y*p1 + w.z*p2 + w.w*p3;
-    vec3 T = normalize(dw.x*p0 + dw.y*p1 + dw.z*p2 + dw.w*p3);
-    vec3 T0 = normalize(dw0.x*p0 + dw0.y*p1 + dw0.z*p2 + dw0.w*p3);
-    vec3 T1 = normalize(dw1.x*p0 + dw1.y*p1 + dw1.z*p2 + dw1.w*p3);
-    vec3 N0 = buildNormal(T0);
-    vec3 N1 = buildNormal(T1);
+    vec3 centerDer = dw.x*p0 + dw.y*p1 + dw.z*p2 + dw.w*p3;
 
-    float angle = acos(clamp(dot(N0, N1), -1.0, 1.0));
-    float s = sin(angle);
-    vec3 N = N0;
-    if (s > 1e-5) {
-        float w0 = sin((1.0 - fu) * angle) / s;
-        float w1 = sin(fu * angle) / s;
-        N = normalize(w0 * N0 + w1 * N1);
-    }
-    N = normalize(N - T * dot(T, N));
+    // --- Hemisphere position ---
+    vec3 T = normalize(centerDer);
+    vec3 N = buildNormal(T);
     vec3 B = cross(T, N);
+
+    vec3 radial = cos(lon) * N + sin(lon) * B;
+
+    vec3 dir = (side == 0)
+        ? (sin(lat) * radial - cos(lat) * T)
+        : (sin(lat) * radial + cos(lat) * T);
 
     // --- Radius (screen-space capped) ---
     vec3 viewPos = (modelViewMatrix * vec4(center, 1.0)).xyz;
     vec2 r_screen = (radii.yz * 2.0 / resolution.y) * (-viewPos.z) / projectionMatrix[1][1];
     float r = clamp(radii.x, r_screen.x, r_screen.y);
 
-    // --- Vertex position ---
-    vec3 offset = cos(fv) * N + sin(fv) * B;
-    vec3 pos = center + r * offset;
+    vec3 pos = center + r * dir;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
 }
