@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-import { UCBSplineGroup } from './UCBSpline';
 import { OrbitControls } from 'three/examples/jsm/Addons.js';
+import { FatUCBSplineGroup2 } from './FatUCBSpline2';
 
 function randomColor(k: number) {
     const f = (j: number) => 1 - Math.sin(Math.PI * 2 * j) ** 2;
     return [f(3 * k + 42), f(2 * k + 51), f(k + 73)];
 }
 
-class SplineScene {
+class FatSplineScene {
     container: HTMLDivElement;
     camera!: THREE.Camera;
     scene!: THREE.Scene;
@@ -20,7 +20,7 @@ class SplineScene {
     isStopped: boolean = false;
     controls!: OrbitControls;
 
-    splineGroup!: UCBSplineGroup;
+    splineGroup!: FatUCBSplineGroup2;
     splineObject!: THREE.Object3D;
 
     constructor(container: HTMLDivElement) {
@@ -57,7 +57,7 @@ class SplineScene {
             this.camera.aspect = aspect;
             this.camera.updateProjectionMatrix();
         }
-        // this.shader.uniforms.resolution.value = new THREE.Vector2(clientWidth, clientHeight);
+        this.splineGroup.setResolution(this.renderer);
     }
 
     setupResizeRenderer() {
@@ -88,21 +88,10 @@ class SplineScene {
         const myObject = {
             animateButton,
             toggleStop,
-            focalLength: 0.5,
-            useFisheye: false,
         };
         this.gui.add(myObject, 'animateButton').name('Animate step');
         this.gui.add(myObject, 'toggleStop').name('Toggle stop/play');
-        this.gui.add(myObject, 'useFisheye')
-            .name('Switch fisheye/rectilinear')
-            .onChange((value: boolean) => {
-                this.splineGroup.shader.uniforms.useFisheye.value = value ? 1 : 0;
-            });
-        this.gui.add(myObject, 'focalLength', 0.1, 1.0)
-            .name("Set focal length")
-            .onChange((value: number) => {
-                this.splineGroup.shader.uniforms.focalLength.value = value;
-            });
+
         this.gui.close();
     }
 
@@ -120,7 +109,7 @@ class SplineScene {
 
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
-        this.camera.position.set(0, 0.2, 1.0);
+        this.camera.position.set(0, 0, 1.0);
         this.camera.lookAt(new THREE.Vector3(0, 0, 0));
         this.controls.update();
     }
@@ -128,7 +117,7 @@ class SplineScene {
     fillSplineGroup1(t: number, reset: boolean) {
         if (reset)
             this.splineGroup.reset();
-        for (let j = 0; j < 1000; j++) {
+        for (let j = 0; j < 10; j++) {
             const pList = [];
             const num = Math.floor(4 + (1.0 + Math.sin(-10 * j)) * 50);
             for (let k = 0; k < num; k++) {
@@ -138,7 +127,7 @@ class SplineScene {
                 p.multiplyScalar(0.3);
                 pList.push(p);
             }
-            this.splineGroup.addSpline(pList, (k) => randomColor(j + k / num));
+            this.splineGroup.addSpline(pList, (k) => randomColor(j + k / num), false, true, true);
         }
     }
 
@@ -149,8 +138,8 @@ class SplineScene {
         const R = 0.3; // Major radius (distance from center to tube center)
         const r = 0.2; // Minor radius (radius of the tube)
 
-        const n = 50;
-        for (let j = 0; j < n; j++) {
+        const n = 15;
+        for (let j = 0; j < n + 1; j++) {
             const pList = [];
             for (let k = 0; k < n; k++) {
                 const sj = 0.75 * j;
@@ -169,7 +158,7 @@ class SplineScene {
                 const p = new THREE.Vector3(x, y, z);
                 pList.push(p);
             }
-            this.splineGroup.addSpline(pList, (k) => randomColor(0.02 * (j + k / n)));
+            this.splineGroup.addSpline(pList, (k) => randomColor(0.02 * (j + k / n)), false, true, true);
         }
     }
 
@@ -220,7 +209,7 @@ class SplineScene {
                         p.multiplyScalar(0.2);
                         pList.push(p);
                     }
-                    this.splineGroup.addSpline(pList, (k) => randomColor(m * 100 + sj), true);
+                    this.splineGroup.addSpline(pList, (k) => randomColor(m * 100 + sj), true, false, false);
                 }
             }
         } else if (mode == 1) {
@@ -243,7 +232,7 @@ class SplineScene {
                     p.multiplyScalar(0.3);
                     pList.push(p);
                 }
-                this.splineGroup.addSpline(pList, (k) => randomColor(K * sm + k / K), true);
+                this.splineGroup.addSpline(pList, (k) => randomColor(K * sm + k / K), true, false, false);
             }
         } else if (mode == 2) {
             const I = 4;
@@ -268,7 +257,7 @@ class SplineScene {
                         p.multiplyScalar(0.1);
                         pList.push(p);
                     }
-                    this.splineGroup.addSpline(pList, (k) => randomColor(si + sm));
+                    this.splineGroup.addSpline(pList, (k) => randomColor(si + sm), true, false, false);
                 }
             }
         } else if (mode == 3) {
@@ -295,7 +284,7 @@ class SplineScene {
                         const omega = 0.05 * Math.sin(30 * t);
                         pList.push(new THREE.Vector3(p.x, Math.cos(omega) * p.y - Math.sin(omega) * p.z, Math.sin(omega) * p.y + Math.cos(omega) * p.z));
                     }
-                    this.splineGroup.addSpline(pList, (k) => randomColor(sm), true);
+                    this.splineGroup.addSpline(pList, (k) => randomColor(sm), true, false, false);
                 }
             }
         }
@@ -304,7 +293,7 @@ class SplineScene {
     setupScene() {
         this.scene = new THREE.Scene();
 
-        this.splineGroup = new UCBSplineGroup(32);
+        this.splineGroup = new FatUCBSplineGroup2(32);
         this.fillSplineGroup3(0, 3, true);
 
         this.splineObject = this.splineGroup.getObject();
@@ -328,8 +317,8 @@ class SplineScene {
 
         const t = this.lastTime * 0.001;
 
-        // this.fillSplineGroup1(t, true);
-        // this.fillSplineGroup2(t, true);
+        // this.fillSplineGroup1(0.1 * t, true);
+        this.fillSplineGroup2(t, true);
         // this.fillSplineGroup3(t, 3, true);
 
         // this.splineObject.setRotationFromEuler(new THREE.Euler(3.0+3.0*t, 2.0+5.0*t, 5.0+2.0*t));
@@ -339,4 +328,4 @@ class SplineScene {
     }
 }
 
-export { SplineScene };
+export { FatSplineScene };

@@ -3,15 +3,16 @@ import { Box, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
 import { SplineScene } from './splineScene';
+import { FatSplineScene } from './fatSplineScene';
 import { TextScene } from './textScene';
 import { MCSDFFont } from './font';
 
-const SplineSceneComponent: React.FC = () => { 
+const SplineSceneComponent: React.FC<{ fat?: boolean }> = ({ fat = false }) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
-        const scene = new SplineScene(containerRef.current!);
+        const scene = fat ? new FatSplineScene(containerRef.current!) : new SplineScene(containerRef.current!);
         return () => {
             scene.dispose();
         };
@@ -26,7 +27,7 @@ const SplineSceneComponent: React.FC = () => {
     );
 };
 
-const TextSceneComponent: React.FC = () => { 
+const TextSceneComponent: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [font1, setFont1] = useState<MCSDFFont | null>(null);
     const [font2, setFont2] = useState<MCSDFFont | null>(null);
@@ -83,9 +84,9 @@ const TextSceneComponent: React.FC = () => {
                     <Typography>Loading font...</Typography>
                 </Box>
             ) : (
-            <Suspense fallback={<Box display="flex" justifyContent="center"><Typography>Loading..</Typography></Box>}>
-                <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-            </Suspense>
+                <Suspense fallback={<Box display="flex" justifyContent="center"><Typography>Loading..</Typography></Box>}>
+                    <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+                </Suspense>
             )}
         </Box>
     );
@@ -94,43 +95,24 @@ const TextSceneComponent: React.FC = () => {
 const App: React.FC = () => {
     return (
         <Container maxWidth="lg">
-            <Box display="flex" justifyContent="center" sx={{py: 2}}>
+            <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                 <Typography variant="h2">
                     Rendering tools
                 </Typography>
             </Box>
-            {/* <Box sx={{ 
-                display: "flex", 
-                flexDirection: { xs: "column", md: "row" },
-                width: "100%", 
-                height: "100%", 
-                justifyContent: "center", 
-                gap: "10px" 
-            }}>
-                <Box sx={{ width: { xs: "100%", md: "50%" }, height: "100%" }}>
-                    <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
-                        <TextSceneComponent />
-                    </Suspense>
-                </Box>
-                <Box sx={{ width: { xs: "100%", md: "50%" }, height: "100%" }}>
-                    <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
-                        <SplineSceneComponent />
-                    </Suspense>
-                </Box>
-            </Box> */}
-            <Box sx={{ width: "100%", height: "100%" }}>
+            {/* <Box sx={{ width: "100%", height: "100%" }}>
                 <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
                     <TextSceneComponent />
                 </Suspense>
-            </Box>
+            </Box> */}
             <Box sx={{ width: "100%", height: "100%" }}>
                 <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
-                    <SplineSceneComponent />
+                    <SplineSceneComponent fat />
                 </Suspense>
             </Box>
             <Box>
-                <Typography sx={{my: 2}}>
-                    Rendering text using multi-channel signed distance fields and instancing. 
+                <Typography sx={{ my: 2 }}>
+                    Rendering text using multi-channel signed distance fields and instancing.
                     Rendering uniform cubic B-splines using instancing. Fisheye effect is using
                     stereographic projection.
                 </Typography>
