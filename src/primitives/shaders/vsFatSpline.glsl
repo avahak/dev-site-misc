@@ -11,14 +11,22 @@ uniform int TEXTURE_WIDTH;
 
 out vec3 v_color;
 
-#define PI 3.141592653589793
-#define PI_OVER_2 0.5*PI
-#define TAU 2.0*PI
+const float PI = 3.141592653589793;
+const float PI_OVER_2 = 0.5*PI;
+const float TAU = 2.0*PI;
+
+// For tangentDirection
+const float EP = 1e-6;
+const float RIGHT_ENDPOINT_START = 1.0 - 1e-5;
 
 const int LUT[6] = int[6](
     0, 2, 1,   // first tri
     0, 3, 2    // second tri
 );
+
+vec3 eval(vec4 w, vec3 p0, vec3 p1, vec3 p2, vec3 p3) {
+    return w.x*p0 + w.y*p1 + w.z*p2 + w.w*p3;
+}
 
 vec4 splineCoeffs(float t) {
     float s1 = 1.0 - t;
@@ -29,10 +37,50 @@ vec4 splineCoeffs(float t) {
     return vec4(s3, 3.0*t3 - 6.0*t2 + 4.0, 3.0*t2*s1 + 3.0*t + 1.0, t3) / 6.0;
 }
 
-vec4 splineDerivCoeffs(float t) {
-    float s1 = 1.0 - t;
-    float t2 = t*t;
-    return vec4(-s1*s1, 3.0*t2 - 4.0*t, -3.0*t2 + 2.0*t + 1.0, t2) / 2.0;
+vec4 d1Coeffs(float t) {
+    float s = 1.0 - t;
+    float t2 = t * t;
+    return vec4(-s*s, 3.0*t2 - 4.0*t, -3.0*t2 + 2.0*t + 1.0, t2) * 0.5;
+}
+
+vec4 d2Coeffs(float t) {
+    return vec4(1.0 - t, 3.0*t - 2.0, -3.0*t + 1.0, t);
+}
+
+vec4 d3Coeffs() {
+    return vec4(-1.0, 3.0, -3.0, 1.0);
+}
+
+// In case that the derivative of the path is zero at one of the endpoints,
+// we use higher order derivatives to suss out a meaningful tangent direction.
+// NOTE This only helps at the endpoints and does not solve situations like 
+//      gamma(t)=(t*(1-t),0,0) at t=1/2. 
+// NOTE In practice we could also fall back from zero 1st derivative to
+//      a basic finite difference test.
+vec3 tangentDirection(float t, vec3 p0, vec3 p1, vec3 p2, vec3 p3) {
+    // 1st derivative
+    vec3 v = eval(d1Coeffs(t), p0, p1, p2, p3);
+    float len = length(v);
+    if (len > EP) 
+        return v / len;
+
+    // 2nd derivative
+    v = eval(d2Coeffs(t), p0, p1, p2, p3);
+    len = length(v);
+    if (len > EP) {
+        // flip at right endpoint for even-order fallback
+        vec3 v0 = v / len;
+        return (t > RIGHT_ENDPOINT_START) ? -v0 : v0;
+    }
+
+    // 3rd derivative (odd -> no flip)
+    v = eval(d3Coeffs(), p0, p1, p2, p3);
+    len = length(v);
+    if (len > EP) 
+        return v / len;
+
+    // fully degenerate
+    return vec3(1.0, 0.0, 0.0);
 }
 
 vec3 buildNormal(vec3 T) {
@@ -91,16 +139,13 @@ void main() {
 
     // --- Spline evaluation ---
     vec4 w = splineCoeffs(fu);
-    vec4 dw = splineDerivCoeffs(fu);
-    vec4 dw0 = vec4(-0.5, 0.0, 0.5, 0.0);       // splineDerivCoeffs(0.0)
-    vec4 dw1 = vec4(0.0, -0.5, 0.0, 0.5);       // splineDerivCoeffs(1.0)
 
     v_color = w.x*c0 + w.y*c1 + w.z*c2 + w.w*c3;
 
     vec3 center = w.x*p0 + w.y*p1 + w.z*p2 + w.w*p3;
-    vec3 T = normalize(dw.x*p0 + dw.y*p1 + dw.z*p2 + dw.w*p3);
-    vec3 T0 = normalize(dw0.x*p0 + dw0.y*p1 + dw0.z*p2 + dw0.w*p3);
-    vec3 T1 = normalize(dw1.x*p0 + dw1.y*p1 + dw1.z*p2 + dw1.w*p3);
+    vec3 T = tangentDirection(fu, p0, p1, p2, p3);
+    vec3 T0 = tangentDirection(0.0, p0, p1, p2, p3);
+    vec3 T1 = tangentDirection(1.0, p0, p1, p2, p3);
     vec3 N0 = buildNormal(T0);
     vec3 N1 = buildNormal(T1);
 
@@ -120,7 +165,7 @@ void main() {
     vec2 pixelRadiusBounds = vec2(minPixelRadius, dot(w, maxPixelRadii));
     vec3 viewPos = (modelViewMatrix * vec4(center, 1.0)).xyz;
     vec2 worldRadiusBounds = (pixelRadiusBounds * 2.0 / resolution.y) * (-viewPos.z) / projectionMatrix[1][1];
-    // Not using clamp here to make sure lower bound to dominates
+    // Not using clamp here to make sure lower bound dominates
     float r = max(min(worldRadius, worldRadiusBounds.y), worldRadiusBounds.x);  
 
     // --- Vertex position ---

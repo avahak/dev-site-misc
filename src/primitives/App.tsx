@@ -100,11 +100,11 @@ const App: React.FC = () => {
                     Rendering tools
                 </Typography>
             </Box>
-            {/* <Box sx={{ width: "100%", height: "100%" }}>
+            <Box sx={{ width: "100%", height: "100%" }}>
                 <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
                     <TextSceneComponent />
                 </Suspense>
-            </Box> */}
+            </Box>
             <Box sx={{ width: "100%", height: "100%" }}>
                 <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
                     <SplineSceneComponent fat />
