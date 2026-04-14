@@ -25,7 +25,10 @@ const AppRouter = () => {
                 <Route path="/region_json" element={<RegionJsonApp />} />
                 <Route path="/fractals" element={<FractalApp />} />
                 <Route path="/template_class" element={<ClassTemplateApp />} />
-                <Route path="/webgl_tools" element={<WebGLApp />} />
+                <Route path="/webgl_tools_text" element={<WebGLApp mode="text" />} />
+                <Route path="/webgl_tools_splines" element={<WebGLApp mode="splines" />} />
+                <Route path="/webgl_tools_fat_splines" element={<WebGLApp mode="fat_splines" />} />
+                <Route path="/webgl_tools_fat_splines2" element={<WebGLApp mode="fat_splines2" />} />
                 <Route path="/input_listener" element={<InputListenerApp />} />
                 <Route path="/graph" element={<GraphApp />} />
                 <Route path="/solid" element={<SolidApp />} />

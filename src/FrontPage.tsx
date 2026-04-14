@@ -6,13 +6,13 @@ import { BUILD_TIMESTAMP } from "./buildInfo";
 const FrontPage = () => {
     return (<>
         <Container maxWidth="xl">
-            <Typography variant="h2" textAlign="center" sx={{py: 2}}>
+            <Typography variant="h2" textAlign="center" sx={{ py: 2 }}>
                 In progress...
             </Typography>
             <Typography variant="h6">
                 Pages
             </Typography>
-            <Box sx={{p: 2}}>
+            <Box sx={{ p: 2 }}>
                 <MUILink component={RouterLink} to="/dzhanibekov" variant="body1" color="primary">
                     Dzhanibekov effect
                 </MUILink>
@@ -40,7 +40,7 @@ const FrontPage = () => {
             <Typography variant="h6">
                 Helpers (ignore these)
             </Typography>
-            <Box sx={{p: 2}}>
+            <Box sx={{ p: 2 }}>
                 <MUILink component={RouterLink} to="/region_json" variant="body1" color="primary">
                     Region JSON
                 </MUILink>
@@ -49,9 +49,13 @@ const FrontPage = () => {
                     Template for Three.js (separate class)
                 </MUILink>
                 <br />
-                <MUILink component={RouterLink} to="/webgl_tools" variant="body1" color="primary">
-                    Rendering tools
-                </MUILink>
+                <Typography>Rendering tools</Typography>
+                <ul style={{ margin: 0 }}>
+                    <li><MUILink component={RouterLink} to="/webgl_tools_text" variant="body1" color="primary">Text</MUILink></li>
+                    <li><MUILink component={RouterLink} to="/webgl_tools_splines" variant="body1" color="primary">Uniform cubic b-splines</MUILink></li>
+                    <li><MUILink component={RouterLink} to="/webgl_tools_fat_splines" variant="body1" color="primary">Fat uniform cubic b-splines</MUILink></li>
+                    <li><MUILink component={RouterLink} to="/webgl_tools_fat_splines2" variant="body1" color="primary">Fat uniform cubic b-splines 2</MUILink></li>
+                </ul>
                 <br />
                 <MUILink component={RouterLink} to="/input_listener" variant="body1" color="primary">
                     Input listener
@@ -65,7 +69,7 @@ const FrontPage = () => {
                     Solid textures
                 </MUILink>
             </Box>
-            <Typography variant="body2" color="textSecondary" sx={{mt: 10}}>{`Build: ${BUILD_TIMESTAMP}`}</Typography>
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 10 }}>{`Build: ${BUILD_TIMESTAMP}`}</Typography>
         </Container>
     </>);
 };

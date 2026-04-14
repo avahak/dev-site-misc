@@ -4,15 +4,22 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
 import { SplineScene } from './splineScene';
 import { FatSplineScene } from './fatSplineScene';
+import { FatSplineSceneODE } from './fatSplineSceneODE';
 import { TextScene } from './textScene';
 import { MCSDFFont } from './font';
 
-const SplineSceneComponent: React.FC<{ fat?: boolean }> = ({ fat = false }) => {
+const SplineSceneComponent: React.FC<{ mode: "splines" | "fat_splines" | "fat_splines2" }> = ({ mode }) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
-        const scene = fat ? new FatSplineScene(containerRef.current!) : new SplineScene(containerRef.current!);
+        let scene = null;
+        if (mode == "fat_splines")
+            scene = new FatSplineScene(containerRef.current!);
+        else if (mode == "fat_splines2")
+            scene = new FatSplineSceneODE(containerRef.current!);
+        else
+            scene = new SplineScene(containerRef.current!);
         return () => {
             scene.dispose();
         };
@@ -92,7 +99,7 @@ const TextSceneComponent: React.FC = () => {
     );
 };
 
-const App: React.FC = () => {
+const App: React.FC<{ mode: "text" | "splines" | "fat_splines" | "fat_splines2" }> = ({ mode }) => {
     return (
         <Container maxWidth="lg">
             <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
@@ -100,16 +107,20 @@ const App: React.FC = () => {
                     Rendering tools
                 </Typography>
             </Box>
-            <Box sx={{ width: "100%", height: "100%" }}>
-                <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
-                    <TextSceneComponent />
-                </Suspense>
-            </Box>
-            <Box sx={{ width: "100%", height: "100%" }}>
-                <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
-                    <SplineSceneComponent fat />
-                </Suspense>
-            </Box>
+            {mode == "text" &&
+                <Box sx={{ width: "100%", height: "100%" }}>
+                    <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
+                        <TextSceneComponent />
+                    </Suspense>
+                </Box>
+            }
+            {(mode == "splines" || mode == "fat_splines" || mode == "fat_splines2") &&
+                <Box sx={{ width: "100%", height: "100%" }}>
+                    <Suspense fallback={<Box justifyContent="center"><Typography>Loading..</Typography></Box>}>
+                        <SplineSceneComponent mode={mode} />
+                    </Suspense>
+                </Box>
+            }
             <Box>
                 <Typography sx={{ my: 2 }}>
                     Rendering text using multi-channel signed distance fields and instancing.
