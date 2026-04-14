@@ -1,8 +1,9 @@
 /**
  * Runge-Kutta methods implementation.
  * See: https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta_methods
- * 
- * TODO unfinished! No optimizations, wasteful memory management..
+ * See: https://www.pulsarmagnetosphere.com/PHYS-427-Fall2024/Lecture%2010/?print-pdf#/
+ * See: https://www.unige.ch/~hairer/software.html
+ * See: Solving Ordinary Differential Equations I: Nonstiff Problems By Ernst Hairer, Syvert P. Nørsett, Gerhard
  */
 
 class ButcherTableau {
@@ -22,9 +23,8 @@ class ButcherTableau {
 
         // Construct nodes by consistency
         this.vc = Array(this.sn).fill(0);
-        for (let k = 0; k < this.sn; k++) {
+        for (let k = 0; k < this.sn; k++)
             this.vc[k] = this.mat[k].reduce((sum, val) => sum + val, 0);
-        }
     }
 
     isValid(): boolean {
@@ -39,12 +39,12 @@ class ButcherTableau {
 
         // vb:s need to sum to 1:
         const sum = this.vb.reduce((acc, val) => acc + val, 0);
-        if (Math.abs(sum - 1.0) > 100 * Number.EPSILON)
+        if (Math.abs(sum - 1) > 100 * Number.EPSILON)
             return false;
 
         if (this.vb2) {
             const sum2 = this.vb2.reduce((acc, val) => acc + val, 0);
-            if (Math.abs(sum2 - 1.0) > 100 * Number.EPSILON)
+            if (Math.abs(sum2 - 1) > 100 * Number.EPSILON)
                 return false;
         }
 
@@ -138,78 +138,163 @@ class ODESolver {
         this.bt = bt;
     }
 
+    /**
+     * Perform one RK step from t0 to t1.
+     * @param useVb2 If true, use embedded lower-order weights (for error estimation).
+     */
     step(y0: number[], t0: number, t1: number, useVb2: boolean = false): number[] {
+        const n = y0.length;
         const h = t1 - t0;
-        // Stage derivatives:
-        const sDer: number[][] = Array.from({ length: this.bt.sn }, () => []);
+        const stages = this.bt.sn;
+        const weights = useVb2 ? this.bt.vb2! : this.bt.vb;
 
-        for (let s = 0; s < this.bt.sn; s++) {
-            let sVal = [...y0]; // Stage value
+        // Reusable buffers for stage derivatives and stage values
+        const sDer: number[][] = Array.from({ length: stages }, () => new Array(n));
+        const sVal = new Array(n);
+
+        for (let s = 0; s < stages; s++) {
+            for (let i = 0; i < n; i++)
+                sVal[i] = y0[i];
+
             for (let j = 0; j < s; j++) {
-                sVal = this.vectorSum(1.0, sVal, this.bt.mat[s][j], sDer[j]);
+                const coeff = this.bt.mat[s][j];
+                if (coeff !== 0) {
+                    const derJ = sDer[j];
+                    for (let i = 0; i < n; i++)
+                        sVal[i] += coeff * derJ[i];
+                }
             }
-            sDer[s] = this.f(t0 + h * this.bt.vc[s], sVal).map(val => val * h);
+
+            const fVal = this.f(t0 + h * this.bt.vc[s], sVal);
+            for (let i = 0; i < n; i++)
+                sDer[s][i] = h * fVal[i];
         }
 
-        return sDer.reduce((y1, sDerVal, j) => this.vectorSum(1.0, y1, useVb2 ? this.bt.vb2![j] : this.bt.vb[j], sDerVal), [...y0]);
+        // Combine stage derivatives into the final result
+        const y1 = new Array(n);
+        for (let i = 0; i < n; i++) {
+            let sum = y0[i];
+            for (let s = 0; s < stages; s++)
+                sum += weights[s] * sDer[s][i];
+            y1[i] = sum;
+        }
+        return y1;
     }
 
+    /**
+     * Fixed-step integration.
+     */
     solve(y0: number[], t0: number, t1: number, stepNum: number): number[][] {
-        const sol = [y0];
+        const sol = [y0.slice()];
         const h = (t1 - t0) / stepNum;
 
         for (let k = 0; k < stepNum; k++) {
-            sol.push(this.step(sol[k], t0 + k * h, t0 + (k + 1) * h));
+            const yNext = this.step(sol[k], t0 + k * h, t0 + (k + 1) * h);
+            sol.push(yNext);
         }
 
         return sol;
     }
 
-    adaptiveSolve(y0: number[], t0: number, t1: number, atol: number, rtol: number): { ts: number[], ys: number[][] } {
+    /**
+     * Adaptive-step integration.
+     * @param denseOutput If true, stage derivatives are added to the output.
+     */
+    adaptiveSolve(
+        y0: number[],
+        t0: number, t1: number,
+        atol: number, rtol: number,
+        denseOutput: boolean = false
+    ): { ts: number[], ys: number[][], sds?: number[][][] } {
         if (!this.bt.vb2)
             throw new Error("Adaptive solve requires vb2.");
 
-        // Compute initial step size h:
-        // let h = (t1 - t0) / 5.0;
+        const n = y0.length;
+        const stages = this.bt.sn;
+
+        // --- Initial step size estimation ---
         // Source: Solving Ordinary Differential Equations I: Nonstiff Problems By Ernst Hairer, Syvert P. Nørsett, Gerhard, p. 169.
         const f0 = this.f(t0, y0);
         const d0 = this.weightedNorm(y0, y0, atol, rtol);
         const d1 = this.weightedNorm(y0, f0, atol, rtol);
         let h0 = (d0 < 1e-5 || d1 < 1e-5) ? 1e-6 : 0.01 * d0 / d1;
         h0 = Math.min(h0, t1 - t0);
-        const y1 = this.vectorSum(1.0, y0, h0, f0);
+
+        const y1 = new Array(n);
+        for (let i = 0; i < n; i++)
+            y1[i] = y0[i] + h0 * f0[i];
         const f1 = this.f(t0 + h0, y1);
-        const d2 = this.weightedNorm(y0, f0.map((v, k) => f1[k] - v), atol, rtol) / h0;
+        const d2 = this.weightedNorm(y0, f1.map((v, i) => (v - f0[i]) / h0), atol, rtol);
         let h1 = Math.pow(0.01 / Math.max(d1, d2), 1 / (this.bt.orders[0] + 1));
-        if (Math.max(d1, d2) < 1e-15)
+        if (Math.max(d1, d2) < 1e-15) {
             h1 = Math.max(1e-6, 1e-3 * h0);
+        }
         let h = Math.min(100 * h0, h1);
 
-        let y = [...y0];
+        let y = y0.slice();
         let t = t0;
         let steps = 0;
 
         const tList = [t0];
-        const yList = [y0];
+        const yList = [y0.slice()];
+        const sDerList: number[][][] | null = denseOutput ? [] : null;
+
+        // Reusable buffers for stage derivatives and stage values
+        const sDer: number[][] = Array.from({ length: stages }, () => new Array(n));
+        const sVal = new Array(n);
 
         while (t < t1) {
             steps++;
-            if (steps > ODESolver.ADAPTIVE_STEPS_BOUNDS[1])
+            if (steps > ODESolver.ADAPTIVE_STEPS_BOUNDS[1]) {
                 throw new Error("Max steps exceeded");
+            }
 
             h = Math.min(h, t1 - t, (t1 - t0) / ODESolver.ADAPTIVE_STEPS_BOUNDS[0]);
 
-            const yNext = this.step(y, t, t + h);
-            const yNext2 = this.step(y, t, t + h, true);
+            // --- Compute stage derivatives for this step ---
+            for (let s = 0; s < stages; s++) {
+                for (let i = 0; i < n; i++)
+                    sVal[i] = y[i];
+
+                for (let j = 0; j < s; j++) {
+                    const coeff = this.bt.mat[s][j];
+                    if (coeff !== 0) {
+                        const derJ = sDer[j];
+                        for (let i = 0; i < n; i++)
+                            sVal[i] += coeff * derJ[i];
+                    }
+                }
+
+                const fVal = this.f(t + h * this.bt.vc[s], sVal);
+                for (let i = 0; i < n; i++)
+                    sDer[s][i] = h * fVal[i];
+            }
+
+            // --- Form high‑order (yNext) and low‑order (yNext2) solutions ---
+            const yNext = new Array(n);
+            const yNext2 = new Array(n);
+            for (let i = 0; i < n; i++) {
+                let sumHigh = y[i];
+                let sumLow = y[i];
+                for (let s = 0; s < stages; s++) {
+                    sumHigh += this.bt.vb[s] * sDer[s][i];
+                    sumLow += this.bt.vb2![s] * sDer[s][i];
+                }
+                yNext[i] = sumHigh;
+                yNext2[i] = sumLow;
+            }
+
             if (yNext.some(v => !isFinite(v)) || yNext2.some(v => !isFinite(v))) {
                 h = Math.max(ODESolver.ADAPTIVE_MIN_STEP_SIZE, h * ODESolver.ADAPTIVE_FACTOR_BOUNDS[0]);
                 continue;
             }
 
+            // --- Error estimation and step size control ---
             const err = this.weightedError(y, yNext, yNext2, atol, rtol);
             let factor = ODESolver.ADAPTIVE_FACTOR_BOUNDS[1];
-            if (err > 1e-12)
+            if (err > 1e-12) {
                 factor = ODESolver.ADAPTIVE_SAFETY_FACTOR * Math.pow(err, -1 / this.bt.orders[0]);
+            }
             factor = Math.min(ODESolver.ADAPTIVE_FACTOR_BOUNDS[1], Math.max(ODESolver.ADAPTIVE_FACTOR_BOUNDS[0], factor));
             let hNew = h * factor;
 
@@ -220,45 +305,127 @@ class ODESolver {
                 h = hNew;
 
                 tList.push(t);
-                yList.push(y);
+                yList.push(y.slice());
+                if (denseOutput)
+                    sDerList?.push(sDer.map(i => [...i]));
             } else {
-                // Reject step, do not advance t
+                // Reject step, try again with smaller h
                 h = Math.max(hNew, ODESolver.ADAPTIVE_MIN_STEP_SIZE);
             }
         }
+
         console.log(`ODESolver.adaptiveSolve steps: ${steps}`);
-
-        return { ts: tList, ys: yList };
+        return denseOutput ? { ts: tList, ys: yList, sds: sDerList! } : { ts: tList, ys: yList };
     }
-
-    private vectorSum(a: number, x: number[], b: number, y: number[]): number[] {
-        return x.map((val, i) => a * val + b * y[i]);
-    }
-
-    // private vectorDist(x: number[], y: number[]): number {
-    //     return Math.sqrt(x.reduce((sum, xi, i) => sum + (xi - y[i]) ** 2, 0));
-    // }
 
     private weightedNorm(ref: number[], vec: number[], atol: number, rtol: number): number {
+        const n = ref.length;
         let sumSq = 0;
-        for (let i = 0; i < ref.length; i++) {
+        for (let i = 0; i < n; i++) {
             const scale = atol + rtol * Math.abs(ref[i]);
             const ratio = vec[i] / scale;
             sumSq += ratio * ratio;
         }
-        return Math.sqrt(sumSq / ref.length);
+        return Math.sqrt(sumSq / n);
     }
 
     private weightedError(y: number[], y1: number[], y2: number[], atol: number, rtol: number): number {
+        const n = y.length;
         let sumSq = 0;
-        for (let i = 0; i < y.length; i++) {
+        for (let i = 0; i < n; i++) {
             const scale = atol + rtol * Math.max(Math.abs(y[i]), Math.abs(y1[i]));
             const diff = (y1[i] - y2[i]) / scale;
             sumSq += diff * diff;
         }
-        return Math.sqrt(sumSq / y.length);
+        return Math.sqrt(sumSq / n);
+    }
+
+    /**
+     * Interpolates the solution of the Dormand–Prince method at a given time t,
+     * using the dense output data from adaptiveSolve with RKDP method and denseOutput = true.
+     * See: Hairer et al., p. 192.
+     *
+     * @param output - The result of adaptiveSolve with RKDP method and denseOutput: true.
+     * @param t - The time at which to evaluate the solution.
+     * @returns The interpolated state vector at time t.
+     */
+    interpolateRKDP(
+        output: { ts: number[]; ys: number[][]; sds?: number[][][] },
+        t: number
+    ): number[] {
+        const { ts, ys, sds } = output;
+        if (this.bt !== ButcherTableau.RKDP)
+            throw new Error("This method only works for RKDP method.");
+        if (!sds)
+            throw new Error("Dense output data (sds) is required for interpolation.");
+        if (t < ts[0] || t > ts[ts.length - 1])
+            throw new Error(`Time ${t} is outside the integration interval [${ts[0]}, ${ts[ts.length - 1]}].`);
+
+        // Binary search
+        let lo = 0, hi = ts.length - 1;
+        while (lo < hi) {
+            const mid = Math.floor((lo + hi) / 2);
+            if (ts[mid] <= t) lo = mid + 1;
+            else hi = mid;
+        }
+        let i = lo - 1;
+        if (i === ts.length - 1)
+            i--;
+
+        const tStart = ts[i];
+        const h = ts[i + 1] - tStart;
+        const theta = (t - tStart) / h;
+
+        const y0 = ys[i];
+
+        const n = y0.length;
+
+        // From Haierer et al. p. 192
+        const th = theta;
+        const th2 = th * th;
+        const thm1 = th - 1;
+        const thm1_2 = thm1 * thm1;
+
+        const b1 =
+            th2 * (3 - 2 * th) * this.bt.vb[0] +
+            th * thm1_2 -
+            th2 * thm1_2 * 5 * (2558722523 - 31403016 * th) / 11282082432;
+
+        const b3 =
+            th2 * (3 - 2 * th) * this.bt.vb[2] +
+            th2 * thm1_2 * 100 * (882725551 - 15701508 * th) / 32700410799;
+
+        const b4 =
+            th2 * (3 - 2 * th) * this.bt.vb[3] -
+            th2 * thm1_2 * 25 * (443332067 - 31403016 * th) / 1880347072;
+
+        const b5 =
+            th2 * (3 - 2 * th) * this.bt.vb[4] +
+            th2 * thm1_2 * 32805 * (23143187 - 3489224 * th) / 199316789632;
+
+        const b6 =
+            th2 * (3 - 2 * th) * this.bt.vb[5] -
+            th2 * thm1_2 * 55 * (29972135 - 7076736 * th) / 822651844;
+
+        const b7 =
+            th2 * (th - 1) +
+            th2 * thm1_2 * 10 * (7414447 - 829305 * th) / 29380423;
+
+        const result = new Array(n);
+
+        for (let j = 0; j < n; j++) {
+            result[j] = y0[j] + (
+                b1 * sds[i][0][j] +
+                b3 * sds[i][2][j] +
+                b4 * sds[i][3][j] +
+                b5 * sds[i][4][j] +
+                b6 * sds[i][5][j] +
+                b7 * sds[i][6][j]
+            );
+        }
+
+        return result;
     }
 }
-
 
 export { ButcherTableau, ODESolver };
