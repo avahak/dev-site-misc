@@ -9,7 +9,6 @@ uniform vec3 cameraPos;
 uniform float time;
 uniform int phase; 
 uniform int objectId;
-uniform sampler2D texB;         // just for nullify phase
 uniform float debug1;
 uniform float debug2;
 uniform float debug3;
@@ -34,20 +33,12 @@ void main() {
     vec4 plane = vec4(cos(time), 0.0, sin(time), 0.25);
     vec3 v = vPos.xyz;
 
-    if (dot(v, plane.xyz) + plane.w < 0.0)
+    if ((dot(v, plane.xyz) + plane.w < 0.0) && (phase != 2))
         discard;
 
     // vec4 clipPos = pvmMat * vPos;
     // float depth = 0.5 + 0.5*clipPos.z/clipPos.w;
     float depth = gl_FragCoord.z;
-
-    if (phase == 1) {    // fronts for nullify
-        vec2 st = gl_FragCoord.xy / resolution;
-        float backDepth = texture(texB, st).r;
-        if (depth <= backDepth)
-            gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);    // closest segment starts after clip boundary -> nullify
-        return;
-    }
 
     // backs (phase 0) and regular rendering (phase 2)
     float id = float(objectId) / 1024.0;

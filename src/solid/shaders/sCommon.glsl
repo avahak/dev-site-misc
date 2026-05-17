@@ -10,9 +10,9 @@
 
 precision highp float;
 
-#define PI 3.1415926535898
-#define TAU 6.28318530718
-#define SQRT2 1.4142135623731
+const float PI = 3.1415926535898;
+const float TAU = 6.28318530718;
+const float SQRT2 = 1.4142135623731;
 
 
 // From uint-shader-hash:

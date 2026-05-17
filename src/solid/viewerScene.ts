@@ -29,8 +29,8 @@ class Scene {
 
     shader!: THREE.ShaderMaterial;
     object!: THREE.Object3D;
-    renderTargetB: THREE.WebGLRenderTarget | null = null;   // for backside
-    renderTargetN: THREE.WebGLRenderTarget | null = null;   // for nullify
+    renderTargetB: THREE.WebGLRenderTarget | null = null;   // for clipped backside
+    renderTargetF: THREE.WebGLRenderTarget | null = null;   // for clipped frontsides
     renderTargetR: THREE.WebGLRenderTarget | null = null;   // for regular rendering
 
     postScene!: THREE.Scene;
@@ -75,7 +75,7 @@ class Scene {
         this.renderer.getDrawingBufferSize(res);
         this.renderer.getDrawingBufferSize(this.shader.uniforms.resolution.value);
         this.renderTargetB?.setSize(res.x, res.y);
-        this.renderTargetN?.setSize(res.x, res.y);
+        this.renderTargetF?.setSize(res.x, res.y);
         this.renderTargetR?.setSize(res.x, res.y);
     }
 
@@ -91,7 +91,7 @@ class Scene {
 
     createRenderTargets() {
         this.renderTargetB?.dispose();
-        this.renderTargetN?.dispose();
+        this.renderTargetF?.dispose();
         this.renderTargetR?.dispose();
 
         const res = this.getResolution();
@@ -105,11 +105,11 @@ class Scene {
             type: THREE.FloatType,
         });
 
-        this.renderTargetN = new THREE.WebGLRenderTarget(width, height, {
+        this.renderTargetF = new THREE.WebGLRenderTarget(width, height, {
             minFilter: THREE.NearestFilter,
             magFilter: THREE.NearestFilter,
-            format: THREE.RedFormat,
-            type: THREE.UnsignedByteType,
+            format: THREE.RGFormat,
+            type: THREE.FloatType,
         });
 
         this.renderTargetR = new THREE.WebGLRenderTarget(width, height, {
@@ -139,7 +139,7 @@ class Scene {
             toggleStop,
             debug1: 1.0,
             debug2: 1.0,
-            debug3: 1.0,
+            debug3: this.shader.uniforms.debug3.value,
             debug4: 1.0,
         };
         this.gui.add(myObject, 'animateButton').name("Animate step");
@@ -148,21 +148,25 @@ class Scene {
             .name('Debug1 (H)')
             .onChange((h: number) => {
                 this.shader.uniforms.debug1.value = h;
+                this.postShader.uniforms.debug1.value = h;
             });
         this.gui.add(myObject, 'debug2', 0.1, 6.0)
             .name('Debug2 (WARP*10)')
             .onChange((h: number) => {
                 this.shader.uniforms.debug2.value = h;
+                this.postShader.uniforms.debug2.value = h;
             });
-        this.gui.add(myObject, 'debug3', 0.1, 2.0)
+        this.gui.add(myObject, 'debug3', 0.0, 1.0)
             .name('Debug3 (-)')
             .onChange((h: number) => {
                 this.shader.uniforms.debug3.value = h;
+                this.postShader.uniforms.debug3.value = h;
             });
         this.gui.add(myObject, 'debug4', 0.1, 2.0)
             .name('Debug4 (-)')
             .onChange((h: number) => {
                 this.shader.uniforms.debug4.value = h;
+                this.postShader.uniforms.debug4.value = h;
             });
         this.gui.close();
     }
@@ -176,7 +180,7 @@ class Scene {
             task();
 
         this.renderTargetB?.dispose();
-        this.renderTargetN?.dispose();
+        this.renderTargetF?.dispose();
         this.renderTargetR?.dispose();
 
         this.renderer.dispose();
@@ -207,10 +211,9 @@ class Scene {
                 time: { value: null },
                 phase: { value: null },
                 objectId: { value: null },
-                texB: { value: null },
                 debug1: { value: 1.0 },
                 debug2: { value: 1.0 },
-                debug3: { value: 1.0 },
+                debug3: { value: 0.8 },
                 debug4: { value: 1.0 },
             },
             vertexShader: vs,
@@ -275,8 +278,12 @@ class Scene {
                 invVpMat: { value: null },
                 time: { value: null },
                 texB: { value: null },
-                texN: { value: null },
+                texF: { value: null },
                 texR: { value: null },
+                debug1: { value: this.shader.uniforms.debug1.value },
+                debug2: { value: this.shader.uniforms.debug2.value },
+                debug3: { value: this.shader.uniforms.debug3.value },
+                debug4: { value: this.shader.uniforms.debug4.value },
             },
             vertexShader: vs,
             fragmentShader: sCommon + '\n' + fsPost,
@@ -309,7 +316,7 @@ class Scene {
     }
 
     render() {
-        if (!this.lastTime || !this.renderTargetB || !this.renderTargetN || !this.renderTargetR)
+        if (!this.lastTime || !this.renderTargetB || !this.renderTargetF || !this.renderTargetR)
             return;
         // this.controls.update();
         const t = this.lastTime * 0.002;
@@ -320,23 +327,21 @@ class Scene {
         this.shader.uniforms.time.value = t;
         this.postShader.uniforms.time.value = t;
 
-        // backside rendering
+        // backside rendering with clipping
         this.renderer.setRenderTarget(this.renderTargetB);  // activate backside target
         this.renderer.clear();
         this.shader.side = THREE.BackSide;
-        this.shader.uniforms.texB.value = null;             // avoid having rendertarget as texture too
         this.shader.uniforms.phase.value = 0;
         this.renderer.render(this.scene, this.camera);
 
-        // frontside rendering (nullify)
-        this.renderer.setRenderTarget(this.renderTargetN);  // activate nullify target
+        // frontside rendering with clipping
+        this.renderer.setRenderTarget(this.renderTargetF);  // activate frontside target
         this.renderer.clear();
         this.shader.side = THREE.FrontSide;
-        this.shader.uniforms.texB.value = this.renderTargetB.textures[0];
         this.shader.uniforms.phase.value = 1;
         this.renderer.render(this.scene, this.camera);
 
-        // regular rendering
+        // regular rendering with no clipping
         this.renderer.setRenderTarget(this.renderTargetR);  // activate regular target
         this.renderer.clear();
         this.shader.side = THREE.FrontSide;
@@ -347,7 +352,7 @@ class Scene {
         this.renderer.setRenderTarget(null);                // activate screen as target
         this.shader.side = THREE.FrontSide;
         this.postShader.uniforms.texB.value = this.renderTargetB.textures[0];
-        this.postShader.uniforms.texN.value = this.renderTargetN.textures[0];
+        this.postShader.uniforms.texF.value = this.renderTargetF.textures[0];
         this.postShader.uniforms.texR.value = this.renderTargetR.textures[0];
         const invMat = this.camera.matrixWorld.clone().multiply(this.camera.projectionMatrixInverse);
         this.postShader.uniforms.invVpMat.value = invMat;
