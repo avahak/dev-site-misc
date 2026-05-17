@@ -72,7 +72,7 @@ function testODE() {
 
         logErrorPoints.push({
             x: t,
-            y: Math.log10(1e-16 + Math.abs(Math.cos(omega * t) - y[0]))
+            y: Math.log10(Number.MIN_VALUE + Math.abs(Math.cos(omega * t) - y[0]))
         });
     }
 

@@ -20,49 +20,47 @@ type TooltipState = {
  * Create an InputMapper that feeds transformations into the given GraphController.
  */
 function inputConnection(gc: GraphController, setTooltipState: React.Dispatch<React.SetStateAction<TooltipState | null>>): InputMapper {
-    return (
-        {
-            mouse: {
-                drag: (args) => {
-                    if ((args.buttons & 1) !== 0)
-                        gc.transform(args.x, args.y, args.dx, args.dy, 1, 0);
-                },
-                down: (args) => {
-                    (args.button === 0) && setTooltipState(null);
-                    (args.button === 2) && setTooltipState({ x: args.x, y: args.y, isVisible: true });
-                },
-                // move: (args) => gc.transform(args.x, args.y, 0, 0, 1, 0),
-            },
-            wheel: {
-                zoom: (args) => {
-                    gc.transform(args.x, args.y, 0, 0, 1 - 0.001 * args.delta, 0);
-                    setTooltipState(null);
-                },
-                pan: (args) => {
-                    gc.transform(args.x, args.y, 0, 0, 1, 0);
-                },
-            },
-            touch: {
-                // start: (x, y) => scene.inputAction(x, y),
-                dragSingle: (args) => {
+    return ({
+        mouse: {
+            drag: (args) => {
+                if ((args.buttons & 1) !== 0)
                     gc.transform(args.x, args.y, args.dx, args.dy, 1, 0);
-                    setTooltipState(null);
-                },
-                dragPair: (args) => gc.transform(args.x, args.y, args.dx, args.dy, args.scale, args.angle),
             },
-            keyboard: {
-                keydown: (args) => {
-                    if (args.key === "-")
-                        gc.transform(0, 0, 0, 0, 1.0 / 1.2, 0);
-                    if (args.key === "+")
-                        gc.transform(0, 0, 0, 0, 1.2, 0);
-                },
+            down: (args) => {
+                (args.button === 0) && setTooltipState(null);
+                (args.button === 2) && setTooltipState({ x: args.x, y: args.y, isVisible: true });
             },
-            safariGesture: {
-                change: (args) => gc.transform(0, 0, 0, 0, args.scale, args.angle),
+            // move: (args) => gc.transform(args.x, args.y, 0, 0, 1, 0),
+        },
+        wheel: {
+            zoom: (args) => {
+                gc.transform(args.x, args.y, 0, 0, 1 - 0.001 * args.delta, 0);
+                setTooltipState(null);
             },
-        }
-    );
+            pan: (args) => {
+                gc.transform(args.x, args.y, 0, 0, 1, 0);
+            },
+        },
+        touch: {
+            // start: (x, y) => scene.inputAction(x, y),
+            dragSingle: (args) => {
+                gc.transform(args.x, args.y, args.dx, args.dy, 1, 0);
+                setTooltipState(null);
+            },
+            dragPair: (args) => gc.transform(args.x, args.y, args.dx, args.dy, args.scale, args.angle),
+        },
+        keyboard: {
+            keydown: (args) => {
+                if (args.key === "-")
+                    gc.transform(0, 0, 0, 0, 1.0 / 1.2, 0);
+                if (args.key === "+")
+                    gc.transform(0, 0, 0, 0, 1.2, 0);
+            },
+        },
+        safariGesture: {
+            change: (args) => gc.transform(0, 0, 0, 0, args.scale, args.angle),
+        },
+    });
 }
 
 interface GroupToggleUIProps {

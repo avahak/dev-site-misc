@@ -238,7 +238,7 @@ class FatSplineSceneODE {
 
     setupScene() {
         this.scene = new THREE.Scene();
-        this.splineGroup = new FatUCBSplineGroup(32);
+        this.splineGroup = new FatUCBSplineGroup(8, 6);
         this.splineObject = this.splineGroup.getObject();
         this.scene.add(this.splineObject);
         // Initial trajectory
