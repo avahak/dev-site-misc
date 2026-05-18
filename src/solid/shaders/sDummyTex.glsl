@@ -1,20 +1,4 @@
-uniform vec2 resolution;
-uniform vec3 cameraPos;
-uniform mat4 invVpMat;     // inv(mvpMatrix) of the main camera
-uniform float time;
-uniform sampler2D texB;
-uniform sampler2D texF;
-uniform sampler2D texR;
-uniform float debug1;
-uniform float debug2;
-uniform float debug3;
-uniform float debug4;
-
-in vec4 vPos;
-in vec2 vUv;
-in mat4 pvmMat;
-
-const float EP = 1.0e-5;
+// Code for placeholder solid textures
 
 /**
  * Solid base texture: returns a color from one of 10 hard-edged patterns.
@@ -106,7 +90,7 @@ vec3 solid_base(vec3 p, int pattern) {
  *   a = pattern % 10, b = (pattern + 3) % 10, c = (pattern + 7) % 10.
  */
 vec3 solid_compound(vec3 p, int pattern) {
-    p += vec3(TAU/SQRT2);  // trying to avoid pattern changes exactly at mesh boundaries
+    p = 5.0*p + vec3(TAU/SQRT2);  // trying to avoid pattern changes exactly at mesh boundaries
     // Cell size for the patchwork – large enough to make each texture region visible
     const float cellSize = 3.0;
 
@@ -135,68 +119,4 @@ vec3 solid_compound(vec3 p, int pattern) {
     col = clamp(col + fbm_color * fbm_val, 0.0, 1.0);
 
     return col;
-}
-
-vec3 worldPosition(float depth) {
-    vec3 ndc = 2.0*vec3(vUv.x, vUv.y, depth) - 1.0;
-    vec4 wph = invVpMat * vec4(ndc, 1.0);
-    return wph.xyz / wph.w;
-}
-
-void main() {
-    vec4 plane = vec4(cos(time), 0.0, sin(time), 0.25);
-
-    vec2 colB = texture(texB, vUv).rg;
-    vec2 colF = texture(texF, vUv).rg;
-    vec2 colR = texture(texR, vUv).rg;
-
-    float depthB = colB.r;
-    float depthF = colF.r;
-    float depthR = colR.r;
-    int objectIdB = int(round(colB.g * 1024.0));
-    int objectIdF = int(round(colF.g * 1024.0));
-    int objectIdR = int(round(colR.g * 1024.0));
-
-    int nullify = ((objectIdF > 0) && (depthF < depthB-EP)) ? 1 : 0;
-
-    float depth = depthF;
-    int objectId = objectIdF;
-
-    vec3 ndcF = 2.0*vec3(vUv.x, vUv.y, depthF) - 1.0;
-    vec3 wpF = worldPosition(depthF);
-    vec3 colorF = objectIdF > 0 ? solid_compound(5.0*wpF, objectIdF) : vec3(0.0);
-
-    vec3 color = colorF;
-
-    if (nullify == 0 && objectIdB > 0) {
-        // Find a point q on the viewing ray in world space
-        // vec3 ndc0 = vec3(vUv.x*2.0-1.0, vUv.y*2.0-1.0, 0.0);
-        vec4 qh = invVpMat*vec4(ndcF, 1.0);
-        vec3 q = qh.xyz / qh.w;
-        // t*cameraPos + (1-t)*q     on plane: 
-        // t*dot(cameraPos, plane.xyz) + (1-t)*dot(q, plane.xyz) + plane.w = 0
-        // t*dot(cameraPos-q, plane.xyz) = -plane.w - dot(q, plane.xyz)
-        float t = -(plane.w+dot(q, plane.xyz)) / dot(cameraPos-q, plane.xyz);
-        vec3 wp = t*cameraPos + (1.0-t)*q;       // intersection of viewing ray and clipping plane
-
-        objectId = objectIdB;
-
-        color = solid_compound(5.0*wp, objectIdB);
-    }
-
-    if (((depthR < depthF-EP) || (objectIdF == 0)) && (objectIdR > 0)) {
-        vec3 wpR = worldPosition(depthR);
-        vec3 colorR = solid_compound(5.0*wpR, objectIdR);
-
-        // Ad hoc blending.. with just `color = (1.0-debug3)*color + debug3*colorR;` 
-        // the semitransparent object in front fades into the background object but is 
-        // clearly visible against black.
-        // float lum = dot(colorR, vec3(0.299, 0.587, 0.114));
-        // float blend = mix(pow(debug3, 2.0), pow(debug3, 0.25), lum);
-        // color = (1.0-blend)*color + blend*colorR;
-
-        color = debug3*color + (1.0-debug3)*colorR;
-    }
-
-    gl_FragColor = vec4(color, 1.0);
 }

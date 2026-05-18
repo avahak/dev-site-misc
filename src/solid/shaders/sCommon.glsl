@@ -14,6 +14,8 @@ const float PI = 3.1415926535898;
 const float TAU = 6.28318530718;
 const float SQRT2 = 1.4142135623731;
 
+const float EP = 1.0e-5;
+
 
 // From uint-shader-hash:
 

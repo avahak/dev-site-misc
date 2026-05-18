@@ -1,5 +1,5 @@
 /**
- * Solid texture renderer test.
+ * Rendering test with clipping solid objects.
  */
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
@@ -7,9 +7,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import vs from './shaders/vs.glsl?raw';
-import fs from './shaders/fs.glsl?raw';
-import fsPost from './shaders/fsPost.glsl?raw';
+import fsGeom from './shaders/fsGeom.glsl?raw';
+import fsSolid from './shaders/fsSolid.glsl?raw';
+import fsComposite from './shaders/fsComposite.glsl?raw';
 import sCommon from './shaders/sCommon.glsl?raw';
+import sDummyTex from './shaders/sDummyTex.glsl?raw';
 
 function isMesh(object: THREE.Object3D): object is THREE.Mesh {
     return (object as THREE.Mesh).isMesh === true;
@@ -17,8 +19,6 @@ function isMesh(object: THREE.Object3D): object is THREE.Mesh {
 
 class Scene {
     container: HTMLDivElement;
-    camera!: THREE.Camera;
-    scene!: THREE.Scene;
     renderer: THREE.WebGLRenderer;
     controls!: OrbitControls;
     cleanUpTasks: (() => void)[];
@@ -27,15 +27,25 @@ class Scene {
     gui: any;
     isStopped: boolean = false;
 
-    shader!: THREE.ShaderMaterial;
-    object!: THREE.Object3D;
-    renderTargetB: THREE.WebGLRenderTarget | null = null;   // for clipped backside
-    renderTargetF: THREE.WebGLRenderTarget | null = null;   // for clipped frontsides
-    renderTargetR: THREE.WebGLRenderTarget | null = null;   // for regular rendering
+    mainCamera!: THREE.Camera;
+    quadCamera!: THREE.OrthographicCamera;      // fixed camera, looking at a quad
 
-    postScene!: THREE.Scene;
-    postShader!: THREE.ShaderMaterial;
-    postCamera!: THREE.Camera;
+    geometryScene!: THREE.Scene;
+    geometryMaterial!: THREE.ShaderMaterial;
+    geometryObject!: THREE.Object3D;
+    geometryBackRT: THREE.WebGLRenderTarget | null = null;   // for clipped backside
+    geometryFrontRT: THREE.WebGLRenderTarget | null = null;   // for clipped frontsides
+    geometryRegularRT: THREE.WebGLRenderTarget | null = null;   // for nonclipped rendering, used for semitransparency
+
+    solidScene!: THREE.Scene;
+    solidMaterial!: THREE.ShaderMaterial;
+
+    opaqueRT: THREE.WebGLRenderTarget | null = null;   // for rendering all opaque objects
+
+    overlayScene!: THREE.Scene;
+
+    compositeScene!: THREE.Scene;
+    compositeMaterial!: THREE.ShaderMaterial;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -63,20 +73,23 @@ class Scene {
         console.log(`Resize! (${clientWidth}, ${clientHeight})`);
         this.renderer.setSize(clientWidth, clientHeight);
         const aspect = clientWidth / clientHeight;
-        if (this.camera instanceof THREE.OrthographicCamera) {
-            this.camera.left = -aspect;
-            this.camera.right = aspect;
-            this.camera.updateProjectionMatrix();
-        } else if (this.camera instanceof THREE.PerspectiveCamera) {
-            this.camera.aspect = aspect;
-            this.camera.updateProjectionMatrix();
+        if (this.mainCamera instanceof THREE.OrthographicCamera) {
+            this.mainCamera.left = -aspect;
+            this.mainCamera.right = aspect;
+            this.mainCamera.updateProjectionMatrix();
+        } else if (this.mainCamera instanceof THREE.PerspectiveCamera) {
+            this.mainCamera.aspect = aspect;
+            this.mainCamera.updateProjectionMatrix();
         }
         const res = new THREE.Vector2();
         this.renderer.getDrawingBufferSize(res);
-        this.renderer.getDrawingBufferSize(this.shader.uniforms.resolution.value);
-        this.renderTargetB?.setSize(res.x, res.y);
-        this.renderTargetF?.setSize(res.x, res.y);
-        this.renderTargetR?.setSize(res.x, res.y);
+        this.renderer.getDrawingBufferSize(this.geometryMaterial.uniforms.resolution.value);
+        this.renderer.getDrawingBufferSize(this.solidMaterial.uniforms.resolution.value);
+        this.renderer.getDrawingBufferSize(this.compositeMaterial.uniforms.resolution.value);
+        this.geometryBackRT?.setSize(res.x, res.y);
+        this.geometryFrontRT?.setSize(res.x, res.y);
+        this.geometryRegularRT?.setSize(res.x, res.y);
+        this.opaqueRT?.setSize(res.x, res.y);
     }
 
     setupResizeRenderer() {
@@ -90,37 +103,46 @@ class Scene {
     }
 
     createRenderTargets() {
-        this.renderTargetB?.dispose();
-        this.renderTargetF?.dispose();
-        this.renderTargetR?.dispose();
+        this.geometryBackRT?.dispose();
+        this.geometryFrontRT?.dispose();
+        this.geometryRegularRT?.dispose();
+        this.opaqueRT?.depthTexture?.dispose();
+        this.opaqueRT?.dispose();
 
         const res = this.getResolution();
         const dpr = Math.min(this.renderer.getPixelRatio(), 2);
         const [width, height] = [dpr * res.x, dpr * res.y];
 
-        this.renderTargetB = new THREE.WebGLRenderTarget(width, height, {
+        this.geometryBackRT = new THREE.WebGLRenderTarget(width, height, {
             minFilter: THREE.NearestFilter,
             magFilter: THREE.NearestFilter,
             format: THREE.RGFormat,
             type: THREE.FloatType,
         });
 
-        this.renderTargetF = new THREE.WebGLRenderTarget(width, height, {
+        this.geometryFrontRT = new THREE.WebGLRenderTarget(width, height, {
             minFilter: THREE.NearestFilter,
             magFilter: THREE.NearestFilter,
             format: THREE.RGFormat,
             type: THREE.FloatType,
         });
 
-        this.renderTargetR = new THREE.WebGLRenderTarget(width, height, {
+        this.geometryRegularRT = new THREE.WebGLRenderTarget(width, height, {
             minFilter: THREE.NearestFilter,
             magFilter: THREE.NearestFilter,
             format: THREE.RGFormat,
             type: THREE.FloatType,
-            // count: 2,
         });
 
-        // console.log(this.renderTarget);
+        this.opaqueRT = new THREE.WebGLRenderTarget(width, height, {
+            minFilter: THREE.LinearFilter,
+            magFilter: THREE.NearestFilter,
+            format: THREE.RGBAFormat,
+            type: THREE.UnsignedByteType,
+        });
+        this.opaqueRT.depthTexture = new THREE.DepthTexture(width, height);
+        this.opaqueRT.depthTexture.format = THREE.DepthFormat;
+        this.opaqueRT.depthTexture.type = THREE.FloatType;
     }
 
     createGUI() {
@@ -139,7 +161,7 @@ class Scene {
             toggleStop,
             debug1: 1.0,
             debug2: 1.0,
-            debug3: this.shader.uniforms.debug3.value,
+            debug3: this.geometryMaterial.uniforms.debug3.value,
             debug4: 1.0,
         };
         this.gui.add(myObject, 'animateButton').name("Animate step");
@@ -147,26 +169,30 @@ class Scene {
         this.gui.add(myObject, 'debug1', 0.1, 2.0)
             .name('Debug1 (H)')
             .onChange((h: number) => {
-                this.shader.uniforms.debug1.value = h;
-                this.postShader.uniforms.debug1.value = h;
+                this.geometryMaterial.uniforms.debug1.value = h;
+                this.solidMaterial.uniforms.debug1.value = h;
+                this.compositeMaterial.uniforms.debug1.value = h;
             });
         this.gui.add(myObject, 'debug2', 0.1, 6.0)
             .name('Debug2 (WARP*10)')
             .onChange((h: number) => {
-                this.shader.uniforms.debug2.value = h;
-                this.postShader.uniforms.debug2.value = h;
+                this.geometryMaterial.uniforms.debug2.value = h;
+                this.solidMaterial.uniforms.debug2.value = h;
+                this.compositeMaterial.uniforms.debug2.value = h;
             });
         this.gui.add(myObject, 'debug3', 0.0, 1.0)
             .name('Debug3 (-)')
             .onChange((h: number) => {
-                this.shader.uniforms.debug3.value = h;
-                this.postShader.uniforms.debug3.value = h;
+                this.geometryMaterial.uniforms.debug3.value = h;
+                this.solidMaterial.uniforms.debug3.value = h;
+                this.compositeMaterial.uniforms.debug3.value = h;
             });
         this.gui.add(myObject, 'debug4', 0.1, 2.0)
             .name('Debug4 (-)')
             .onChange((h: number) => {
-                this.shader.uniforms.debug4.value = h;
-                this.postShader.uniforms.debug4.value = h;
+                this.geometryMaterial.uniforms.debug4.value = h;
+                this.solidMaterial.uniforms.debug4.value = h;
+                this.compositeMaterial.uniforms.debug4.value = h;
             });
         this.gui.close();
     }
@@ -179,32 +205,34 @@ class Scene {
         for (const task of this.cleanUpTasks)
             task();
 
-        this.renderTargetB?.dispose();
-        this.renderTargetF?.dispose();
-        this.renderTargetR?.dispose();
+        this.geometryBackRT?.dispose();
+        this.geometryFrontRT?.dispose();
+        this.geometryRegularRT?.dispose();
+        this.opaqueRT?.depthTexture?.dispose();
+        this.opaqueRT?.dispose();
 
         this.renderer.dispose();
-        this.shader.dispose();
+        this.geometryMaterial.dispose();
         this.controls.dispose();
 
         this.gui.destroy();
     }
 
     setupCamera() {
-        this.camera = new THREE.PerspectiveCamera();
+        this.mainCamera = new THREE.PerspectiveCamera();
 
-        this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+        this.controls = new OrbitControls(this.mainCamera, this.renderer.domElement);
 
-        this.camera.position.set(0, 0, 5);
+        this.mainCamera.position.set(0, 0, 5);
 
-        this.postCamera = new THREE.OrthographicCamera();
-        this.postCamera.position.set(0, 0, 1);
+        this.quadCamera = new THREE.OrthographicCamera();
+        this.quadCamera.position.set(0, 0, 1);
     }
 
     setupScene() {
-        this.scene = new THREE.Scene();
+        this.geometryScene = new THREE.Scene();
 
-        this.shader = new THREE.ShaderMaterial({
+        this.geometryMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 resolution: { value: new THREE.Vector2() },
                 cameraPos: { value: new THREE.Vector3() },
@@ -217,24 +245,24 @@ class Scene {
                 debug4: { value: 1.0 },
             },
             vertexShader: vs,
-            fragmentShader: sCommon + '\n' + fs,
+            fragmentShader: sCommon + '\n' + fsGeom,
             depthWrite: true,
             depthTest: true,
             // glslVersion: THREE.GLSL3
         });
 
-        this.shader.onBeforeRender = (_renderer, _scene, _camera, _geometry, object) => {
-            this.shader.uniforms.objectId.value = object.userData.objectId;
-            this.shader.uniformsNeedUpdate = true;  // See https://github.com/mrdoob/three.js/issues/9870
+        this.geometryMaterial.onBeforeRender = (_renderer, _scene, _camera, _geometry, object) => {
+            this.geometryMaterial.uniforms.objectId.value = object.userData.objectId;
+            this.geometryMaterial.uniformsNeedUpdate = true;  // See https://github.com/mrdoob/three.js/issues/9870
         };
 
         const light = new THREE.AmbientLight(new THREE.Color(1, 1, 1));
-        this.scene.add(light);
+        this.geometryScene.add(light);
 
         const materialReplacement: { [key: string]: THREE.Material } = {
             // "Material.001": new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.5, 0.5) }),
-            "Material.001": this.shader,
-            "Material.002": this.shader,
+            "Material.001": this.geometryMaterial,
+            "Material.002": this.geometryMaterial,
         };
 
         let objectId = 1;       // reserve 0 for no object
@@ -249,7 +277,7 @@ class Scene {
 
             objLoader.load('/dev-site-misc/solid/solid.obj', (object: THREE.Object3D) => {
                 object.position.set(0, 0, 0);
-                this.scene.add(object);
+                this.geometryScene.add(object);
                 object.traverse((childObj: THREE.Object3D) => {
                     if (isMesh(childObj)) {
                         const mat = childObj.material;
@@ -259,40 +287,75 @@ class Scene {
                             childObj.material = materialReplacement[mat.name];
                     }
                 });
-                this.object = object;
+                this.geometryObject = object;
             });
         });
 
         // this.scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI/2.0);   // just for camera angles
 
         // const cGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1);
-        // this.cylinder = new THREE.Mesh(cGeometry, this.shader);
+        // this.cylinder = new THREE.Mesh(cGeometry, this.geometryMaterial);
         // this.scene.add(this.cylinder);
 
 
-        this.postScene = new THREE.Scene();
-        this.postShader = new THREE.ShaderMaterial({
+        this.solidScene = new THREE.Scene();
+        this.solidMaterial = new THREE.ShaderMaterial({
             uniforms: {
-                resolution: { value: null },
+                resolution: { value: new THREE.Vector2() },
                 cameraPos: { value: new THREE.Vector3() },
+                vpMat: { value: null },
                 invVpMat: { value: null },
                 time: { value: null },
-                texB: { value: null },
-                texF: { value: null },
-                texR: { value: null },
-                debug1: { value: this.shader.uniforms.debug1.value },
-                debug2: { value: this.shader.uniforms.debug2.value },
-                debug3: { value: this.shader.uniforms.debug3.value },
-                debug4: { value: this.shader.uniforms.debug4.value },
+                backTex: { value: null },
+                frontTex: { value: null },
+                // regularTex: { value: null },
+                debug1: { value: this.geometryMaterial.uniforms.debug1.value },
+                debug2: { value: this.geometryMaterial.uniforms.debug2.value },
+                debug3: { value: this.geometryMaterial.uniforms.debug3.value },
+                debug4: { value: this.geometryMaterial.uniforms.debug4.value },
             },
             vertexShader: vs,
-            fragmentShader: sCommon + '\n' + fsPost,
+            fragmentShader: sCommon + '\n' + sDummyTex + '\n' + fsSolid,
             depthWrite: true,
             depthTest: true,
         });
-        const geometry = new THREE.PlaneGeometry(2, 2);
-        let mesh = new THREE.Mesh(geometry, this.postShader);
-        this.postScene.add(mesh);
+        const solidMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.solidMaterial);
+        this.solidScene.add(solidMesh);
+
+        this.compositeScene = new THREE.Scene();
+        this.compositeMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                resolution: { value: new THREE.Vector2() },
+                cameraPos: { value: new THREE.Vector3() },
+                vpMat: { value: null },
+                invVpMat: { value: null },
+                time: { value: null },
+                opaqueDepthTex: { value: null },
+                opaqueColorTex: { value: null },
+                frontTex: { value: null },
+                regularTex: { value: null },
+                debug1: { value: this.geometryMaterial.uniforms.debug1.value },
+                debug2: { value: this.geometryMaterial.uniforms.debug2.value },
+                debug3: { value: this.geometryMaterial.uniforms.debug3.value },
+                debug4: { value: this.geometryMaterial.uniforms.debug4.value },
+            },
+            vertexShader: vs,
+            fragmentShader: sCommon + '\n' + sDummyTex + '\n' + fsComposite,
+            depthWrite: false,
+            depthTest: false,
+        });
+        const compositeMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.compositeMaterial);
+        this.compositeScene.add(compositeMesh);
+
+        this.overlayScene = new THREE.Scene();
+        const normalMaterial = new THREE.MeshNormalMaterial();
+        const knotGeo = new THREE.TorusKnotGeometry(0.6, 0.2, 100, 16, 3, 2);
+        const knotMesh = new THREE.Mesh(knotGeo, normalMaterial);
+        knotMesh.position.x = -1.5;
+        const torusGeo = new THREE.TorusGeometry(0.6, 0.2, 16, 100);
+        const torusMesh = new THREE.Mesh(torusGeo, normalMaterial);
+        torusMesh.position.x = 1.5;
+        this.overlayScene.add(knotMesh, torusMesh);
     }
 
     getResolution() {
@@ -316,47 +379,64 @@ class Scene {
     }
 
     render() {
-        if (!this.lastTime || !this.renderTargetB || !this.renderTargetF || !this.renderTargetR)
+        if (!this.lastTime || !this.geometryBackRT || !this.geometryFrontRT || !this.geometryRegularRT || !this.opaqueRT)
             return;
         // this.controls.update();
         const t = this.lastTime * 0.002;
         // this.cylinder.setRotationFromEuler(new THREE.Euler(t, 2.0*t, 3.0*t));
 
-        this.shader.uniforms.cameraPos.value.copy(this.camera.position);
-        this.postShader.uniforms.cameraPos.value.copy(this.camera.position);
-        this.shader.uniforms.time.value = t;
-        this.postShader.uniforms.time.value = t;
+        this.geometryMaterial.uniforms.cameraPos.value.copy(this.mainCamera.position);
+        this.solidMaterial.uniforms.cameraPos.value.copy(this.mainCamera.position);
+        this.geometryMaterial.uniforms.time.value = t;
+        this.solidMaterial.uniforms.time.value = t;
 
-        // backside rendering with clipping
-        this.renderer.setRenderTarget(this.renderTargetB);  // activate backside target
+        // view-projection matrix and its inverse for mainCamera
+        const vpMat = this.mainCamera.projectionMatrix.clone().multiply(this.mainCamera.matrixWorldInverse);
+        const invVpMat = this.mainCamera.matrixWorld.clone().multiply(this.mainCamera.projectionMatrixInverse);
+
+        // backside rendering with geometryScene
+        this.renderer.setRenderTarget(this.geometryBackRT);  // activate backside target
         this.renderer.clear();
-        this.shader.side = THREE.BackSide;
-        this.shader.uniforms.phase.value = 0;
-        this.renderer.render(this.scene, this.camera);
+        this.geometryMaterial.side = THREE.BackSide;
+        this.geometryMaterial.uniforms.phase.value = 0;
+        this.renderer.render(this.geometryScene, this.mainCamera);
 
-        // frontside rendering with clipping
-        this.renderer.setRenderTarget(this.renderTargetF);  // activate frontside target
+        // frontside rendering with geometryScene
+        this.renderer.setRenderTarget(this.geometryFrontRT);  // activate frontside target
         this.renderer.clear();
-        this.shader.side = THREE.FrontSide;
-        this.shader.uniforms.phase.value = 1;
-        this.renderer.render(this.scene, this.camera);
+        this.geometryMaterial.side = THREE.FrontSide;
+        this.geometryMaterial.uniforms.phase.value = 1;
+        this.renderer.render(this.geometryScene, this.mainCamera);
 
-        // regular rendering with no clipping
-        this.renderer.setRenderTarget(this.renderTargetR);  // activate regular target
+        // regular rendering with geometryScene
+        this.renderer.setRenderTarget(this.geometryRegularRT);  // activate regular target
         this.renderer.clear();
-        this.shader.side = THREE.FrontSide;
-        this.shader.uniforms.phase.value = 2;
-        this.renderer.render(this.scene, this.camera);
+        this.geometryMaterial.side = THREE.FrontSide;
+        this.geometryMaterial.uniforms.phase.value = 2;
+        this.renderer.render(this.geometryScene, this.mainCamera);
 
-        // post render
+        // Rendering the clipped scene into opaqueRT
+        this.renderer.setRenderTarget(this.opaqueRT);                // activate opaqueRT
+        this.renderer.clear();
+        this.solidMaterial.uniforms.backTex.value = this.geometryBackRT.texture;
+        this.solidMaterial.uniforms.frontTex.value = this.geometryFrontRT.texture;
+        this.solidMaterial.uniforms.vpMat.value = vpMat;
+        this.solidMaterial.uniforms.invVpMat.value = invVpMat;
+        this.renderer.render(this.solidScene, this.quadCamera);
+
+        // Rendering overlayScene into opaqueRT
+        this.renderer.setRenderTarget(this.opaqueRT);                // activate opaqueRT
+        this.renderer.render(this.overlayScene, this.mainCamera);
+
+        // Post-processing: composite opaqueRT and geometryRegularRT into final image on screen
         this.renderer.setRenderTarget(null);                // activate screen as target
-        this.shader.side = THREE.FrontSide;
-        this.postShader.uniforms.texB.value = this.renderTargetB.textures[0];
-        this.postShader.uniforms.texF.value = this.renderTargetF.textures[0];
-        this.postShader.uniforms.texR.value = this.renderTargetR.textures[0];
-        const invMat = this.camera.matrixWorld.clone().multiply(this.camera.projectionMatrixInverse);
-        this.postShader.uniforms.invVpMat.value = invMat;
-        this.renderer.render(this.postScene, this.postCamera);
+        this.compositeMaterial.uniforms.opaqueDepthTex.value = this.opaqueRT.depthTexture;
+        this.compositeMaterial.uniforms.opaqueColorTex.value = this.opaqueRT.texture;
+        this.compositeMaterial.uniforms.frontTex.value = this.geometryFrontRT.texture;
+        this.compositeMaterial.uniforms.regularTex.value = this.geometryRegularRT.texture;
+        this.compositeMaterial.uniforms.vpMat.value = vpMat;
+        this.compositeMaterial.uniforms.invVpMat.value = invVpMat;
+        this.renderer.render(this.compositeScene, this.quadCamera);
     }
 }
 
