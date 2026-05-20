@@ -18,17 +18,6 @@ in vec4 vPos;
 in vec2 vUv;
 in mat4 pvmMat;
 
-
-// Returns t such that (1-t)*cameraPos+t*v is on the plane
-// float cutDistance(vec3 v, vec4 plane) {
-//     // plane.xyz . ((1-t)*cameraPos + t*v) + plane.w = 0
-//     float a = dot(plane.xyz, cameraPos);
-//     float b = dot(plane.xyz, v);
-//     // (1-t)*a + t*b + plane.w = 0
-//     // t = -(a + plane.w) / (b - a)
-//     return -(a + plane.w) / (b - a);
-// }
-
 void main() {
     vec4 plane = vec4(cos(time), 0.0, sin(time), 0.25);
     vec3 v = vPos.xyz;

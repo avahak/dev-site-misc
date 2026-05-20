@@ -33,12 +33,13 @@ void main() {
     int bObjectId = int(round(bTexColor.g * 1024.0));
     int fObjectId = int(round(fTexColor.g * 1024.0));
 
-    int nullify = ((fObjectId > 0) && (fDepth < bDepth-EP)) ? 1 : 0;
-    // TODO FIX
-    // EP=0 here -> z-fighting when two objects close to each other
-    // EP=1e-5 here -> at corners where fDepth and bDepth are closer than EP 
+    // EP=0 below -> z-fighting when two objects close to each other
+    // EP=1e-5 below -> near edges where |fDepth-bDepth| < EP 
     //     we get nullify=0 but correct value 1 -> we jump to plane that has 
     //     nothing to do with it -> we use plane z that is completely wrong -> artifacts
+    // Possible fix: use EP=0 when the objects are the same but EP=1e-5 if they are different:
+    float ep = (fObjectId == bObjectId) ? 0.0 : EP;
+    int nullify = ((fObjectId > 0) && (fDepth < bDepth-ep)) ? 1 : 0;
 
     vec4 fClip = vec4(vUv.x, vUv.y, fDepth, 1.0);
     vec3 fNdc = 2.0*fClip.xyz - 1.0;
@@ -48,7 +49,8 @@ void main() {
     float depth = fDepth;
     vec3 color = fColor;
 
-    if (nullify == 0 && bObjectId > 0) {
+    int clipping = (nullify == 0 && bObjectId > 0) ? 1 : 0;
+    if (clipping == 1) {
         // Find a point q on the viewing ray in world space
         vec4 qh = invVpMat*vec4(fNdc, 1.0);
         vec3 q = qh.xyz / qh.w;
@@ -64,6 +66,6 @@ void main() {
         color = solid_compound(p, bObjectId);
     }
 
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(color, float(clipping));        // store clipping in alpha-channel
     gl_FragDepth = (fObjectId > 0 || bObjectId > 0) ? depth : 1.0; // assigning depth here so we recover a correctly z-buffered scene
 }

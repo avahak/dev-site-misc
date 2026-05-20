@@ -1,4 +1,4 @@
-// Code for placeholder solid textures
+// Code for placeholder solid textures, mostly AI generated
 
 /**
  * Solid base texture: returns a color from one of 10 hard-edged patterns.

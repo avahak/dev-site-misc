@@ -1,5 +1,8 @@
 /**
  * Rendering test with clipping solid objects.
+ * TODO
+ * - Rebuild shadows without using three.js lights
+ * - Change plane to more general clipping function
  */
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
@@ -12,6 +15,18 @@ import fsSolid from './shaders/fsSolid.glsl?raw';
 import fsComposite from './shaders/fsComposite.glsl?raw';
 import sCommon from './shaders/sCommon.glsl?raw';
 import sDummyTex from './shaders/sDummyTex.glsl?raw';
+
+const NUM_LIGHTS = 4;
+const SHADOW_MAP_SIZE = 1024;
+
+const setShadow = (object: THREE.Object3D, castShadow: boolean, receiveShadow: boolean) => {
+    object.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+            child.castShadow = castShadow;
+            child.receiveShadow = receiveShadow;
+        }
+    });
+};
 
 function isMesh(object: THREE.Object3D): object is THREE.Mesh {
     return (object as THREE.Mesh).isMesh === true;
@@ -46,6 +61,8 @@ class Scene {
 
     compositeScene!: THREE.Scene;
     compositeMaterial!: THREE.ShaderMaterial;
+
+    lights: THREE.SpotLight[] = [];         // lights with shadows
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -156,9 +173,24 @@ class Scene {
         const toggleStop = () => {
             this.isStopped = !this.isStopped;
         };
+        const debugInfo = () => {
+            const cam = this.lights[0].shadow.camera;
+            console.log("A", this.lights[0].shadow.matrix.elements);
+
+            const mAux = new THREE.Matrix4();
+            mAux.set(
+                0.5, 0.0, 0.0, 0.5,
+                0.0, 0.5, 0.0, 0.5,
+                0.0, 0.0, 0.5, 0.5,
+                0.0, 0.0, 0.0, 1.0
+            );
+            const m3 = mAux.multiply(cam.projectionMatrix.clone().multiply(cam.matrixWorldInverse));
+            console.log("B", m3.elements);
+        };
         const myObject = {
             animateButton,
             toggleStop,
+            debugInfo,
             debug1: 1.0,
             debug2: 1.0,
             debug3: this.geometryMaterial.uniforms.debug3.value,
@@ -166,6 +198,7 @@ class Scene {
         };
         this.gui.add(myObject, 'animateButton').name("Animate step");
         this.gui.add(myObject, 'toggleStop').name("Toggle stop/play");
+        this.gui.add(myObject, 'debugInfo').name("Debug info");
         this.gui.add(myObject, 'debug1', 0.1, 2.0)
             .name('Debug1 (H)')
             .onChange((h: number) => {
@@ -256,14 +289,32 @@ class Scene {
             this.geometryMaterial.uniformsNeedUpdate = true;  // See https://github.com/mrdoob/three.js/issues/9870
         };
 
-        const light = new THREE.AmbientLight(new THREE.Color(1, 1, 1));
-        this.geometryScene.add(light);
+        // Add lights
+        const ambientLight = new THREE.AmbientLight(new THREE.Color(1, 1, 1));
+        this.geometryScene.add(ambientLight);
+        for (let k = 0; k < NUM_LIGHTS; k++) {
+            const light = new THREE.SpotLight(0xffffff, 1, 20, Math.PI / 8);
+            light.position.set(10 * (Math.random() - 0.5), 10, 10 * (Math.random() - 0.5));
+            light.castShadow = true;
+            light.shadow.camera.near = 1.0;
+            light.shadow.camera.far = 20.0;
+            light.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+            light.shadow.autoUpdate = true;
+            light.target.position.set(0, 0, 0);
+            this.geometryScene.add(light, light.target);
+            this.lights.push(light);
+        }
 
         const materialReplacement: { [key: string]: THREE.Material } = {
             // "Material.001": new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.5, 0.5) }),
             "Material.001": this.geometryMaterial,
             "Material.002": this.geometryMaterial,
         };
+
+        const depthMaterial = new THREE.MeshDepthMaterial({
+            depthPacking: THREE.RGBADepthPacking,
+            side: THREE.BackSide,
+        });
 
         let objectId = 1;       // reserve 0 for no object
 
@@ -285,18 +336,16 @@ class Scene {
                         // console.log(childObj.name, (!Array.isArray(childObj.material) && (childObj.material.name in materialReplacement)));
                         if (!Array.isArray(mat) && (mat.name in materialReplacement))
                             childObj.material = materialReplacement[mat.name];
+
+                        childObj.customDepthMaterial = depthMaterial;
                     }
                 });
                 this.geometryObject = object;
+                setShadow(this.geometryObject, true, true);
             });
         });
 
         // this.scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI/2.0);   // just for camera angles
-
-        // const cGeometry = new THREE.CylinderGeometry(0.5, 0.5, 1);
-        // this.cylinder = new THREE.Mesh(cGeometry, this.geometryMaterial);
-        // this.scene.add(this.cylinder);
-
 
         this.solidScene = new THREE.Scene();
         this.solidMaterial = new THREE.ShaderMaterial({
@@ -334,6 +383,12 @@ class Scene {
                 opaqueColorTex: { value: null },
                 frontTex: { value: null },
                 regularTex: { value: null },
+
+                numLights: { value: NUM_LIGHTS },
+                shadowMapSize: { value: SHADOW_MAP_SIZE },
+                shadowMaps: { value: this.lights.map((light) => light.shadow.map) },
+                shadowMatrices: { value: this.lights.map((light) => light.shadow.matrix) },
+
                 debug1: { value: this.geometryMaterial.uniforms.debug1.value },
                 debug2: { value: this.geometryMaterial.uniforms.debug2.value },
                 debug3: { value: this.geometryMaterial.uniforms.debug3.value },
@@ -343,6 +398,7 @@ class Scene {
             fragmentShader: sCommon + '\n' + sDummyTex + '\n' + fsComposite,
             depthWrite: false,
             depthTest: false,
+            // glslVersion: THREE.GLSL3,
         });
         const compositeMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.compositeMaterial);
         this.compositeScene.add(compositeMesh);
@@ -356,6 +412,13 @@ class Scene {
         const torusMesh = new THREE.Mesh(torusGeo, normalMaterial);
         torusMesh.position.x = 1.5;
         this.overlayScene.add(knotMesh, torusMesh);
+        for (const light of this.lights) {
+            const spotLightHelper = new THREE.SpotLightHelper(light);
+            spotLightHelper.update();
+            this.overlayScene.add(spotLightHelper);
+        }
+
+        console.log("shadowMatrices", this.compositeMaterial.uniforms.shadowMatrices);
     }
 
     getResolution() {
@@ -381,25 +444,34 @@ class Scene {
     render() {
         if (!this.lastTime || !this.geometryBackRT || !this.geometryFrontRT || !this.geometryRegularRT || !this.opaqueRT)
             return;
-        // this.controls.update();
         const t = this.lastTime * 0.002;
-        // this.cylinder.setRotationFromEuler(new THREE.Euler(t, 2.0*t, 3.0*t));
+        // this.overlayScene.setRotationFromEuler(new THREE.Euler(t, 2.0 * t, 3.0 * t));
 
         this.geometryMaterial.uniforms.cameraPos.value.copy(this.mainCamera.position);
         this.solidMaterial.uniforms.cameraPos.value.copy(this.mainCamera.position);
         this.geometryMaterial.uniforms.time.value = t;
         this.solidMaterial.uniforms.time.value = t;
+        this.compositeMaterial.uniforms.time.value = t;
 
         // view-projection matrix and its inverse for mainCamera
+        this.mainCamera.updateMatrixWorld();        // TODO remove after debug
+        this.mainCamera.updateMatrix();
         const vpMat = this.mainCamera.projectionMatrix.clone().multiply(this.mainCamera.matrixWorldInverse);
         const invVpMat = this.mainCamera.matrixWorld.clone().multiply(this.mainCamera.projectionMatrixInverse);
 
-        // backside rendering with geometryScene
+        // backside rendering with geometryScene + shadows
+        this.renderer.shadowMap.enabled = true;
+        // this.renderer.shadowMap.type = THREE.BasicShadowMap;
+        for (const light of this.lights)
+            light.shadow.autoUpdate = true;
         this.renderer.setRenderTarget(this.geometryBackRT);  // activate backside target
         this.renderer.clear();
         this.geometryMaterial.side = THREE.BackSide;
         this.geometryMaterial.uniforms.phase.value = 0;
         this.renderer.render(this.geometryScene, this.mainCamera);
+        for (const light of this.lights)
+            light.shadow.autoUpdate = false;
+        this.renderer.shadowMap.enabled = false;
 
         // frontside rendering with geometryScene
         this.renderer.setRenderTarget(this.geometryFrontRT);  // activate frontside target
@@ -436,6 +508,12 @@ class Scene {
         this.compositeMaterial.uniforms.regularTex.value = this.geometryRegularRT.texture;
         this.compositeMaterial.uniforms.vpMat.value = vpMat;
         this.compositeMaterial.uniforms.invVpMat.value = invVpMat;
+        for (let k = 0; k < NUM_LIGHTS; k++) {
+            // this.lights[k].shadow.camera.updateMatrixWorld();
+            // this.lights[k].shadow.camera.updateProjectionMatrix();
+            this.compositeMaterial.uniforms.shadowMaps.value[k] = this.lights[k].shadow.map?.texture;
+            this.compositeMaterial.uniforms.shadowMatrices.value[k] = this.lights[k].shadow.matrix;
+        }
         this.renderer.render(this.compositeScene, this.quadCamera);
     }
 }
