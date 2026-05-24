@@ -1,3 +1,6 @@
+#include <sCommon>
+#include <sSolidTex>
+
 uniform vec2 resolution;
 uniform vec3 cameraPos;
 uniform mat4 vpMat;         // view-projection matrix of the main camera

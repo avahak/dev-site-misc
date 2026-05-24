@@ -1,3 +1,6 @@
+#include <sCommon>
+#include <sSolidTex>
+
 uniform vec2 resolution;
 uniform vec3 cameraPos;
 uniform mat4 vpMat;         // view-projection matrix of the main camera
@@ -5,7 +8,6 @@ uniform mat4 invVpMat;      // inverse of vpMap
 uniform float time;
 uniform sampler2D opaqueDepthTex;
 uniform sampler2D opaqueColorTex;
-uniform sampler2D frontTex;
 uniform sampler2D regularTex;
 
 #define MAX_LIGHTS 4
@@ -76,28 +78,23 @@ vec3 worldPosition(float depth) {
 
 
 void main() {
-    vec4 plane = vec4(cos(time), 0.0, sin(time), 0.25);
-
-    vec2 fTexColor = texture(frontTex, vUv).rg;
     vec2 rTexColor = texture(regularTex, vUv).rg;
     float opaqueDepth = texture(opaqueDepthTex, vUv).r;
     vec4 opaqueColor4 = texture(opaqueColorTex, vUv);
     vec3 opaqueColor = opaqueColor4.rgb;
     int clipping = (opaqueColor4.a > 0.5) ? 1 : 0;
 
-    float fDepth = fTexColor.r;
     float rDepth = rTexColor.r;
-    int fObjectId = int(round(fTexColor.g * 1024.0));
     int rObjectId = int(round(rTexColor.g * 1024.0));
 
     vec3 op = worldPosition(opaqueDepth);
     float oShadow = computeShadows(op);
-    if (clipping == 0)
-        opaqueColor *= oShadow;     // no shadows when clipping
+    opaqueColor *= (clipping == 1) ? 1.0 : oShadow;     // no shadows when clipping
 
     vec3 color = opaqueColor;
 
-    if (((rDepth < fDepth-EP) || (fObjectId == 0)) && (rObjectId > 0) && (rDepth < opaqueDepth-EP)) {
+    if ((rObjectId > 0) && (rDepth < opaqueDepth)) {
+        // Add regular objects in front of clipping plane semitransparently
         vec3 rp = worldPosition(rDepth);
         float rShadow = computeShadows(rp);
         vec3 rColor = solid_compound(rp, rObjectId) * rShadow;

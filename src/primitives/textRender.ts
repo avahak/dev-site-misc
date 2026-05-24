@@ -25,7 +25,7 @@ class TextGroup {
     data: Float32Array;
     numChars!: number;
 
-    constructor(font: MCSDFFont) {
+    constructor(font: MCSDFFont, alphaLimit?: number) {
         this.font = font;
 
         this.shader = new THREE.ShaderMaterial({
@@ -36,6 +36,7 @@ class TextGroup {
                 numChars: { value: null },
                 useFisheye: { value: 0 },
                 focalLength: { value: 0.5 },
+                alphaLimit: { value: alphaLimit ?? 0.2 },
             },
             vertexShader: vsText,
             fragmentShader: fsText,

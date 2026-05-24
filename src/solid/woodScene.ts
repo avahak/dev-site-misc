@@ -16,8 +16,8 @@ class Scene {
     renderer: THREE.WebGLRenderer;
     controls!: OrbitControls;
     cleanUpTasks: (() => void)[];
-    animationRequestID: number|null = null;
-    lastTime: number|null = null;
+    animationRequestID: number | null = null;
+    lastTime: number | null = null;
     gui: any;
     isStopped: boolean = false;
 
@@ -38,7 +38,7 @@ class Scene {
         this.setupResizeRenderer();
         this.createGUI();
 
-        this.cleanUpTasks.push(() => { 
+        this.cleanUpTasks.push(() => {
             if (this.animationRequestID)
                 cancelAnimationFrame(this.animationRequestID);
         });
@@ -81,7 +81,7 @@ class Scene {
         this.gui.domElement.style.right = '0px';
 
         const animateButton = () => this.animateStep();
-        const toggleStop = () => { 
+        const toggleStop = () => {
             this.isStopped = !this.isStopped;
         };
         const myObject = {
@@ -89,7 +89,7 @@ class Scene {
             toggleStop,
             radius: 1,
             height: 2,
-            debug1: 1.0, 
+            debug1: 1.0,
             debug2: 1.0,
             debug3: 1.0,
             debug4: 1.0,
@@ -153,7 +153,7 @@ class Scene {
         if (this.cylinder)
             this.scene.remove(this.cylinder);
         const cGeometry = new THREE.CylinderGeometry(r, r, h);
-        cGeometry.rotateX(Math.PI/2);
+        cGeometry.rotateX(Math.PI / 2);
         this.cylinder = new THREE.Mesh(cGeometry, this.shader);
         this.scene.add(this.cylinder);
         this.render();
@@ -210,7 +210,7 @@ class Scene {
     render() {
         if (!this.lastTime)
             return;
-        const t = this.lastTime*0.002;
+        const t = this.lastTime * 0.002;
         // this.cylinder.setRotationFromEuler(new THREE.Euler(t, 2.0*t, 3.0*t));
         this.renderer.render(this.scene, this.camera);
     }

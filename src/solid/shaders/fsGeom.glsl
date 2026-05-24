@@ -4,6 +4,8 @@
 // layout(location = 0) out vec4 gOne;
 // layout(location = 0) out vec4 gTwo;
 
+#include <sCommon>
+
 uniform vec2 resolution;
 uniform vec3 cameraPos;
 uniform float time;

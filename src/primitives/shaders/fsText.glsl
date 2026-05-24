@@ -3,6 +3,7 @@ precision highp float;
 uniform int numChars;
 uniform sampler2D atlasTexture;
 uniform vec2 unitRange;
+uniform float alphaLimit;
 
 in vec2 atlasCoords;
 in vec3 color;
@@ -20,7 +21,7 @@ void main() {
     float alpha = clamp(screenPxDistance + 0.5, 0.0, 1.0);
 
     // Opacity does not work correctly but no easy solution
-    if (alpha > 0.2) {
+    if (alpha >= alphaLimit) {
         gl_FragColor = vec4(color, alpha);
     } else {
         discard;

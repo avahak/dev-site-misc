@@ -9,12 +9,14 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
-import vs from './shaders/vs.glsl?raw';
-import fsGeom from './shaders/fsGeom.glsl?raw';
-import fsSolid from './shaders/fsSolid.glsl?raw';
-import fsComposite from './shaders/fsComposite.glsl?raw';
-import sCommon from './shaders/sCommon.glsl?raw';
-import sDummyTex from './shaders/sDummyTex.glsl?raw';
+import { TextGroup } from '../primitives/textRender';
+import { MCSDFFont } from '../primitives/font';
+import { importShaders, resolveShaderChunk } from './shaderImport';
+const shaderChunks = importShaders(import.meta.glob(['./shaders/*.glsl'], {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+}));
 
 const NUM_LIGHTS = 4;
 const SHADOW_MAP_SIZE = 1024;
@@ -52,8 +54,8 @@ class Scene {
     geometryFrontRT: THREE.WebGLRenderTarget | null = null;   // for clipped frontsides
     geometryRegularRT: THREE.WebGLRenderTarget | null = null;   // for nonclipped rendering, used for semitransparency
 
-    solidScene!: THREE.Scene;
-    solidMaterial!: THREE.ShaderMaterial;
+    clipScene!: THREE.Scene;
+    clipMaterial!: THREE.ShaderMaterial;
 
     opaqueRT: THREE.WebGLRenderTarget | null = null;   // for rendering all opaque objects
 
@@ -64,6 +66,8 @@ class Scene {
 
     lights: THREE.SpotLight[] = [];         // lights with shadows
 
+    font!: MCSDFFont;
+
     constructor(container: HTMLDivElement) {
         this.container = container;
         this.cleanUpTasks = [];
@@ -73,6 +77,12 @@ class Scene {
         container.appendChild(this.renderer.domElement);
 
         // this.renderer.getContext().getExtension('EXT_float_blend');
+        this.init();
+    }
+
+    async init() {
+        this.font = new MCSDFFont();
+        await this.font.load('times64');
 
         this.setupCamera();
         this.setupScene();
@@ -101,7 +111,7 @@ class Scene {
         const res = new THREE.Vector2();
         this.renderer.getDrawingBufferSize(res);
         this.renderer.getDrawingBufferSize(this.geometryMaterial.uniforms.resolution.value);
-        this.renderer.getDrawingBufferSize(this.solidMaterial.uniforms.resolution.value);
+        this.renderer.getDrawingBufferSize(this.clipMaterial.uniforms.resolution.value);
         this.renderer.getDrawingBufferSize(this.compositeMaterial.uniforms.resolution.value);
         this.geometryBackRT?.setSize(res.x, res.y);
         this.geometryFrontRT?.setSize(res.x, res.y);
@@ -203,28 +213,28 @@ class Scene {
             .name('Debug1 (H)')
             .onChange((h: number) => {
                 this.geometryMaterial.uniforms.debug1.value = h;
-                this.solidMaterial.uniforms.debug1.value = h;
+                this.clipMaterial.uniforms.debug1.value = h;
                 this.compositeMaterial.uniforms.debug1.value = h;
             });
         this.gui.add(myObject, 'debug2', 0.1, 6.0)
             .name('Debug2 (WARP*10)')
             .onChange((h: number) => {
                 this.geometryMaterial.uniforms.debug2.value = h;
-                this.solidMaterial.uniforms.debug2.value = h;
+                this.clipMaterial.uniforms.debug2.value = h;
                 this.compositeMaterial.uniforms.debug2.value = h;
             });
         this.gui.add(myObject, 'debug3', 0.0, 1.0)
             .name('Debug3 (-)')
             .onChange((h: number) => {
                 this.geometryMaterial.uniforms.debug3.value = h;
-                this.solidMaterial.uniforms.debug3.value = h;
+                this.clipMaterial.uniforms.debug3.value = h;
                 this.compositeMaterial.uniforms.debug3.value = h;
             });
         this.gui.add(myObject, 'debug4', 0.1, 2.0)
             .name('Debug4 (-)')
             .onChange((h: number) => {
                 this.geometryMaterial.uniforms.debug4.value = h;
-                this.solidMaterial.uniforms.debug4.value = h;
+                this.clipMaterial.uniforms.debug4.value = h;
                 this.compositeMaterial.uniforms.debug4.value = h;
             });
         this.gui.close();
@@ -277,8 +287,8 @@ class Scene {
                 debug3: { value: 0.8 },
                 debug4: { value: 1.0 },
             },
-            vertexShader: vs,
-            fragmentShader: sCommon + '\n' + fsGeom,
+            vertexShader: resolveShaderChunk("vs", shaderChunks),
+            fragmentShader: resolveShaderChunk("fsGeom", shaderChunks),
             depthWrite: true,
             depthTest: true,
             // glslVersion: THREE.GLSL3
@@ -347,8 +357,8 @@ class Scene {
 
         // this.scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI/2.0);   // just for camera angles
 
-        this.solidScene = new THREE.Scene();
-        this.solidMaterial = new THREE.ShaderMaterial({
+        this.clipScene = new THREE.Scene();
+        this.clipMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 resolution: { value: new THREE.Vector2() },
                 cameraPos: { value: new THREE.Vector3() },
@@ -363,13 +373,13 @@ class Scene {
                 debug3: { value: this.geometryMaterial.uniforms.debug3.value },
                 debug4: { value: this.geometryMaterial.uniforms.debug4.value },
             },
-            vertexShader: vs,
-            fragmentShader: sCommon + '\n' + sDummyTex + '\n' + fsSolid,
+            vertexShader: resolveShaderChunk("vs", shaderChunks),
+            fragmentShader: resolveShaderChunk("fsClip", shaderChunks),
             depthWrite: true,
             depthTest: true,
         });
-        const solidMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.solidMaterial);
-        this.solidScene.add(solidMesh);
+        const solidMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.clipMaterial);
+        this.clipScene.add(solidMesh);
 
         this.compositeScene = new THREE.Scene();
         this.compositeMaterial = new THREE.ShaderMaterial({
@@ -381,7 +391,6 @@ class Scene {
                 time: { value: null },
                 opaqueDepthTex: { value: null },
                 opaqueColorTex: { value: null },
-                frontTex: { value: null },
                 regularTex: { value: null },
 
                 numLights: { value: NUM_LIGHTS },
@@ -394,8 +403,8 @@ class Scene {
                 debug3: { value: this.geometryMaterial.uniforms.debug3.value },
                 debug4: { value: this.geometryMaterial.uniforms.debug4.value },
             },
-            vertexShader: vs,
-            fragmentShader: sCommon + '\n' + sDummyTex + '\n' + fsComposite,
+            vertexShader: resolveShaderChunk("vs", shaderChunks),
+            fragmentShader: resolveShaderChunk("fsComposite", shaderChunks),
             depthWrite: false,
             depthTest: false,
             // glslVersion: THREE.GLSL3,
@@ -417,6 +426,17 @@ class Scene {
             spotLightHelper.update();
             this.overlayScene.add(spotLightHelper);
         }
+        const textGroup = new TextGroup(this.font, 0.5);    // problem with alpha-blending here
+        for (let k = 0; k < 20; k++) {
+            const p = [5.0 * (Math.random() - 0.5), 2.0 * Math.random(), 5.0 * (Math.random() - 0.5)];
+            const phi = Math.random() * 2.0 * Math.PI;
+            const size = 0.1 + 0.1 * Math.random();
+            const v = [Math.cos(phi), 0.0, Math.sin(phi)];
+            const pos = (x: number, y: number) => [p[0] + size * x * v[0], p[1] + size * y, p[2] + size * x * v[2]];
+            const col = [0.5 + Math.random() * 0.5, 0.5 + Math.random() * 0.5, 0.5 + Math.random() * 0.5];
+            textGroup.addText(`Test_${Math.random()}`, pos, col, [0, 0], 0.1 + 0.1 * Math.random());
+        }
+        this.overlayScene.add(textGroup.getObject());
 
         console.log("shadowMatrices", this.compositeMaterial.uniforms.shadowMatrices);
     }
@@ -448,14 +468,13 @@ class Scene {
         // this.overlayScene.setRotationFromEuler(new THREE.Euler(t, 2.0 * t, 3.0 * t));
 
         this.geometryMaterial.uniforms.cameraPos.value.copy(this.mainCamera.position);
-        this.solidMaterial.uniforms.cameraPos.value.copy(this.mainCamera.position);
+        this.clipMaterial.uniforms.cameraPos.value.copy(this.mainCamera.position);
+        this.compositeMaterial.uniforms.cameraPos.value.copy(this.mainCamera.position);
         this.geometryMaterial.uniforms.time.value = t;
-        this.solidMaterial.uniforms.time.value = t;
+        this.clipMaterial.uniforms.time.value = t;
         this.compositeMaterial.uniforms.time.value = t;
 
         // view-projection matrix and its inverse for mainCamera
-        this.mainCamera.updateMatrixWorld();        // TODO remove after debug
-        this.mainCamera.updateMatrix();
         const vpMat = this.mainCamera.projectionMatrix.clone().multiply(this.mainCamera.matrixWorldInverse);
         const invVpMat = this.mainCamera.matrixWorld.clone().multiply(this.mainCamera.projectionMatrixInverse);
 
@@ -490,11 +509,11 @@ class Scene {
         // Rendering the clipped scene into opaqueRT
         this.renderer.setRenderTarget(this.opaqueRT);                // activate opaqueRT
         this.renderer.clear();
-        this.solidMaterial.uniforms.backTex.value = this.geometryBackRT.texture;
-        this.solidMaterial.uniforms.frontTex.value = this.geometryFrontRT.texture;
-        this.solidMaterial.uniforms.vpMat.value = vpMat;
-        this.solidMaterial.uniforms.invVpMat.value = invVpMat;
-        this.renderer.render(this.solidScene, this.quadCamera);
+        this.clipMaterial.uniforms.backTex.value = this.geometryBackRT.texture;
+        this.clipMaterial.uniforms.frontTex.value = this.geometryFrontRT.texture;
+        this.clipMaterial.uniforms.vpMat.value = vpMat;
+        this.clipMaterial.uniforms.invVpMat.value = invVpMat;
+        this.renderer.render(this.clipScene, this.quadCamera);
 
         // Rendering overlayScene into opaqueRT
         this.renderer.setRenderTarget(this.opaqueRT);                // activate opaqueRT
@@ -504,7 +523,6 @@ class Scene {
         this.renderer.setRenderTarget(null);                // activate screen as target
         this.compositeMaterial.uniforms.opaqueDepthTex.value = this.opaqueRT.depthTexture;
         this.compositeMaterial.uniforms.opaqueColorTex.value = this.opaqueRT.texture;
-        this.compositeMaterial.uniforms.frontTex.value = this.geometryFrontRT.texture;
         this.compositeMaterial.uniforms.regularTex.value = this.geometryRegularRT.texture;
         this.compositeMaterial.uniforms.vpMat.value = vpMat;
         this.compositeMaterial.uniforms.invVpMat.value = invVpMat;
