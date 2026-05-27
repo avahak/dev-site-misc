@@ -71,7 +71,7 @@ float computeShadows(vec3 worldPos) {
 }
 
 vec3 worldPosition(float depth) {
-    vec3 ndc = 2.0*vec3(vUv.x, vUv.y, depth) - 1.0;
+    vec3 ndc = 2.0*vec3(gl_FragCoord.xy/resolution, depth) - 1.0;
     vec4 ph = invVpMat * vec4(ndc, 1.0);
     return ph.xyz / ph.w;
 }
@@ -94,7 +94,7 @@ void main() {
     vec3 color = opaqueColor;
 
     if ((rObjectId > 0) && (rDepth < opaqueDepth)) {
-        // Add regular objects in front of clipping plane semitransparently
+        // Add regular objects in front of opaque ones semitransparently
         vec3 rp = worldPosition(rDepth);
         float rShadow = computeShadows(rp);
         vec3 rColor = solid_compound(rp, rObjectId) * rShadow;

@@ -3,7 +3,8 @@
  * uint-shader-hash, David Hoskins (MMqd), 
  * https://github.com/MMqd/uint-shader-hash
  *
- * Source for simplex noise: Noise for GLSL 1.20, Copyright (C) 2011 Ashima Arts. 
+ * Source for simplex noise: 
+ * Noise for GLSL 1.20, Copyright (C) 2011 Ashima Arts. 
  * (MIT license https://github.com/stegu/webgl-noise/blob/master/LICENSE)
  * https://github.com/stegu/webgl-noise 
  */

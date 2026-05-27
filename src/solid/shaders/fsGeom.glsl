@@ -8,6 +8,8 @@
 
 uniform vec2 resolution;
 uniform vec3 cameraPos;
+uniform mat4 vpMat;         // view-projection matrix of the main camera
+uniform mat4 invVpMat;      // inverse of vpMap
 uniform float time;
 uniform int phase; 
 uniform int objectId;
@@ -20,18 +22,16 @@ in vec4 vPos;
 in vec2 vUv;
 in mat4 pvmMat;
 
+#include <sVolume>
+
 void main() {
-    vec4 plane = vec4(cos(time), 0.0, sin(time), 0.25);
     vec3 v = vPos.xyz;
-
-    if ((dot(v, plane.xyz) + plane.w < 0.0) && (phase != 2))
-        discard;
-
-    // vec4 clipPos = pvmMat * vPos;
-    // float depth = 0.5 + 0.5*clipPos.z/clipPos.w;
     float depth = gl_FragCoord.z;
 
-    // backs (phase 0) and regular rendering (phase 2)
+    vec2 volumeI = volumeInterval();
+    if ((depth < volumeI.x) && (phase != 2))
+        discard;
+
     float id = float(objectId) / 1024.0;
     gl_FragColor = vec4(depth, id, 0.0, 1.0);
 }

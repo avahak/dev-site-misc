@@ -2,7 +2,6 @@
  * Rendering test with clipping solid objects.
  * TODO
  * - Rebuild shadows without using three.js lights
- * - Change plane to more general clipping function
  */
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
@@ -44,7 +43,7 @@ class Scene {
     gui: any;
     isStopped: boolean = false;
 
-    mainCamera!: THREE.Camera;
+    mainCamera!: THREE.PerspectiveCamera;
     quadCamera!: THREE.OrthographicCamera;      // fixed camera, looking at a quad
 
     geometryScene!: THREE.Scene;
@@ -65,6 +64,8 @@ class Scene {
     compositeMaterial!: THREE.ShaderMaterial;
 
     lights: THREE.SpotLight[] = [];         // lights with shadows
+
+    sphereObject!: THREE.Object3D;
 
     font!: MCSDFFont;
 
@@ -179,7 +180,7 @@ class Scene {
         this.gui.domElement.style.top = '0px';
         this.gui.domElement.style.right = '0px';
 
-        const animateButton = () => this.animateStep();
+        const animateButton = () => this.animateStep(true);
         const toggleStop = () => {
             this.isStopped = !this.isStopped;
         };
@@ -196,6 +197,9 @@ class Scene {
             );
             const m3 = mAux.multiply(cam.projectionMatrix.clone().multiply(cam.matrixWorldInverse));
             console.log("B", m3.elements);
+
+            console.log("pMat", this.mainCamera.projectionMatrix.elements);
+            console.log("pMatInv", this.mainCamera.projectionMatrixInverse.elements);
         };
         const myObject = {
             animateButton,
@@ -262,7 +266,8 @@ class Scene {
     }
 
     setupCamera() {
-        this.mainCamera = new THREE.PerspectiveCamera();
+        this.mainCamera = new THREE.PerspectiveCamera(50);
+        // this.mainCamera.near = 3.0;
 
         this.controls = new OrbitControls(this.mainCamera, this.renderer.domElement);
 
@@ -279,9 +284,12 @@ class Scene {
             uniforms: {
                 resolution: { value: new THREE.Vector2() },
                 cameraPos: { value: new THREE.Vector3() },
+                vpMat: { value: null },
+                invVpMat: { value: null },
                 time: { value: null },
                 phase: { value: null },
                 objectId: { value: null },
+                sphere: { value: null },
                 debug1: { value: 1.0 },
                 debug2: { value: 1.0 },
                 debug3: { value: 0.8 },
@@ -368,6 +376,7 @@ class Scene {
                 backTex: { value: null },
                 frontTex: { value: null },
                 // regularTex: { value: null },
+                sphere: { value: null },
                 debug1: { value: this.geometryMaterial.uniforms.debug1.value },
                 debug2: { value: this.geometryMaterial.uniforms.debug2.value },
                 debug3: { value: this.geometryMaterial.uniforms.debug3.value },
@@ -413,6 +422,10 @@ class Scene {
         this.compositeScene.add(compositeMesh);
 
         this.overlayScene = new THREE.Scene();
+        const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const sphereGeometry = new THREE.SphereGeometry(0.2);
+        this.sphereObject = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        this.overlayScene.add(this.sphereObject);
         const normalMaterial = new THREE.MeshNormalMaterial();
         const knotGeo = new THREE.TorusKnotGeometry(0.6, 0.2, 100, 16, 3, 2);
         const knotMesh = new THREE.Mesh(knotGeo, normalMaterial);
@@ -437,8 +450,6 @@ class Scene {
             textGroup.addText(`Test_${Math.random()}`, pos, col, [0, 0], 0.1 + 0.1 * Math.random());
         }
         this.overlayScene.add(textGroup.getObject());
-
-        console.log("shadowMatrices", this.compositeMaterial.uniforms.shadowMatrices);
     }
 
     getResolution() {
@@ -446,18 +457,39 @@ class Scene {
         return new THREE.Vector2(clientWidth, clientHeight);
     }
 
+    getSphere(p: THREE.Vector3, n: THREE.Vector3, r: number): THREE.Matrix4 {
+        // NOTE: Careful with column-major/row-major order here! 
+        // See https://threejs.org/docs/#Matrix4
+        const center = new THREE.Vector3(p.x - r * n.x, p.y - r * n.y, p.z - r * n.z);
+        // To replace `inverse(pMat) * vec4(ndcXy, 0.0, 1.0)`:
+        const cam1 = new THREE.Vector4(1, 1, 0, 1).applyMatrix4(this.mainCamera.projectionMatrixInverse);
+        // To replace `pMat * vec4(t*dir, 1.0)`:
+        const cam2 = this.mainCamera.projectionMatrix.elements;
+        const s1z = cam1.z / cam1.w;
+        // To replace `v = -(vMat * vec4(sphere[0].xyz, 1.0)).xyz`
+        const cam3 = center.clone().applyMatrix4(this.mainCamera.matrixWorldInverse);
+        // For volume near clip
+        const tNear = -this.mainCamera.near / s1z;
+        const array: number[] = [
+            center.x, center.y, center.z, r,        // NOTE: this is first column
+            cam1.x / cam1.w, cam1.y / cam1.w, s1z, 0,
+            0.5 * (cam2[10] + cam2[11]) / cam2[11], 0.5 * cam2[14] / cam2[11] / s1z, 0, 0,
+            -cam3.x, -cam3.y, -cam3.z, tNear,
+        ];
+        return new THREE.Matrix4().fromArray(array);
+    }
+
     animate() {
         this.animationRequestID = requestAnimationFrame(this.animate);
         this.controls.update();
-        this.animateStep();
+        this.animateStep(false);
     }
 
-    animateStep() {
-        if (!this.isStopped) {
+    animateStep(bypassIsStopped: boolean) {
+        if (!this.isStopped || bypassIsStopped) {
             const currentTime = (this.lastTime ?? 0.0) + 1.0;
             this.lastTime = currentTime;
         }
-
         this.render();
     }
 
@@ -474,6 +506,14 @@ class Scene {
         this.clipMaterial.uniforms.time.value = t;
         this.compositeMaterial.uniforms.time.value = t;
 
+        const p = new THREE.Vector3(Math.cos(t), 1 + Math.sin(2 * t), Math.sin(3 * t));
+        const n = new THREE.Vector3(Math.cos(4 * t), Math.sin(5 * t)).normalize();
+        const r = 2 / (1 + 0.4 * Math.sin(6 * t));
+        const sphere = this.getSphere(p, n, r);
+        this.sphereObject.position.set(sphere.elements[0], sphere.elements[1], sphere.elements[2]);
+        this.geometryMaterial.uniforms.sphere.value = sphere;
+        this.clipMaterial.uniforms.sphere.value = sphere;
+
         // view-projection matrix and its inverse for mainCamera
         const vpMat = this.mainCamera.projectionMatrix.clone().multiply(this.mainCamera.matrixWorldInverse);
         const invVpMat = this.mainCamera.matrixWorld.clone().multiply(this.mainCamera.projectionMatrixInverse);
@@ -486,6 +526,8 @@ class Scene {
         this.renderer.setRenderTarget(this.geometryBackRT);  // activate backside target
         this.renderer.clear();
         this.geometryMaterial.side = THREE.BackSide;
+        this.geometryMaterial.uniforms.vpMat.value = vpMat;
+        this.geometryMaterial.uniforms.invVpMat.value = invVpMat;
         this.geometryMaterial.uniforms.phase.value = 0;
         this.renderer.render(this.geometryScene, this.mainCamera);
         for (const light of this.lights)
