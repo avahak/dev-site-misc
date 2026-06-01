@@ -31,7 +31,8 @@ const AppRouter = () => {
                 <Route path="/webgl_tools_fat_splines2" element={<WebGLApp mode="fat_splines2" />} />
                 <Route path="/input_listener" element={<InputListenerApp />} />
                 <Route path="/graph" element={<GraphApp />} />
-                <Route path="/solid" element={<SolidApp />} />
+                <Route path="/solid" element={<SolidApp debug={false} />} />
+                <Route path="/solid_debug" element={<SolidApp debug />} />
                 <Route path="/" element={<FrontPage />} />
             </Routes>
         </HashRouter>

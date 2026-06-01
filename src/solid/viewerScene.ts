@@ -1,7 +1,9 @@
 /**
  * Rendering test with clipping solid objects.
  * TODO
- * - Rebuild shadows without using three.js lights
+ * - Some basic shading
+ * - Consider precomputing volumeI (RT using RGFormat, FloatType)
+ * - How should interpolation work in the main passes
  */
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
@@ -17,8 +19,17 @@ const shaderChunks = importShaders(import.meta.glob(['./shaders/*.glsl'], {
     eager: true,
 }));
 
-const NUM_LIGHTS = 4;
-const SHADOW_MAP_SIZE = 1024;
+const NUM_LIGHTS = 2;
+const MAX_LIGHTS = 4;       // Has to be same as in shader
+const SHADOW_RADIUS = 2;
+const SHADOW_MAP_SIZE = 512;
+const mAux = new THREE.Matrix4();   // Used to get rid of `shadowCoord.xyz = shadowCoord.xyz*0.5 + 0.5;` during shadow computation
+mAux.set(
+    0.5, 0.0, 0.0, 0.5,
+    0.0, 0.5, 0.0, 0.5,
+    0.0, 0.0, 0.5, 0.5,
+    0.0, 0.0, 0.0, 1.0
+);
 
 const setShadow = (object: THREE.Object3D, castShadow: boolean, receiveShadow: boolean) => {
     object.traverse((child) => {
@@ -43,31 +54,40 @@ class Scene {
     gui: any;
     isStopped: boolean = false;
 
-    mainCamera!: THREE.PerspectiveCamera;
+    quadScene!: THREE.Scene;
     quadCamera!: THREE.OrthographicCamera;      // fixed camera, looking at a quad
+
+    mainCamera!: THREE.PerspectiveCamera;
 
     geometryScene!: THREE.Scene;
     geometryMaterial!: THREE.ShaderMaterial;
+    geometryMaterialNormals!: THREE.ShaderMaterial;
     geometryObject!: THREE.Object3D;
     geometryBackRT: THREE.WebGLRenderTarget | null = null;   // for clipped backside
     geometryFrontRT: THREE.WebGLRenderTarget | null = null;   // for clipped frontsides
     geometryRegularRT: THREE.WebGLRenderTarget | null = null;   // for nonclipped rendering, used for semitransparency
 
-    clipScene!: THREE.Scene;
     clipMaterial!: THREE.ShaderMaterial;
 
     opaqueRT: THREE.WebGLRenderTarget | null = null;   // for rendering all opaque objects
 
     overlayScene!: THREE.Scene;
 
-    compositeScene!: THREE.Scene;
     compositeMaterial!: THREE.ShaderMaterial;
 
-    lights: THREE.SpotLight[] = [];         // lights with shadows
+    shadowCameras: THREE.PerspectiveCamera[] = [];
+    shadowFrontRT: THREE.WebGLRenderTarget | null = null;
+    shadowBackRT: THREE.WebGLRenderTarget | null = null;
+    shadowRegularRTs: THREE.WebGLRenderTarget[] = [];
+    shadowClipRTs: THREE.WebGLRenderTarget[] = [];
+    shadowMaterialGeom!: THREE.ShaderMaterial;
+    shadowMaterialClip!: THREE.ShaderMaterial;
 
     sphereObject!: THREE.Object3D;
 
     font!: MCSDFFont;
+
+    isInitDebug = false;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -112,6 +132,7 @@ class Scene {
         const res = new THREE.Vector2();
         this.renderer.getDrawingBufferSize(res);
         this.renderer.getDrawingBufferSize(this.geometryMaterial.uniforms.resolution.value);
+        this.renderer.getDrawingBufferSize(this.geometryMaterialNormals.uniforms.resolution.value);
         this.renderer.getDrawingBufferSize(this.clipMaterial.uniforms.resolution.value);
         this.renderer.getDrawingBufferSize(this.compositeMaterial.uniforms.resolution.value);
         this.geometryBackRT?.setSize(res.x, res.y);
@@ -131,11 +152,7 @@ class Scene {
     }
 
     createRenderTargets() {
-        this.geometryBackRT?.dispose();
-        this.geometryFrontRT?.dispose();
-        this.geometryRegularRT?.dispose();
-        this.opaqueRT?.depthTexture?.dispose();
-        this.opaqueRT?.dispose();
+        this.disposeRenderTargets();
 
         const res = this.getResolution();
         const dpr = Math.min(this.renderer.getPixelRatio(), 2);
@@ -144,33 +161,120 @@ class Scene {
         this.geometryBackRT = new THREE.WebGLRenderTarget(width, height, {
             minFilter: THREE.NearestFilter,
             magFilter: THREE.NearestFilter,
-            format: THREE.RGFormat,
-            type: THREE.FloatType,
+            format: THREE.RedFormat,
+            type: THREE.HalfFloatType,
+            depthTexture: new THREE.DepthTexture(width, height, THREE.FloatType),
         });
 
         this.geometryFrontRT = new THREE.WebGLRenderTarget(width, height, {
-            minFilter: THREE.NearestFilter,
-            magFilter: THREE.NearestFilter,
-            format: THREE.RGFormat,
-            type: THREE.FloatType,
+            depthTexture: new THREE.DepthTexture(width, height, THREE.FloatType),
+            count: 2,
         });
+        this.geometryFrontRT.textures[0].minFilter = THREE.NearestFilter;
+        this.geometryFrontRT.textures[0].magFilter = THREE.NearestFilter;
+        this.geometryFrontRT.textures[0].format = THREE.RedFormat;
+        this.geometryFrontRT.textures[0].type = THREE.HalfFloatType;
+        this.geometryFrontRT.textures[1].minFilter = THREE.NearestFilter;
+        this.geometryFrontRT.textures[1].magFilter = THREE.NearestFilter;
+        this.geometryFrontRT.textures[1].format = THREE.RGFormat;
+        this.geometryFrontRT.textures[1].type = THREE.HalfFloatType;
 
         this.geometryRegularRT = new THREE.WebGLRenderTarget(width, height, {
-            minFilter: THREE.NearestFilter,
-            magFilter: THREE.NearestFilter,
-            format: THREE.RGFormat,
-            type: THREE.FloatType,
+            depthTexture: new THREE.DepthTexture(width, height, THREE.FloatType),
+            count: 2,
         });
+        this.geometryRegularRT.textures[0].minFilter = THREE.NearestFilter;
+        this.geometryRegularRT.textures[0].magFilter = THREE.NearestFilter;
+        this.geometryRegularRT.textures[0].format = THREE.RedFormat;
+        this.geometryRegularRT.textures[0].type = THREE.HalfFloatType;
+        this.geometryRegularRT.textures[1].minFilter = THREE.NearestFilter;
+        this.geometryRegularRT.textures[1].magFilter = THREE.NearestFilter;
+        this.geometryRegularRT.textures[1].format = THREE.RGFormat;
+        this.geometryRegularRT.textures[1].type = THREE.HalfFloatType;
 
         this.opaqueRT = new THREE.WebGLRenderTarget(width, height, {
-            minFilter: THREE.LinearFilter,
+            minFilter: THREE.NearestFilter,
             magFilter: THREE.NearestFilter,
             format: THREE.RGBAFormat,
             type: THREE.UnsignedByteType,
+            depthTexture: new THREE.DepthTexture(width, height, THREE.FloatType),
         });
-        this.opaqueRT.depthTexture = new THREE.DepthTexture(width, height);
-        this.opaqueRT.depthTexture.format = THREE.DepthFormat;
-        this.opaqueRT.depthTexture.type = THREE.FloatType;
+
+        this.shadowBackRT = new THREE.WebGLRenderTarget(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, {
+            count: 2,
+        });
+        this.shadowBackRT.textures[0].format = THREE.RedFormat;
+        this.shadowBackRT.textures[0].type = THREE.FloatType;
+        this.shadowBackRT.textures[0].minFilter = THREE.LinearFilter;
+        this.shadowBackRT.textures[0].magFilter = THREE.LinearFilter;
+        this.shadowBackRT.textures[1].format = THREE.RedFormat;
+        this.shadowBackRT.textures[1].type = THREE.HalfFloatType;
+        this.shadowBackRT.textures[1].minFilter = THREE.NearestFilter;
+        this.shadowBackRT.textures[1].magFilter = THREE.NearestFilter;
+
+        this.shadowFrontRT = new THREE.WebGLRenderTarget(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, {
+            count: 2,
+        });
+        this.shadowFrontRT.textures[0].format = THREE.RedFormat;
+        this.shadowFrontRT.textures[0].type = THREE.FloatType;
+        this.shadowFrontRT.textures[0].minFilter = THREE.LinearFilter;
+        this.shadowFrontRT.textures[0].magFilter = THREE.LinearFilter;
+        this.shadowFrontRT.textures[1].format = THREE.RedFormat;
+        this.shadowFrontRT.textures[1].type = THREE.HalfFloatType;
+        this.shadowFrontRT.textures[1].minFilter = THREE.NearestFilter;
+        this.shadowFrontRT.textures[1].magFilter = THREE.NearestFilter;
+
+        for (let k = 0; k < NUM_LIGHTS; k++) {
+            const shadowRegularRT = new THREE.WebGLRenderTarget(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, {
+                depthTexture: new THREE.DepthTexture(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE),
+                depthBuffer: true,
+                count: 2,
+            });
+            const depthTextureRegular = shadowRegularRT.depthTexture!;
+            depthTextureRegular.format = THREE.DepthFormat;
+            depthTextureRegular.type = THREE.UnsignedIntType;
+            depthTextureRegular.minFilter = THREE.LinearFilter;
+            depthTextureRegular.magFilter = THREE.LinearFilter;
+            // To use depth as sampler2DShadow, we need to set it up in compare mode
+            this.renderer.setRenderTarget(shadowRegularRT);
+            const gl = this.renderer.getContext() as WebGL2RenderingContext;
+            const handleR = (this.renderer.properties.get(depthTextureRegular) as any).__webglTexture;
+            gl.bindTexture(gl.TEXTURE_2D, handleR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+            this.renderer.setRenderTarget(null);
+            shadowRegularRT.textures[0].format = THREE.RedFormat;
+            shadowRegularRT.textures[0].type = THREE.FloatType;
+            shadowRegularRT.textures[0].minFilter = THREE.LinearFilter;
+            shadowRegularRT.textures[0].magFilter = THREE.LinearFilter;
+            shadowRegularRT.textures[1].format = THREE.RedFormat;
+            shadowRegularRT.textures[1].type = THREE.HalfFloatType;
+            shadowRegularRT.textures[1].minFilter = THREE.NearestFilter;
+            shadowRegularRT.textures[1].magFilter = THREE.NearestFilter;
+            this.shadowRegularRTs.push(shadowRegularRT);
+
+            const shadowClipRT = new THREE.WebGLRenderTarget(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, {
+                format: THREE.RedFormat,
+                type: THREE.UnsignedByteType,
+                depthTexture: new THREE.DepthTexture(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE),
+                depthBuffer: true,
+            });
+            const depthTextureClip = shadowClipRT.depthTexture!;
+            depthTextureClip.format = THREE.DepthFormat;
+            depthTextureClip.type = THREE.UnsignedIntType;
+            depthTextureClip.minFilter = THREE.LinearFilter;
+            depthTextureClip.magFilter = THREE.LinearFilter;
+            // To use depth as sampler2DShadow, we need to set it up in compare mode
+            this.renderer.setRenderTarget(shadowClipRT);
+            const handleC = (this.renderer.properties.get(depthTextureClip) as any).__webglTexture;
+            gl.bindTexture(gl.TEXTURE_2D, handleC);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+            this.renderer.setRenderTarget(null);
+            this.shadowClipRTs.push(shadowClipRT);
+        }
     }
 
     createGUI() {
@@ -185,21 +289,8 @@ class Scene {
             this.isStopped = !this.isStopped;
         };
         const debugInfo = () => {
-            const cam = this.lights[0].shadow.camera;
-            console.log("A", this.lights[0].shadow.matrix.elements);
-
-            const mAux = new THREE.Matrix4();
-            mAux.set(
-                0.5, 0.0, 0.0, 0.5,
-                0.0, 0.5, 0.0, 0.5,
-                0.0, 0.0, 0.5, 0.5,
-                0.0, 0.0, 0.0, 1.0
-            );
-            const m3 = mAux.multiply(cam.projectionMatrix.clone().multiply(cam.matrixWorldInverse));
-            console.log("B", m3.elements);
-
-            console.log("pMat", this.mainCamera.projectionMatrix.elements);
-            console.log("pMatInv", this.mainCamera.projectionMatrixInverse.elements);
+            console.log("1", this.mainCamera.matrixWorldInverse.elements);
+            console.log("2", this.shadowCameras[0].matrixWorldInverse.elements);
         };
         const myObject = {
             animateButton,
@@ -217,13 +308,15 @@ class Scene {
             .name('Debug1 (H)')
             .onChange((h: number) => {
                 this.geometryMaterial.uniforms.debug1.value = h;
+                this.geometryMaterialNormals.uniforms.debug1.value = h;
                 this.clipMaterial.uniforms.debug1.value = h;
                 this.compositeMaterial.uniforms.debug1.value = h;
             });
-        this.gui.add(myObject, 'debug2', 0.1, 6.0)
-            .name('Debug2 (WARP*10)')
+        this.gui.add(myObject, 'debug2', 0.0, 1.0)
+            .name('Debug2 (prev. WARP*10)')
             .onChange((h: number) => {
                 this.geometryMaterial.uniforms.debug2.value = h;
+                this.geometryMaterialNormals.uniforms.debug2.value = h;
                 this.clipMaterial.uniforms.debug2.value = h;
                 this.compositeMaterial.uniforms.debug2.value = h;
             });
@@ -231,17 +324,45 @@ class Scene {
             .name('Debug3 (-)')
             .onChange((h: number) => {
                 this.geometryMaterial.uniforms.debug3.value = h;
+                this.geometryMaterialNormals.uniforms.debug3.value = h;
                 this.clipMaterial.uniforms.debug3.value = h;
                 this.compositeMaterial.uniforms.debug3.value = h;
             });
-        this.gui.add(myObject, 'debug4', 0.1, 2.0)
+        this.gui.add(myObject, 'debug4', 0.0, 1.0)
             .name('Debug4 (-)')
             .onChange((h: number) => {
                 this.geometryMaterial.uniforms.debug4.value = h;
+                this.geometryMaterialNormals.uniforms.debug4.value = h;
                 this.clipMaterial.uniforms.debug4.value = h;
                 this.compositeMaterial.uniforms.debug4.value = h;
             });
         this.gui.close();
+    }
+
+    disposeRenderTargets() {
+        const rtList = [
+            this.geometryBackRT, this.geometryFrontRT, this.geometryRegularRT, this.opaqueRT,
+            this.shadowBackRT, this.shadowFrontRT
+        ];
+        for (const rt of this.shadowRegularRTs)
+            rtList.push(rt);
+        for (const rt of this.shadowClipRTs)
+            rtList.push(rt);
+
+        for (const rt of rtList) {
+            rt?.depthTexture?.dispose();
+            rt?.dispose();
+        }
+    }
+
+    disposeShaders() {
+        const shaderList = [
+            this.geometryMaterial, this.geometryMaterialNormals, this.clipMaterial,
+            this.compositeMaterial, this.shadowMaterialGeom, this.shadowMaterialClip,
+        ];
+        for (const shader of shaderList) {
+            shader?.dispose();
+        }
     }
 
     dispose() {
@@ -252,11 +373,8 @@ class Scene {
         for (const task of this.cleanUpTasks)
             task();
 
-        this.geometryBackRT?.dispose();
-        this.geometryFrontRT?.dispose();
-        this.geometryRegularRT?.dispose();
-        this.opaqueRT?.depthTexture?.dispose();
-        this.opaqueRT?.dispose();
+        this.disposeRenderTargets();
+        this.disposeShaders();
 
         this.renderer.dispose();
         this.geometryMaterial.dispose();
@@ -278,6 +396,9 @@ class Scene {
     }
 
     setupScene() {
+        this.quadScene = new THREE.Scene();
+        this.quadScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2)));
+
         this.geometryScene = new THREE.Scene();
 
         this.geometryMaterial = new THREE.ShaderMaterial({
@@ -299,35 +420,38 @@ class Scene {
             fragmentShader: resolveShaderChunk("fsGeom", shaderChunks),
             depthWrite: true,
             depthTest: true,
-            // glslVersion: THREE.GLSL3
+            glslVersion: THREE.GLSL3,
         });
 
-        this.geometryMaterial.onBeforeRender = (_renderer, _scene, _camera, _geometry, object) => {
-            this.geometryMaterial.uniforms.objectId.value = object.userData.objectId;
-            this.geometryMaterial.uniformsNeedUpdate = true;  // See https://github.com/mrdoob/three.js/issues/9870
-        };
+        this.geometryMaterialNormals = new THREE.ShaderMaterial({
+            uniforms: {
+                resolution: { value: new THREE.Vector2() },
+                cameraPos: { value: new THREE.Vector3() },
+                vpMat: { value: null },
+                invVpMat: { value: null },
+                time: { value: null },
+                phase: { value: null },
+                objectId: { value: null },
+                sphere: { value: null },
+                debug1: { value: 1.0 },
+                debug2: { value: 1.0 },
+                debug3: { value: 0.8 },
+                debug4: { value: 0.0 },
+            },
+            vertexShader: resolveShaderChunk("vs", shaderChunks),
+            fragmentShader: resolveShaderChunk("fsGeomNormals", shaderChunks),
+            depthWrite: true,
+            depthTest: true,
+            glslVersion: THREE.GLSL3,
+        });
 
-        // Add lights
-        const ambientLight = new THREE.AmbientLight(new THREE.Color(1, 1, 1));
-        this.geometryScene.add(ambientLight);
+        // Add shadow cameras
         for (let k = 0; k < NUM_LIGHTS; k++) {
-            const light = new THREE.SpotLight(0xffffff, 1, 20, Math.PI / 8);
-            light.position.set(10 * (Math.random() - 0.5), 10, 10 * (Math.random() - 0.5));
-            light.castShadow = true;
-            light.shadow.camera.near = 1.0;
-            light.shadow.camera.far = 20.0;
-            light.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-            light.shadow.autoUpdate = true;
-            light.target.position.set(0, 0, 0);
-            this.geometryScene.add(light, light.target);
-            this.lights.push(light);
+            const camera = new THREE.PerspectiveCamera(40, 1, 1, 20);
+            camera.position.set(10 * (Math.random() - 0.5), 10, 10 * (Math.random() - 0.5));
+            camera.lookAt(0, 0, 0);
+            this.shadowCameras.push(camera);
         }
-
-        const materialReplacement: { [key: string]: THREE.Material } = {
-            // "Material.001": new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.5, 0.5) }),
-            "Material.001": this.geometryMaterial,
-            "Material.002": this.geometryMaterial,
-        };
 
         const depthMaterial = new THREE.MeshDepthMaterial({
             depthPacking: THREE.RGBADepthPacking,
@@ -351,10 +475,6 @@ class Scene {
                     if (isMesh(childObj)) {
                         const mat = childObj.material;
                         childObj.userData.objectId = objectId++;
-                        // console.log(childObj.name, (!Array.isArray(childObj.material) && (childObj.material.name in materialReplacement)));
-                        if (!Array.isArray(mat) && (mat.name in materialReplacement))
-                            childObj.material = materialReplacement[mat.name];
-
                         childObj.customDepthMaterial = depthMaterial;
                     }
                 });
@@ -365,7 +485,6 @@ class Scene {
 
         // this.scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI/2.0);   // just for camera angles
 
-        this.clipScene = new THREE.Scene();
         this.clipMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 resolution: { value: new THREE.Vector2() },
@@ -375,7 +494,8 @@ class Scene {
                 time: { value: null },
                 backTex: { value: null },
                 frontTex: { value: null },
-                // regularTex: { value: null },
+                backDepthTex: { value: null },
+                frontDepthTex: { value: null },
                 sphere: { value: null },
                 debug1: { value: this.geometryMaterial.uniforms.debug1.value },
                 debug2: { value: this.geometryMaterial.uniforms.debug2.value },
@@ -386,11 +506,9 @@ class Scene {
             fragmentShader: resolveShaderChunk("fsClip", shaderChunks),
             depthWrite: true,
             depthTest: true,
+            glslVersion: THREE.GLSL3,
         });
-        const solidMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.clipMaterial);
-        this.clipScene.add(solidMesh);
 
-        this.compositeScene = new THREE.Scene();
         this.compositeMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 resolution: { value: new THREE.Vector2() },
@@ -400,12 +518,19 @@ class Scene {
                 time: { value: null },
                 opaqueDepthTex: { value: null },
                 opaqueColorTex: { value: null },
+                frontNormalTex: { value: null },
                 regularTex: { value: null },
+                regularDepthTex: { value: null },
+                regularNormalTex: { value: null },
+                sphere: { value: null },
 
                 numLights: { value: NUM_LIGHTS },
                 shadowMapSize: { value: SHADOW_MAP_SIZE },
-                shadowMaps: { value: this.lights.map((light) => light.shadow.map) },
-                shadowMatrices: { value: this.lights.map((light) => light.shadow.matrix) },
+                shadowRadius: { value: SHADOW_RADIUS },
+                shadowMatrices: { value: Array(MAX_LIGHTS).fill(null) },
+                lightPositions: { value: Array(MAX_LIGHTS).fill(null) },
+                shadowMapsClip: { value: Array(MAX_LIGHTS).fill(null) },
+                shadowMapsRegular: { value: Array(MAX_LIGHTS).fill(null) },
 
                 debug1: { value: this.geometryMaterial.uniforms.debug1.value },
                 debug2: { value: this.geometryMaterial.uniforms.debug2.value },
@@ -416,10 +541,8 @@ class Scene {
             fragmentShader: resolveShaderChunk("fsComposite", shaderChunks),
             depthWrite: false,
             depthTest: false,
-            // glslVersion: THREE.GLSL3,
+            glslVersion: THREE.GLSL3,
         });
-        const compositeMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.compositeMaterial);
-        this.compositeScene.add(compositeMesh);
 
         this.overlayScene = new THREE.Scene();
         const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
@@ -434,10 +557,12 @@ class Scene {
         const torusMesh = new THREE.Mesh(torusGeo, normalMaterial);
         torusMesh.position.x = 1.5;
         this.overlayScene.add(knotMesh, torusMesh);
-        for (const light of this.lights) {
-            const spotLightHelper = new THREE.SpotLightHelper(light);
-            spotLightHelper.update();
-            this.overlayScene.add(spotLightHelper);
+        for (const cam of this.shadowCameras) {
+            const sphereMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const sphereGeometry = new THREE.SphereGeometry(0.2);
+            const obj = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            obj.position.copy(cam.position);
+            this.overlayScene.add(obj);
         }
         const textGroup = new TextGroup(this.font, 0.5);    // problem with alpha-blending here
         for (let k = 0; k < 20; k++) {
@@ -450,6 +575,65 @@ class Scene {
             textGroup.addText(`Test_${Math.random()}`, pos, col, [0, 0], 0.1 + 0.1 * Math.random());
         }
         this.overlayScene.add(textGroup.getObject());
+
+        this.shadowMaterialGeom = new THREE.ShaderMaterial({
+            uniforms: {
+                resolution: { value: new THREE.Vector2(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE) },
+                cameraPos: { value: new THREE.Vector3() },
+                vpMat: { value: null },
+                invVpMat: { value: null },
+                time: { value: null },
+                phase: { value: null },
+                objectId: { value: null },
+                sphere: { value: null },
+                debug1: { value: 1.0 },
+                debug2: { value: 1.0 },
+                debug3: { value: 0.8 },
+                debug4: { value: 0.0 },
+            },
+            vertexShader: resolveShaderChunk("vs", shaderChunks),
+            fragmentShader: resolveShaderChunk("fsShadowGeom", shaderChunks),
+            depthWrite: true,
+            depthTest: true,
+            glslVersion: THREE.GLSL3,
+        });
+
+        this.shadowMaterialClip = new THREE.ShaderMaterial({
+            uniforms: {
+                resolution: { value: new THREE.Vector2(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE) },
+                cameraPos: { value: new THREE.Vector3() },
+                vpMat: { value: null },
+                invVpMat: { value: null },
+                time: { value: null },
+                backIdTex: { value: null },
+                frontIdTex: { value: null },
+                backDepthTex: { value: null },
+                frontDepthTex: { value: null },
+                sphere: { value: null },
+                debug1: { value: this.geometryMaterial.uniforms.debug1.value },
+                debug2: { value: this.geometryMaterial.uniforms.debug2.value },
+                debug3: { value: this.geometryMaterial.uniforms.debug3.value },
+                debug4: { value: this.geometryMaterial.uniforms.debug4.value },
+            },
+            vertexShader: resolveShaderChunk("vs", shaderChunks),
+            fragmentShader: resolveShaderChunk("fsShadowClip", shaderChunks),
+            depthWrite: true,
+            depthTest: true,
+            glslVersion: THREE.GLSL3,
+        });
+
+        this.geometryMaterial.onBeforeRender = (_renderer, _scene, _camera, _geometry, object) => {
+            this.geometryMaterial.uniforms.objectId.value = object.userData.objectId;
+            this.geometryMaterial.uniformsNeedUpdate = true;  // See https://github.com/mrdoob/three.js/issues/9870
+        };
+        this.geometryMaterialNormals.onBeforeRender = (_renderer, _scene, _camera, _geometry, object) => {
+            this.geometryMaterialNormals.uniforms.objectId.value = object.userData.objectId;
+            this.geometryMaterialNormals.uniformsNeedUpdate = true;
+        };
+        this.shadowMaterialGeom.onBeforeRender = (_renderer, _scene, _camera, _geometry, object) => {
+            this.shadowMaterialGeom.uniforms.objectId.value = object.userData.objectId;
+            this.shadowMaterialGeom.uniformsNeedUpdate = true;
+        };
     }
 
     getResolution() {
@@ -457,19 +641,19 @@ class Scene {
         return new THREE.Vector2(clientWidth, clientHeight);
     }
 
-    getSphere(p: THREE.Vector3, n: THREE.Vector3, r: number): THREE.Matrix4 {
+    getSphere(p: THREE.Vector3, n: THREE.Vector3, r: number, camera: THREE.PerspectiveCamera): THREE.Matrix4 {
         // NOTE: Careful with column-major/row-major order here! 
         // See https://threejs.org/docs/#Matrix4
         const center = new THREE.Vector3(p.x - r * n.x, p.y - r * n.y, p.z - r * n.z);
         // To replace `inverse(pMat) * vec4(ndcXy, 0.0, 1.0)`:
-        const cam1 = new THREE.Vector4(1, 1, 0, 1).applyMatrix4(this.mainCamera.projectionMatrixInverse);
+        const cam1 = new THREE.Vector4(1, 1, 0, 1).applyMatrix4(camera.projectionMatrixInverse);
         // To replace `pMat * vec4(t*dir, 1.0)`:
-        const cam2 = this.mainCamera.projectionMatrix.elements;
+        const cam2 = camera.projectionMatrix.elements;
         const s1z = cam1.z / cam1.w;
         // To replace `v = -(vMat * vec4(sphere[0].xyz, 1.0)).xyz`
-        const cam3 = center.clone().applyMatrix4(this.mainCamera.matrixWorldInverse);
+        const cam3 = center.clone().applyMatrix4(camera.matrixWorldInverse);
         // For volume near clip
-        const tNear = -this.mainCamera.near / s1z;
+        const tNear = -camera.near / s1z;
         const array: number[] = [
             center.x, center.y, center.z, r,        // NOTE: this is first column
             cam1.x / cam1.w, cam1.y / cam1.w, s1z, 0,
@@ -494,87 +678,138 @@ class Scene {
     }
 
     render() {
-        if (!this.lastTime || !this.geometryBackRT || !this.geometryFrontRT || !this.geometryRegularRT || !this.opaqueRT)
+        if (!this.lastTime || !this.shadowBackRT || !this.shadowFrontRT || !this.geometryObject || !this.geometryBackRT || !this.geometryFrontRT || !this.geometryRegularRT || !this.opaqueRT)
             return;
         const t = this.lastTime * 0.002;
         // this.overlayScene.setRotationFromEuler(new THREE.Euler(t, 2.0 * t, 3.0 * t));
 
+        // Assigning uniforms
         this.geometryMaterial.uniforms.cameraPos.value.copy(this.mainCamera.position);
+        this.geometryMaterialNormals.uniforms.cameraPos.value.copy(this.mainCamera.position);
         this.clipMaterial.uniforms.cameraPos.value.copy(this.mainCamera.position);
         this.compositeMaterial.uniforms.cameraPos.value.copy(this.mainCamera.position);
         this.geometryMaterial.uniforms.time.value = t;
+        this.geometryMaterialNormals.uniforms.time.value = t;
         this.clipMaterial.uniforms.time.value = t;
         this.compositeMaterial.uniforms.time.value = t;
-
-        const p = new THREE.Vector3(Math.cos(t), 1 + Math.sin(2 * t), Math.sin(3 * t));
-        const n = new THREE.Vector3(Math.cos(4 * t), Math.sin(5 * t)).normalize();
-        const r = 2 / (1 + 0.4 * Math.sin(6 * t));
-        const sphere = this.getSphere(p, n, r);
-        this.sphereObject.position.set(sphere.elements[0], sphere.elements[1], sphere.elements[2]);
-        this.geometryMaterial.uniforms.sphere.value = sphere;
-        this.clipMaterial.uniforms.sphere.value = sphere;
 
         // view-projection matrix and its inverse for mainCamera
         const vpMat = this.mainCamera.projectionMatrix.clone().multiply(this.mainCamera.matrixWorldInverse);
         const invVpMat = this.mainCamera.matrixWorld.clone().multiply(this.mainCamera.projectionMatrixInverse);
-
-        // backside rendering with geometryScene + shadows
-        this.renderer.shadowMap.enabled = true;
-        // this.renderer.shadowMap.type = THREE.BasicShadowMap;
-        for (const light of this.lights)
-            light.shadow.autoUpdate = true;
-        this.renderer.setRenderTarget(this.geometryBackRT);  // activate backside target
-        this.renderer.clear();
-        this.geometryMaterial.side = THREE.BackSide;
         this.geometryMaterial.uniforms.vpMat.value = vpMat;
         this.geometryMaterial.uniforms.invVpMat.value = invVpMat;
+        this.geometryMaterialNormals.uniforms.vpMat.value = vpMat;
+        this.geometryMaterialNormals.uniforms.invVpMat.value = invVpMat;
+        this.clipMaterial.uniforms.vpMat.value = vpMat;
+        this.clipMaterial.uniforms.invVpMat.value = invVpMat;
+        this.compositeMaterial.uniforms.vpMat.value = vpMat;
+        this.compositeMaterial.uniforms.invVpMat.value = invVpMat;
+
+        const p = new THREE.Vector3(Math.cos(t), 1 + Math.sin(2 * t), Math.sin(3 * t));
+        const n = new THREE.Vector3(Math.cos(4 * t), Math.sin(5 * t)).normalize();
+        const r = 3 / (1 + 0.4 * Math.sin(6 * t));
+        const sphereMainCamera = this.getSphere(p, n, r, this.mainCamera);
+        this.sphereObject.position.set(sphereMainCamera.elements[0], sphereMainCamera.elements[1], sphereMainCamera.elements[2]);
+        this.geometryMaterial.uniforms.sphere.value = sphereMainCamera;
+        this.geometryMaterialNormals.uniforms.sphere.value = sphereMainCamera;
+        this.clipMaterial.uniforms.sphere.value = sphereMainCamera;
+        this.compositeMaterial.uniforms.sphere.value = sphereMainCamera;
+
+        for (let k = 0; k < NUM_LIGHTS; k++) {
+            const cam = this.shadowCameras[k];
+            const sphereShadowCamera = this.getSphere(p, n, r, cam);
+            this.shadowMaterialGeom.uniforms.sphere.value = sphereShadowCamera;
+            this.shadowMaterialClip.uniforms.sphere.value = sphereShadowCamera;
+
+            // Rendering shadows - back:
+            this.renderer.setRenderTarget(this.shadowBackRT);
+            this.renderer.clear();
+            this.shadowMaterialGeom.side = THREE.BackSide;
+            this.shadowMaterialGeom.uniforms.phase.value = 0;
+            this.geometryScene.overrideMaterial = this.shadowMaterialGeom;
+            this.renderer.render(this.geometryScene, cam);
+            // Rendering shadows - front:
+            this.renderer.setRenderTarget(this.shadowFrontRT);
+            this.renderer.clear();
+            this.shadowMaterialGeom.side = THREE.FrontSide;
+            this.shadowMaterialGeom.uniforms.phase.value = 1;
+            this.geometryScene.overrideMaterial = this.shadowMaterialGeom;
+            this.renderer.render(this.geometryScene, cam);
+            // Rendering shadows - regular:
+            this.renderer.setRenderTarget(this.shadowRegularRTs[k]);
+            this.renderer.clear();
+            this.shadowMaterialGeom.side = THREE.FrontSide;
+            this.shadowMaterialGeom.uniforms.phase.value = 2;
+            this.geometryScene.overrideMaterial = this.shadowMaterialGeom;
+            this.renderer.render(this.geometryScene, cam);
+            // Rendering shadows - clip:
+            this.renderer.setRenderTarget(this.shadowClipRTs[k]);
+            this.renderer.clear();
+            this.shadowMaterialClip.uniforms.backDepthTex.value = this.shadowBackRT.textures[0];
+            this.shadowMaterialClip.uniforms.frontDepthTex.value = this.shadowFrontRT.textures[0];
+            this.shadowMaterialClip.uniforms.backIdTex.value = this.shadowBackRT.textures[1];
+            this.shadowMaterialClip.uniforms.frontIdTex.value = this.shadowFrontRT.textures[1];
+            this.quadScene.overrideMaterial = this.shadowMaterialClip;
+            this.renderer.render(this.quadScene, this.quadCamera);
+        }
+
+        // backside rendering with geometryScene
+        this.renderer.setRenderTarget(this.geometryBackRT);
+        this.renderer.clear();
+        this.geometryMaterial.side = THREE.BackSide;
         this.geometryMaterial.uniforms.phase.value = 0;
+        this.geometryScene.overrideMaterial = this.geometryMaterial;
         this.renderer.render(this.geometryScene, this.mainCamera);
-        for (const light of this.lights)
-            light.shadow.autoUpdate = false;
-        this.renderer.shadowMap.enabled = false;
 
         // frontside rendering with geometryScene
-        this.renderer.setRenderTarget(this.geometryFrontRT);  // activate frontside target
+        this.renderer.setRenderTarget(this.geometryFrontRT);
         this.renderer.clear();
-        this.geometryMaterial.side = THREE.FrontSide;
-        this.geometryMaterial.uniforms.phase.value = 1;
+        this.geometryMaterialNormals.side = THREE.FrontSide;
+        this.geometryMaterialNormals.uniforms.phase.value = 1;
+        this.geometryScene.overrideMaterial = this.geometryMaterialNormals;
         this.renderer.render(this.geometryScene, this.mainCamera);
 
         // regular rendering with geometryScene
-        this.renderer.setRenderTarget(this.geometryRegularRT);  // activate regular target
+        this.renderer.setRenderTarget(this.geometryRegularRT);
         this.renderer.clear();
-        this.geometryMaterial.side = THREE.FrontSide;
-        this.geometryMaterial.uniforms.phase.value = 2;
+        this.geometryMaterialNormals.side = THREE.FrontSide;
+        this.geometryMaterialNormals.uniforms.phase.value = 2;
+        this.geometryScene.overrideMaterial = this.geometryMaterialNormals;
         this.renderer.render(this.geometryScene, this.mainCamera);
 
         // Rendering the clipped scene into opaqueRT
-        this.renderer.setRenderTarget(this.opaqueRT);                // activate opaqueRT
+        this.renderer.setRenderTarget(this.opaqueRT);
         this.renderer.clear();
         this.clipMaterial.uniforms.backTex.value = this.geometryBackRT.texture;
-        this.clipMaterial.uniforms.frontTex.value = this.geometryFrontRT.texture;
-        this.clipMaterial.uniforms.vpMat.value = vpMat;
-        this.clipMaterial.uniforms.invVpMat.value = invVpMat;
-        this.renderer.render(this.clipScene, this.quadCamera);
+        this.clipMaterial.uniforms.frontTex.value = this.geometryFrontRT.textures[0];
+        this.clipMaterial.uniforms.backDepthTex.value = this.geometryBackRT.depthTexture;
+        this.clipMaterial.uniforms.frontDepthTex.value = this.geometryFrontRT.depthTexture;
+        this.quadScene.overrideMaterial = this.clipMaterial;
+        this.renderer.render(this.quadScene, this.quadCamera);
 
         // Rendering overlayScene into opaqueRT
-        this.renderer.setRenderTarget(this.opaqueRT);                // activate opaqueRT
+        this.renderer.setRenderTarget(this.opaqueRT);
         this.renderer.render(this.overlayScene, this.mainCamera);
 
         // Post-processing: composite opaqueRT and geometryRegularRT into final image on screen
         this.renderer.setRenderTarget(null);                // activate screen as target
         this.compositeMaterial.uniforms.opaqueDepthTex.value = this.opaqueRT.depthTexture;
         this.compositeMaterial.uniforms.opaqueColorTex.value = this.opaqueRT.texture;
-        this.compositeMaterial.uniforms.regularTex.value = this.geometryRegularRT.texture;
-        this.compositeMaterial.uniforms.vpMat.value = vpMat;
-        this.compositeMaterial.uniforms.invVpMat.value = invVpMat;
-        for (let k = 0; k < NUM_LIGHTS; k++) {
-            // this.lights[k].shadow.camera.updateMatrixWorld();
-            // this.lights[k].shadow.camera.updateProjectionMatrix();
-            this.compositeMaterial.uniforms.shadowMaps.value[k] = this.lights[k].shadow.map?.texture;
-            this.compositeMaterial.uniforms.shadowMatrices.value[k] = this.lights[k].shadow.matrix;
+        this.compositeMaterial.uniforms.regularTex.value = this.geometryRegularRT.textures[0];
+        this.compositeMaterial.uniforms.regularDepthTex.value = this.geometryRegularRT.depthTexture;
+        this.compositeMaterial.uniforms.regularNormalTex.value = this.geometryRegularRT.textures[1];
+        this.compositeMaterial.uniforms.frontNormalTex.value = this.geometryFrontRT.textures[1];
+        for (let k = 0; k < MAX_LIGHTS; k++) {
+            // NOTE We have to set all MAX_LIGHTS uniforms even though we only use NUM_LIGHTS
+            const j = (k < NUM_LIGHTS) ? k : 0;
+            this.compositeMaterial.uniforms.shadowMapsClip.value[k] = this.shadowClipRTs[j].depthTexture;
+            this.compositeMaterial.uniforms.shadowMapsRegular.value[k] = this.shadowRegularRTs[j].depthTexture;
+            const mat = mAux.clone().multiply(this.shadowCameras[j].projectionMatrix.clone().multiply(this.shadowCameras[j].matrixWorldInverse));
+            this.compositeMaterial.uniforms.shadowMatrices.value[k] = mat;
+            this.compositeMaterial.uniforms.lightPositions.value[k] = this.shadowCameras[j].position;
         }
-        this.renderer.render(this.compositeScene, this.quadCamera);
+        this.quadScene.overrideMaterial = this.compositeMaterial;
+        this.renderer.render(this.quadScene, this.quadCamera);
     }
 }
 

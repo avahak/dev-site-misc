@@ -15,7 +15,8 @@ uniform float debug4;
 in vec4 vPos;
 in vec2 vUv;
 
-layout(location = 0) out vec4 outObjectId;
+layout(location = 0) out vec4 outDepth;
+layout(location = 1) out vec4 outObjectId;
 
 #include <sVolume>
 
@@ -28,5 +29,6 @@ void main() {
         discard;
 
     float id = float(objectId) / 1024.0;
+    outDepth = vec4(depth, 0.0, 0.0, 0.0);
     outObjectId = vec4(id, 0.0, 0.0, 0.0);
 }

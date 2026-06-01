@@ -7,10 +7,7 @@
 // at^2+bt+c0=0, where a=d\cdot d, b=2d\cdot (p-c), c0=|p-c|^2-r^2.
 // Solutions exist if D=b^2-4ac>=0. Then the solutions are t=\pm (-b\pm\sqrt{D})/(2a).
 
-// These have to be defined in the shader using this
-// uniform vec3 cameraPos;
-// uniform mat4 vpMat;
-
+// uniform vec2 resolution;     // This needs to be defined in parent shader
 uniform mat4 sphere;        // contains (sphere center x,y,z,r) and camera related parameters
 
 float evalVolumeField(vec3 p) {
@@ -18,6 +15,33 @@ float evalVolumeField(vec3 p) {
     // |p-c|^2-r^2
     vec3 v = p - sphere[0].xyz;
     return dot(v, v) - sphere[0].w*sphere[0].w;
+}
+
+vec3 evalVolumeNormal(vec3 p) {
+    // Normal for the volume on the boundary
+    vec3 v = p - sphere[0].xyz;
+    return normalize(v);
+}
+
+vec2 volumeInterval() {
+    // Returns (-,+ solution) depths (in window space z).
+    vec2 ndcXy = 2.0*gl_FragCoord.xy/resolution - 1.0;
+    vec3 dir = sphere[1].xyz * vec3(ndcXy, 1.0);
+    vec3 v = sphere[3].xyz;
+
+    float a = dot(dir, dir);
+    float b = 2.0*dot(dir, v);
+    float c = dot(v, v) - sphere[0].w*sphere[0].w;
+    float discr = b*b - 4.0*a*c;
+    if (discr <= 0.0)
+        return vec2(0.0);   // no solutions
+    float sd = sqrt(discr);
+    vec2 ts = vec2(-b-sd, -b+sd) / (2.0*a);
+
+    vec2 zs = sphere[2].x + sphere[2].y / ts;
+
+    float tNear = sphere[3].w;
+    return vec2(ts.x > tNear ? zs.x : 0.0, ts.y > tNear ? zs.y : 0.0);
 }
 
 // vec2 _volumeInterval() {
@@ -47,27 +71,6 @@ float evalVolumeField(vec3 p) {
 //     float zPlus = ndcPlus.z * 0.5 + 0.5;
 //     return vec2(tMinus > 0.0 ? zMinus : 0.0, tPlus > 0.0 ? zPlus : 0.0);    // TODO FIX with camera.near
 // }
-
-vec2 volumeInterval() {
-    // Returns (-,+ solution) depths (in window space z).
-    vec2 ndcXy = 2.0*gl_FragCoord.xy/resolution - 1.0;
-    vec3 dir = sphere[1].xyz * vec3(ndcXy, 1.0);
-    vec3 v = sphere[3].xyz;
-
-    float a = dot(dir, dir);
-    float b = 2.0*dot(dir, v);
-    float c = dot(v, v) - sphere[0].w*sphere[0].w;
-    float discr = b*b - 4.0*a*c;
-    if (discr <= 0.0)
-        return vec2(0.0);   // no solutions
-    float sd = sqrt(discr);
-    vec2 ts = vec2(-b-sd, -b+sd) / (2.0*a);
-
-    vec2 zs = sphere[2].x + sphere[2].y / ts;
-
-    float tNear = sphere[3].w;
-    return vec2(ts.x > tNear ? zs.x : 0.0, ts.y > tNear ? zs.y : 0.0);
-}
 
 // vec4 intervalEntry(vec3 p0, vec3 dir) {
 //     // Solving when is p0+t*dir on the sphere.

@@ -1,10 +1,6 @@
 out vec4 vPos;
-out vec2 vUv;
-out vec3 vNormal;
 
 void main() {
     vPos = vec4(position.xyz, 1.0);
-    vUv = uv;
-    vNormal = normal;
     gl_Position = projectionMatrix * modelViewMatrix * vPos;
 }

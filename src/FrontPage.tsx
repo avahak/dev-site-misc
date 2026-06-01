@@ -68,6 +68,10 @@ const FrontPage = () => {
                 <MUILink component={RouterLink} to="/solid" variant="body1" color="primary">
                     Solid textures
                 </MUILink>
+                <br />
+                <MUILink component={RouterLink} to="/solid_debug" variant="body1" color="primary">
+                    Solid textures (DEBUG)
+                </MUILink>
             </Box>
             <Typography variant="body2" color="textSecondary" sx={{ mt: 10 }}>{`Build: ${BUILD_TIMESTAMP}`}</Typography>
         </Container>

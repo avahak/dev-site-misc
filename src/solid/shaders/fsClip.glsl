@@ -37,7 +37,8 @@ uniform mat4 invVpMat;      // inverse of vpMap
 uniform float time;
 uniform sampler2D backTex;
 uniform sampler2D frontTex;
-// uniform sampler2D regularTex;      // Handling semi-transparency moved to later processing step
+uniform sampler2D backDepthTex;
+uniform sampler2D frontDepthTex;
 uniform float debug1;
 uniform float debug2;
 uniform float debug3;
@@ -45,7 +46,8 @@ uniform float debug4;
 
 in vec4 vPos;
 in vec2 vUv;
-in mat4 pvmMat;
+
+layout(location = 0) out vec4 outColor;
 
 #include <sVolume>
 
@@ -57,13 +59,13 @@ vec3 worldPosition(float depth) {
 }
 
 void main() {
-    vec2 bTexColor = texture(backTex, vUv).rg;
-    vec2 fTexColor = texture(frontTex, vUv).rg;
+    float bDepth = texture(backDepthTex, vUv).r;
+    float fDepth = texture(frontDepthTex, vUv).r;
 
-    float bDepth = bTexColor.r;
-    float fDepth = fTexColor.r;
-    int bObjectId = int(round(bTexColor.g * 1024.0));
-    int fObjectId = int(round(fTexColor.g * 1024.0));
+    float bTexColor = texture(backTex, vUv).r;
+    float fTexColor = texture(frontTex, vUv).r;
+    int bObjectId = int(round(bTexColor * 1024.0));
+    int fObjectId = int(round(fTexColor * 1024.0));
 
     if (bObjectId == 0)
         discard;        // No back => ray miss
@@ -74,10 +76,10 @@ void main() {
 
     // Z-fighting problem:
     // ep=0 below -> z-fighting when two objects are close to each other
-    // ep=1.0e-5 below -> near edges where |fDepth-bDepth|<ep
+    // ep=1e-5 below -> near edges where |fDepth-bDepth|<ep
     //     we get matchedPair=0 but correct value is 1 -> we jump to pEntry that has 
     //     nothing to do with it -> we use plane z that is completely wrong -> artifacts
-    // Fix used: use ep=0 when the objects are the same but ep=1.0e-5 if they are different:
+    // Fix used: use ep=0 when the objects are the same but ep=1e-5 if they are different:
     float ep = (fObjectId == bObjectId) ? 0.0 : EP;
     int matchedPair = (fObjectId > 0 && fDepth < bDepth-ep) ? 1 : 0;
     if (matchedPair == 1) {
@@ -88,8 +90,8 @@ void main() {
         vec3 fp = worldPosition(fDepth);
         vec3 fColor = solid_compound(fp, fObjectId);
 
-        gl_FragColor = vec4(fColor, 0.0);        // store clipping in alpha-channel
         gl_FragDepth = fDepth;
+        outColor = vec4(fColor, 0.0);        // encode state in alpha-channel
         return;
     } 
 
@@ -97,6 +99,6 @@ void main() {
     vec3 pEntry = worldPosition(volumeI.x);
     vec3 color = solid_compound(pEntry, bObjectId);
 
-    gl_FragColor = vec4(color, 1.0);        // store clipping in alpha-channel
     gl_FragDepth = volumeI.x;
+    outColor = vec4(color, 0.01);        // encode state in alpha-channel
 }

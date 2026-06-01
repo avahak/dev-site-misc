@@ -18,6 +18,28 @@ const float SQRT2 = 1.4142135623731;
 const float EP = 1.0e-5;
 
 
+vec2 octEncode(vec3 n) {
+    // Encodes unit vec3 vector to vec2
+    n /= (abs(n.x) + abs(n.y) + abs(n.z));
+    vec2 p = n.xy;
+    if (n.z < 0.0) {
+        vec2 signP = step(0.0, p) * 2.0 - 1.0;
+        p = (1.0 - abs(p.yx)) * signP;
+    }
+    return p * 0.5 + 0.5;
+}
+
+vec3 octDecode(vec2 e) {
+    // Decoder for octEncode, recovers the original unit vector
+    vec2 p = e * 2.0 - 1.0;
+    vec3 n = vec3(p, 1.0 - abs(p.x) - abs(p.y));
+    if (n.z < 0.0) {
+        vec2 signP = step(0.0, n.xy) * 2.0 - 1.0;
+        n.xy = (1.0 - abs(n.yx)) * signP;
+    }
+    return normalize(n);
+}
+
 // From uint-shader-hash:
 
 

@@ -4,6 +4,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
 import { Scene as WoodScene } from './woodScene';
 import { Scene as ViewerScene } from './viewerScene';
+import { Scene as ViewerSceneShadow } from './shadowTestScene';   // TODO remove after debug
 
 const WoodSceneComponent: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -19,12 +20,12 @@ const WoodSceneComponent: React.FC = () => {
     return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 };
 
-const ViewerSceneComponent: React.FC = () => {
+const ViewerSceneComponent: React.FC<{ debug: boolean }> = ({ debug }) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
-        const viewerScene = new ViewerScene(containerRef.current!);
+        const viewerScene = debug ? new ViewerSceneShadow(containerRef.current!) : new ViewerScene(containerRef.current!);
         return () => {
             viewerScene.dispose();
         };
@@ -33,10 +34,10 @@ const ViewerSceneComponent: React.FC = () => {
     return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 };
 
-const App: React.FC = () => {
+const App: React.FC<{ debug: boolean }> = ({ debug }) => {
     return (
         <Container maxWidth="xl">
-            <Box display="flex" justifyContent="center" sx={{py: 2}}>
+            <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                 <Typography variant="h2">
                     Solid textures
                 </Typography>
@@ -45,7 +46,7 @@ const App: React.FC = () => {
                 <WoodSceneComponent />
             </Box> */}
             <Box style={{ width: "100%", height: "600px" }}>
-                <ViewerSceneComponent />
+                <ViewerSceneComponent debug={debug} />
             </Box>
             <MUILink component={RouterLink} to="/" variant="body1" color="primary">
                 Back
