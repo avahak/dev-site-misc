@@ -1,16 +1,10 @@
 #include <sCommon>
 
+#include <sGlobalUBO>
+
 uniform vec2 resolution;
-uniform vec3 cameraPos;
-uniform mat4 vpMat;         // view-projection matrix of the main camera
-uniform mat4 invVpMat;      // inverse of vpMap
-uniform float time;
 uniform int phase; 
 uniform int objectId;
-uniform float debug1;
-uniform float debug2;
-uniform float debug3;
-uniform float debug4;
 
 in vec4 vPos;
 in vec2 vUv;

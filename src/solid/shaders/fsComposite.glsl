@@ -2,12 +2,11 @@
 
 #include <sCommon>
 #include <sSolidTex>
+#include <sPBR>
+
+#include <sGlobalUBO>
 
 uniform vec2 resolution;
-uniform vec3 cameraPos;
-uniform mat4 vpMat;         // view-projection matrix of the main camera
-uniform mat4 invVpMat;      // inverse of vpMap
-uniform float time;
 uniform sampler2D opaqueDepthTex;
 uniform sampler2D opaqueColorTex;
 uniform sampler2D frontNormalTex;
@@ -15,19 +14,8 @@ uniform sampler2D regularTex;
 uniform sampler2D regularDepthTex;
 uniform sampler2D regularNormalTex;
 
-#define MAX_LIGHTS 4
-uniform mat4 shadowMatrices[MAX_LIGHTS];
-uniform vec3 lightPositions[MAX_LIGHTS];
-uniform float shadowMapSize;
-uniform float shadowRadius;
-uniform int numLights;
 uniform sampler2DShadow shadowMapsClip[MAX_LIGHTS];
 uniform sampler2DShadow shadowMapsRegular[MAX_LIGHTS];
-
-uniform float debug1;
-uniform float debug2;
-uniform float debug3;
-uniform float debug4;
 
 in vec4 vPos;
 in vec2 vUv;
@@ -35,6 +23,17 @@ in vec2 vUv;
 layout(location = 0) out vec4 outColor;
 
 #include <sVolume>
+
+
+vec3 worldPosition(float depth) {
+    vec3 ndc = 2.0*vec3(gl_FragCoord.xy/resolution, depth) - 1.0;
+    vec4 ph = invVpMat * vec4(ndc, 1.0);
+    return ph.xyz / ph.w;
+}
+
+float getLinearDepth(float depth, float near, float far) {
+    return (near * far) / (far - depth * (far - near));
+}
 
 
 // Interleaved Gradient Noise for randomizing sampling patterns
@@ -64,61 +63,81 @@ float computeShadowTerm(vec3 worldPos, vec3 normal, int lightIndex, sampler2DSha
     shadowCoord.xyz /= shadowCoord.w;
     shadowCoord.z -= 2e-4;     // bias
 
+    // float linearDepth = getLinearDepth(...)
+    float radius = lightPos[lightIndex].w;
+
     float phi = interleavedGradientNoise(gl_FragCoord.xy) * TAU;
     float sum = 0.0;
     for (int k = 0; k < 5; k++) {
-        vec2 offset = vogelDiskSample(k, 5, phi) * shadowRadius/shadowMapSize;
+        vec2 offset = vogelDiskSample(k, 5, phi) * radius/shadowMapSize;
         vec3 v = vec3(shadowCoord.xy + offset, shadowCoord.z);
-        float result = texture(shadowMap, v);
-        sum += 0.2*result;
+        sum += texture(shadowMap, v);
     }
 
-    return sum;
+    return 0.2*sum;
 }
 
-float computeShadows(vec3 worldPos, vec3 normal, int useClip) {
-    float sum = 0.0; 
-    for (int k = 0; k < MAX_LIGHTS; k++) {
-        if (k >= numLights)
+float computeShadow(vec3 worldPos, vec3 normal, int useClip, int k) {
+    float term;
+    switch (k) {
+        case 0: 
+            term = (useClip == 1) ?
+                computeShadowTerm(worldPos, normal, k, shadowMapsClip[0]) : 
+                computeShadowTerm(worldPos, normal, k, shadowMapsRegular[0]);
             break;
-        vec3 lightPos = lightPositions[k];
-        vec3 lightDir = normalize(lightPos - worldPos);
-        float dp = dot(normal, lightDir);
-        float term;
-        switch (k) {
-            case 0: 
-                term = (useClip == 1) ?
-                    computeShadowTerm(worldPos, normal, k, shadowMapsClip[0]) : 
-                    computeShadowTerm(worldPos, normal, k, shadowMapsRegular[0]);
-                break;
-            case 1: 
-                term = (useClip == 1) ?
-                    computeShadowTerm(worldPos, normal, k, shadowMapsClip[1]) : 
-                    computeShadowTerm(worldPos, normal, k, shadowMapsRegular[1]);
-                break;
-            case 2: 
-                term = (useClip == 1) ?
-                    computeShadowTerm(worldPos, normal, k, shadowMapsClip[2]) : 
-                    computeShadowTerm(worldPos, normal, k, shadowMapsRegular[2]);
-                break;
-            case 3: 
-                term = (useClip == 1) ?
-                    computeShadowTerm(worldPos, normal, k, shadowMapsClip[3]) : 
-                    computeShadowTerm(worldPos, normal, k, shadowMapsRegular[3]);
-                break;
-        }
-        sum += term * max(dp, 0.0);
+        case 1: 
+            term = (useClip == 1) ?
+                computeShadowTerm(worldPos, normal, k, shadowMapsClip[1]) : 
+                computeShadowTerm(worldPos, normal, k, shadowMapsRegular[1]);
+            break;
+        case 2: 
+            term = (useClip == 1) ?
+                computeShadowTerm(worldPos, normal, k, shadowMapsClip[2]) : 
+                computeShadowTerm(worldPos, normal, k, shadowMapsRegular[2]);
+            break;
+        case 3: 
+            term = (useClip == 1) ?
+                computeShadowTerm(worldPos, normal, k, shadowMapsClip[3]) : 
+                computeShadowTerm(worldPos, normal, k, shadowMapsRegular[3]);
+            break;
     }
-    sum = clamp(sum/float(numLights), 0.0, 1.0);
-    float ambient = 0.25;
-    return mix(ambient, 1.0, sum);
+    return term;
 }
 
 
-vec3 worldPosition(float depth) {
-    vec3 ndc = 2.0*vec3(gl_FragCoord.xy/resolution, depth) - 1.0;
-    vec4 ph = invVpMat * vec4(ndc, 1.0);
-    return ph.xyz / ph.w;
+
+// vec3 evalDirectLight(
+//     vec3 P, vec3 N, vec3 camPos, 
+//     vec3 baseColor, float roughness, float metallic, 
+//     vec3 lightPos, vec3 lightColor, float lightIntensity
+// ) {
+
+
+void computeWeights(out vec3 weights[MAX_LIGHTS], vec3 P, vec3 N, vec3 baseColor, float roughness, float metallic) {
+    for (int k = 0; k < MAX_LIGHTS; k++) {
+        if (k >= int(round(numLights)))
+            break;
+        vec3 lPos = lightPos[k].xyz;
+        weights[k] = evalDirectLightWeighting(P, N, cameraPos, baseColor, roughness, metallic, lPos);
+    }
+}
+
+vec3 computeLight(in vec3 weights[MAX_LIGHTS], vec3 P, vec3 N, int useClip) {
+    vec3 color = vec3(0.0);
+    for (int k = 0; k < MAX_LIGHTS; k++) {
+        if (k >= int(round(numLights)))
+            break;
+
+        vec3 lPos = lightPos[k].xyz;
+        float lRadius = lightPos[k].w;
+        float x = 1.0 + length(P - lPos)/lRadius;
+
+        float shadow = computeShadow(P, N, useClip, k);
+        vec3 radiance = lightCol[k].xyz * shadow * lightCol[k].w / (x*x);
+
+        color += radiance * weights[k];
+    }
+    return color;
 }
 
 
@@ -136,22 +155,28 @@ void main() {
     vec3 fNormal = octDecode(texture(frontNormalTex, vUv).xy);
     vec3 normal = (state == 1) ? evalVolumeNormal(op) : fNormal;
 
-    // float oShadow = computeShadows(op, normal, 1);
-    float oShadow = debug3*computeShadows(op, normal, 1) + (1.0-debug3)*computeShadows(op, normal, 0);
-    opaqueColor *= (state < 2) ? oShadow : 1.0;
+    vec3 oWeights[MAX_LIGHTS];
+    computeWeights(oWeights, op, normal, opaqueColor, debug2, 0.0);
 
-    vec3 color = opaqueColor;
+    vec3 color = (1.0-debug3)*computeLight(oWeights, op, normal, 1) + debug3*computeLight(oWeights, op, normal, 0);
+    color = (state >= 2) ? opaqueColor : color;
 
     if ((rObjectId > 0) && (rDepth < opaqueDepth)) {
         // Add regular objects in front of opaque ones semitransparently
         vec3 rp = worldPosition(rDepth);
         vec3 rNormal = octDecode(texture(regularNormalTex, vUv).xy);
-        float rShadow = computeShadows(rp, rNormal, 0);
-        vec3 rColor = solid_compound(rp, rObjectId) * rShadow;
+        // float rShadow = computeShadows(rp, rNormal, 0);
+        vec3 rColor = solid_compound(rp, rObjectId);
 
-        color = debug3*opaqueColor + (1.0-debug3)*rColor;
+        vec3 rWeights[MAX_LIGHTS];
+        computeWeights(rWeights, rp, rNormal, rColor, debug2, 0.0);
+
+        rColor = computeLight(rWeights, rp, rNormal, 0);
+
+        color = (1.0-debug3)*color + debug3*rColor;
     }
 
+    color = linearToSRGB(ACESFilm(color));
     outColor = vec4(color, 1.0);
 
     // For debugging:
