@@ -3,7 +3,6 @@
 #include <sGlobalUBO>
 
 uniform vec2 resolution;
-uniform int phase; 
 uniform int objectId;
 
 in vec4 vPos;
@@ -19,7 +18,7 @@ void main() {
     float depth = gl_FragCoord.z;
 
     vec2 volumeI = volumeInterval();
-    if ((depth < volumeI.x) && (phase != 2))
+    if (depth < volumeI.x)
         discard;
 
     float id = float(objectId) / 1024.0;

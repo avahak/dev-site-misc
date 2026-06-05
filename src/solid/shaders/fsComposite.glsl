@@ -31,10 +31,6 @@ vec3 worldPosition(float depth) {
     return ph.xyz / ph.w;
 }
 
-float getLinearDepth(float depth, float near, float far) {
-    return (near * far) / (far - depth * (far - near));
-}
-
 
 // Interleaved Gradient Noise for randomizing sampling patterns
 // Source: https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderChunk/shadowmap_pars_fragment.glsl.js
@@ -63,13 +59,12 @@ float computeShadowTerm(vec3 worldPos, vec3 normal, int lightIndex, sampler2DSha
     shadowCoord.xyz /= shadowCoord.w;
     shadowCoord.z -= 2e-4;     // bias
 
-    // float linearDepth = getLinearDepth(...)
-    float radius = lightPos[lightIndex].w;
+    float r = lightPos[lightIndex].w / shadowMapSize;
 
     float phi = interleavedGradientNoise(gl_FragCoord.xy) * TAU;
     float sum = 0.0;
     for (int k = 0; k < 5; k++) {
-        vec2 offset = vogelDiskSample(k, 5, phi) * radius/shadowMapSize;
+        vec2 offset = r * vogelDiskSample(k, 5, phi);
         vec3 v = vec3(shadowCoord.xy + offset, shadowCoord.z);
         sum += texture(shadowMap, v);
     }

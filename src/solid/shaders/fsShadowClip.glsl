@@ -39,13 +39,14 @@ void main() {
             discard;
         // Now fDepth < volumeI.y so we should render front
 
+        // outDepth = vec4(fDepth, 0.0, 0.0, 0.0);
         outDummy = vec4(0.0);
         gl_FragDepth = fDepth;
         return;
     } 
 
     // Case of unmatched pair: render mesh interior at volumeI.x.
+    // outDepth = vec4(volumeI.x, 0.0, 0.0, 0.0);
     outDummy = vec4(0.0);
     gl_FragDepth = volumeI.x;
-    // outDepth = vec4(volumeI.x, 0.0, 0.0, 0.0);
 }

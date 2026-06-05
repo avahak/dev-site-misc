@@ -1,10 +1,6 @@
 /**
  * Rendering test with clipping solid objects.
  * TODO:
- * - Dynamic shadow radius for PCF, review the shadow RT color attachments
- * -    NOTE: shadowRegularRTs do not use their color attachments (depth,id) currently (they are just there so they can use existing shader for simplicity)
- *            and shadowClipRTs have 1 byte dummy color attachment
- *            So.. could just replace dummy with float depth (and remove id from shadowRegularRTs) and we would have all info to sample depth...
  * - Refactor this module
  * - Consider precomputing volumeI (RT using RGFormat, FloatType)
  * - How should interpolation work in the main passes?
@@ -113,6 +109,7 @@ class Scene {
     shadowRegularRTs: THREE.WebGLRenderTarget[] = [];
     shadowClipRTs: THREE.WebGLRenderTarget[] = [];
     shadowMaterialGeom!: THREE.ShaderMaterial;
+    shadowMaterialRegular!: THREE.ShaderMaterial;
     shadowMaterialClip!: THREE.ShaderMaterial;
 
     sphereObject!: THREE.Object3D;
@@ -192,10 +189,10 @@ class Scene {
         const [width, height] = [dpr * res.x, dpr * res.y];
 
         this.geometryBackRT = new THREE.WebGLRenderTarget(width, height, {
-            minFilter: THREE.NearestFilter,
-            magFilter: THREE.NearestFilter,
             format: THREE.RedFormat,        // id
             type: THREE.HalfFloatType,
+            minFilter: THREE.NearestFilter,
+            magFilter: THREE.NearestFilter,
             depthTexture: new THREE.DepthTexture(width, height, THREE.FloatType),
         });
 
@@ -226,10 +223,10 @@ class Scene {
         this.geometryRegularRT.textures[1].type = THREE.HalfFloatType;
 
         this.opaqueRT = new THREE.WebGLRenderTarget(width, height, {
-            minFilter: THREE.NearestFilter,
-            magFilter: THREE.NearestFilter,
             format: THREE.RGBAFormat,       // color
             type: THREE.UnsignedByteType,
+            minFilter: THREE.NearestFilter,
+            magFilter: THREE.NearestFilter,
             depthTexture: new THREE.DepthTexture(width, height, THREE.FloatType),
         });
 
@@ -259,9 +256,10 @@ class Scene {
 
         for (let k = 0; k < NUM_LIGHTS; k++) {
             const shadowRegularRT = new THREE.WebGLRenderTarget(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, {
+                format: THREE.RedFormat,        // dummy
+                type: THREE.UnsignedByteType,
                 depthTexture: new THREE.DepthTexture(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE),
                 depthBuffer: true,
-                count: 2,       // depth, id
             });
             const depthTextureRegular = shadowRegularRT.depthTexture!;
             depthTextureRegular.format = THREE.DepthFormat;
@@ -277,14 +275,6 @@ class Scene {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
             gl.bindTexture(gl.TEXTURE_2D, null);
             this.renderer.setRenderTarget(null);
-            shadowRegularRT.textures[0].format = THREE.RedFormat;
-            shadowRegularRT.textures[0].type = THREE.FloatType;
-            shadowRegularRT.textures[0].minFilter = THREE.LinearFilter;
-            shadowRegularRT.textures[0].magFilter = THREE.LinearFilter;
-            shadowRegularRT.textures[1].format = THREE.RedFormat;
-            shadowRegularRT.textures[1].type = THREE.HalfFloatType;
-            shadowRegularRT.textures[1].minFilter = THREE.NearestFilter;
-            shadowRegularRT.textures[1].magFilter = THREE.NearestFilter;
             this.shadowRegularRTs.push(shadowRegularRT);
 
             const shadowClipRT = new THREE.WebGLRenderTarget(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, {
@@ -604,13 +594,22 @@ class Scene {
         this.shadowMaterialGeom = new THREE.ShaderMaterial({
             uniforms: {
                 resolution: { value: new THREE.Vector2(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE) },
-                phase: { value: null },
                 objectId: { value: null },
                 sphere: { value: null },
             },
             vertexShader: resolveShaderChunk("vs", shaderChunks),
             fragmentShader: resolveShaderChunk("fsShadowGeom", shaderChunks),
             uniformsGroups: [this.globalUBO],
+            depthWrite: true,
+            depthTest: true,
+            glslVersion: THREE.GLSL3,
+        });
+
+        this.shadowMaterialRegular = new THREE.ShaderMaterial({
+            uniforms: {
+            },
+            vertexShader: resolveShaderChunk("vsPlain", shaderChunks),
+            fragmentShader: resolveShaderChunk("fsShadowRegular", shaderChunks),
             depthWrite: true,
             depthTest: true,
             glslVersion: THREE.GLSL3,
@@ -736,22 +735,18 @@ class Scene {
             this.renderer.setRenderTarget(this.shadowBackRT);
             this.renderer.clear();
             this.shadowMaterialGeom.side = THREE.BackSide;
-            this.shadowMaterialGeom.uniforms.phase.value = 0;
             this.geometryScene.overrideMaterial = this.shadowMaterialGeom;
             this.renderer.render(this.geometryScene, cam);
             // Rendering shadows - front:
             this.renderer.setRenderTarget(this.shadowFrontRT);
             this.renderer.clear();
             this.shadowMaterialGeom.side = THREE.FrontSide;
-            this.shadowMaterialGeom.uniforms.phase.value = 1;
             this.geometryScene.overrideMaterial = this.shadowMaterialGeom;
             this.renderer.render(this.geometryScene, cam);
             // Rendering shadows - regular:
             this.renderer.setRenderTarget(this.shadowRegularRTs[k]);
             this.renderer.clear();
-            this.shadowMaterialGeom.side = THREE.FrontSide;
-            this.shadowMaterialGeom.uniforms.phase.value = 2;
-            this.geometryScene.overrideMaterial = this.shadowMaterialGeom;
+            this.geometryScene.overrideMaterial = this.shadowMaterialRegular;
             this.renderer.render(this.geometryScene, cam);
             // Rendering shadows - clip:
             this.renderer.setRenderTarget(this.shadowClipRTs[k]);
