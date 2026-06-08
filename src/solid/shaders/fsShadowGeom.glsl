@@ -2,8 +2,8 @@
 
 #include <sGlobalUBO>
 
-uniform vec2 resolution;
 uniform int objectId;
+uniform int lightIndex;
 
 in vec4 vPos;
 in vec2 vUv;
@@ -17,7 +17,7 @@ layout(location = 1) out vec4 outObjectId;
 void main() {
     float depth = gl_FragCoord.z;
 
-    vec2 volumeI = volumeInterval();
+    vec2 volumeI = volumeInterval(vec2(shadowMapSize), shadowSpheres[lightIndex]);
     if (depth < volumeI.x)
         discard;
 

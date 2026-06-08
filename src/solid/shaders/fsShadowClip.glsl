@@ -1,14 +1,14 @@
-// Same logic as in fsClip.
+// Same logic as in non-shadow side.
 
 #include <sCommon>
 
 #include <sGlobalUBO>
 
-uniform vec2 resolution;
 uniform sampler2D backDepthTex;
 uniform sampler2D frontDepthTex;
 uniform sampler2D backIdTex;
 uniform sampler2D frontIdTex;
+uniform int lightIndex;
 
 in vec4 vPos;
 in vec2 vUv;
@@ -28,7 +28,7 @@ void main() {
     if (bObjectId == 0)
         discard;        // No back => ray miss
 
-    vec2 volumeI = volumeInterval();
+    vec2 volumeI = volumeInterval(vec2(shadowMapSize), shadowSpheres[lightIndex]);
     if (volumeI.x == volumeI.y)
         discard;        // No volume intersection => ray miss
 

@@ -1,5 +1,6 @@
 // Code for placeholder solid textures, mostly AI generated
 
+
 /**
  * Solid base texture: returns a color from one of 10 hard-edged patterns.
  * All patterns have a characteristic feature scale of roughly 1 unit.
@@ -120,3 +121,8 @@ vec3 solid_compound(vec3 p, int pattern) {
 
     return col;
 }
+
+// vec3 solid_compound(vec3 p, int pattern) {
+//     float c = hash22(vec2(float(pattern))).x;
+//     return vec3(c, c, c);
+// }

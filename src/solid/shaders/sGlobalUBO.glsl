@@ -1,9 +1,11 @@
 uniform globalUBO {
+    vec2 resolution;
     vec3 cameraPos;
     vec4 cameraParams;      // (near,far,_,_)
     mat4 vpMat;
     mat4 invVpMat;
     float time;
+    mat4 sphereMain;
     float debug1;
     float debug2;
     float debug3;
@@ -15,4 +17,5 @@ uniform globalUBO {
     float shadowMapSize;
     vec4 shadowCameraParams[MAX_LIGHTS];      // (near,far,_,_)
     mat4 shadowMatrices[MAX_LIGHTS];
+    mat4 shadowSpheres[MAX_LIGHTS];
 };

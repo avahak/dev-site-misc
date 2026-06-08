@@ -7,25 +7,24 @@
 // at^2+bt+c0=0, where a=d\cdot d, b=2d\cdot (p-c), c0=|p-c|^2-r^2.
 // Solutions exist if D=b^2-4ac>=0. Then the solutions are t=\pm (-b\pm\sqrt{D})/(2a).
 
-// uniform vec2 resolution;     // This needs to be defined in parent shader
-uniform mat4 sphere;        // contains (sphere center x,y,z,r) and camera related parameters
+// Sphere constants contain (sphere center x,y,z,r) and camera related parameters.
 
-float evalVolumeField(vec3 p) {
+float evalVolumeField(vec3 p, mat4 sphere) {
     // Negative value means inside
     // |p-c|^2-r^2
     vec3 v = p - sphere[0].xyz;
     return dot(v, v) - sphere[0].w*sphere[0].w;
 }
 
-vec3 evalVolumeNormal(vec3 p) {
+vec3 evalVolumeNormal(vec3 p, mat4 sphere) {
     // Normal for the volume on the boundary
     vec3 v = p - sphere[0].xyz;
     return normalize(v);
 }
 
-vec2 volumeInterval() {
+vec2 volumeInterval(vec2 res, mat4 sphere) {
     // Returns (-,+ solution) depths (in window space z).
-    vec2 ndcXy = 2.0*gl_FragCoord.xy/resolution - 1.0;
+    vec2 ndcXy = 2.0*gl_FragCoord.xy/res - 1.0;
     vec3 dir = sphere[1].xyz * vec3(ndcXy, 1.0);
     vec3 v = sphere[3].xyz;
 
@@ -70,19 +69,4 @@ vec2 volumeInterval() {
 //     float zMinus = ndcMinus.z * 0.5 + 0.5;
 //     float zPlus = ndcPlus.z * 0.5 + 0.5;
 //     return vec2(tMinus > 0.0 ? zMinus : 0.0, tPlus > 0.0 ? zPlus : 0.0);    // TODO FIX with camera.near
-// }
-
-// vec4 intervalEntry(vec3 p0, vec3 dir) {
-//     // Solving when is p0+t*dir on the sphere.
-//     // Returns (pos,w), where w=1 if solution exists, 0 otherwise, and pos is sol with smaller t.
-//     vec3 v = p0 - sphere.xyz;
-//     float a = dot(dir, dir);
-//     float b = 2.0*dot(dir, v);
-//     float c = dot(v, v) - sphere.w*sphere.w;
-//     float discr = b*b - 4.0*a*c;
-//     if (discr < 0.0)
-//         return vec4(0.0);   // no solutions
-//     // Picking negative sign corresponding to entering the sphere
-//     float t = (-b - sqrt(discr)) / (2.0*a);
-//     return vec4(p0 + t*dir, 1.0);
 // }

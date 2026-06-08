@@ -4,7 +4,6 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
 import { Scene as WoodScene } from './woodScene';
 import { Scene as ViewerScene } from './viewerScene';
-import { Scene as ViewerSceneShadow } from './shadowTestScene';   // TODO remove after debug
 
 const WoodSceneComponent: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -25,7 +24,7 @@ const ViewerSceneComponent: React.FC<{ debug: boolean }> = ({ debug }) => {
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
-        const viewerScene = debug ? new ViewerSceneShadow(containerRef.current!) : new ViewerScene(containerRef.current!);
+        const viewerScene = new ViewerScene(containerRef.current!);
         return () => {
             viewerScene.dispose();
         };

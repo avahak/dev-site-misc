@@ -6,16 +6,13 @@
 
 #include <sGlobalUBO>
 
-uniform vec2 resolution;
-uniform sampler2D opaqueDepthTex;
-uniform sampler2D opaqueColorTex;
+uniform sampler2D backTex;
+uniform sampler2D frontTex;
+uniform sampler2D backDepthTex;
+uniform sampler2D frontDepthTex;
 uniform sampler2D frontNormalTex;
-uniform sampler2D regularTex;
-uniform sampler2D regularDepthTex;
-uniform sampler2D regularNormalTex;
 
-uniform sampler2DShadow shadowMapsClip[MAX_LIGHTS];
-uniform sampler2DShadow shadowMapsRegular[MAX_LIGHTS];
+uniform sampler2DShadow shadowMaps[MAX_LIGHTS];
 
 in vec4 vPos;
 in vec2 vUv;
@@ -24,11 +21,86 @@ layout(location = 0) out vec4 outColor;
 
 #include <sVolume>
 
+struct ClipOut {
+    vec3 color;
+    float depth;
+    int state;      // 0: miss, 1: front, 2: clip
+};
 
 vec3 worldPosition(float depth) {
     vec3 ndc = 2.0*vec3(gl_FragCoord.xy/resolution, depth) - 1.0;
     vec4 ph = invVpMat * vec4(ndc, 1.0);
     return ph.xyz / ph.w;
+}
+
+ClipOut clip() {
+    /*
+    Consider the viewing ray cameraPos+t*v for t>0. The ray intersects the volume at
+    [tEntry,tExit] or misses it completely. The geometry phase provides tBack (or bObjectId=0)
+    and tFront (or fObjectId=0). By construction, these are not necessarily a paired entry/exit 
+    of the same solid mesh segment, and tFront>tBack is possible. 
+
+    The camera only sees the intersection of the volume and the solid mesh. Therefore, for any
+    solid mesh segment S along the viewing ray, the visible point along the ray is the closest hit, 
+    found via min([tEntry,tExit]\cap S). We separate three cases:
+
+    Ray miss) 
+        If volume interval does not exist or no back exists, nothing is visible.
+
+    Matched pair) 
+        If front exists and tFront<tBack, by construction they form a mesh solid segment 
+        and tEntry<tFront. We evaluate two subcases:
+        - If tExit<tFront: [tEntry,tExit]\cap[tFront,tBack] is empty and nothing is visible.
+        - If tExit>tFront: min([tEntry,tExit]\cap[tFront,tBack])=tFront.
+        Therefore the camera sees the mesh front at tFront.
+
+    Unmatched pair) 
+        If front does not exist or tFront>tBack, there exists another frontside 
+        front' (and tFront') associated with back. By construction tFront'<tEntry and tBack>tEntry. 
+        Thus min([tEntry,tExit]\cap[tFront',tBack])=tEntry.
+        Therefore the camera sees the volume entrypoint at tEntry.
+
+    NOTE: For simplicity we have not considered cases with equality above.
+    */
+    float bDepth = texture(backDepthTex, vUv).r;
+    float fDepth = texture(frontDepthTex, vUv).r;
+
+    float bTexColor = texture(backTex, vUv).r;
+    float fTexColor = texture(frontTex, vUv).r;
+    int bObjectId = int(round(bTexColor * 1024.0));
+    int fObjectId = int(round(fTexColor * 1024.0));
+
+    if (bObjectId == 0)
+        return ClipOut(vec3(0.0), 0.0, 0);        // No back => ray miss
+
+    vec2 volumeI = volumeInterval(resolution, sphereMain);
+    if (volumeI.x == volumeI.y)
+        return ClipOut(vec3(0.0), 0.0, 0);        // No volume intersection => ray miss
+
+    // Z-fighting problem:
+    // ep=0 below -> z-fighting when two objects are close to each other
+    // ep=1e-5 below -> near edges where |fDepth-bDepth|<ep
+    //     we get matchedPair=0 but correct value is 1 -> we jump to pEntry that has 
+    //     nothing to do with it -> we use plane z that is completely wrong -> artifacts
+    // Fix used: use ep=0 when the objects are the same but ep=1e-5 if they are different:
+    float ep = (fObjectId == bObjectId) ? 0.0 : EP;
+    int matchedPair = (fObjectId > 0 && fDepth < bDepth-ep) ? 1 : 0;
+    if (matchedPair == 1) {
+        if (fDepth >= volumeI.y) 
+            discard;
+        // Now fDepth < volumeI.y so we should render front
+
+        vec3 fp = worldPosition(fDepth);
+        vec3 fColor = solid_compound(fp, fObjectId);
+
+        return ClipOut(fColor, fDepth, 1);
+    } 
+
+    // Case of unmatched pair: render mesh interior at volumeI.x.
+    vec3 pEntry = worldPosition(volumeI.x);
+    vec3 color = solid_compound(pEntry, bObjectId);
+
+    return ClipOut(color, volumeI.x, 2);
 }
 
 
@@ -72,40 +144,24 @@ float computeShadowTerm(vec3 worldPos, vec3 normal, int lightIndex, sampler2DSha
     return 0.2*sum;
 }
 
-float computeShadow(vec3 worldPos, vec3 normal, int useClip, int k) {
+float computeShadow(vec3 worldPos, vec3 normal, int k) {
     float term;
     switch (k) {
         case 0: 
-            term = (useClip == 1) ?
-                computeShadowTerm(worldPos, normal, k, shadowMapsClip[0]) : 
-                computeShadowTerm(worldPos, normal, k, shadowMapsRegular[0]);
+            term = computeShadowTerm(worldPos, normal, k, shadowMaps[0]);
             break;
         case 1: 
-            term = (useClip == 1) ?
-                computeShadowTerm(worldPos, normal, k, shadowMapsClip[1]) : 
-                computeShadowTerm(worldPos, normal, k, shadowMapsRegular[1]);
+            term = computeShadowTerm(worldPos, normal, k, shadowMaps[1]);
             break;
         case 2: 
-            term = (useClip == 1) ?
-                computeShadowTerm(worldPos, normal, k, shadowMapsClip[2]) : 
-                computeShadowTerm(worldPos, normal, k, shadowMapsRegular[2]);
+            term = computeShadowTerm(worldPos, normal, k, shadowMaps[2]);
             break;
         case 3: 
-            term = (useClip == 1) ?
-                computeShadowTerm(worldPos, normal, k, shadowMapsClip[3]) : 
-                computeShadowTerm(worldPos, normal, k, shadowMapsRegular[3]);
+            term = computeShadowTerm(worldPos, normal, k, shadowMaps[3]);
             break;
     }
     return term;
 }
-
-
-
-// vec3 evalDirectLight(
-//     vec3 P, vec3 N, vec3 camPos, 
-//     vec3 baseColor, float roughness, float metallic, 
-//     vec3 lightPos, vec3 lightColor, float lightIntensity
-// ) {
 
 
 void computeWeights(out vec3 weights[MAX_LIGHTS], vec3 P, vec3 N, vec3 baseColor, float roughness, float metallic) {
@@ -117,7 +173,7 @@ void computeWeights(out vec3 weights[MAX_LIGHTS], vec3 P, vec3 N, vec3 baseColor
     }
 }
 
-vec3 computeLight(in vec3 weights[MAX_LIGHTS], vec3 P, vec3 N, int useClip) {
+vec3 computeLight(in vec3 weights[MAX_LIGHTS], vec3 P, vec3 N) {
     vec3 color = vec3(0.0);
     for (int k = 0; k < MAX_LIGHTS; k++) {
         if (k >= int(round(numLights)))
@@ -127,7 +183,7 @@ vec3 computeLight(in vec3 weights[MAX_LIGHTS], vec3 P, vec3 N, int useClip) {
         float lRadius = lightPos[k].w;
         float x = 1.0 + length(P - lPos)/lRadius;
 
-        float shadow = computeShadow(P, N, useClip, k);
+        float shadow = computeShadow(P, N, k);
         vec3 radiance = lightCol[k].xyz * shadow * lightCol[k].w / (x*x);
 
         color += radiance * weights[k];
@@ -137,42 +193,29 @@ vec3 computeLight(in vec3 weights[MAX_LIGHTS], vec3 P, vec3 N, int useClip) {
 
 
 void main() {
-    float rTexColor = texture(regularTex, vUv).r;
-    float opaqueDepth = texture(opaqueDepthTex, vUv).r;
-    vec4 opaqueColor4 = texture(opaqueColorTex, vUv);
-    vec3 opaqueColor = opaqueColor4.rgb;
+    ClipOut clipResult = clip();
+    float opaqueDepth = clipResult.depth;
+    vec3 opaqueColor = clipResult.color;
+    int state = clipResult.state;       // 0: miss, 1: front, 2: clip
+
+    if (state == 0) {
+        // miss
+        discard;
+    }
+
     vec3 op = worldPosition(opaqueDepth);
-    int state = clamp(int(round(opaqueColor4.a*100.0)), 0, 2);
-    // State 0:front, 1:volume, 2:external opaque addition. Regular render is not part of state
-    float rDepth = texture(regularDepthTex, vUv).r;
-    int rObjectId = int(round(rTexColor * 1024.0));
 
     vec3 fNormal = octDecode(texture(frontNormalTex, vUv).xy);
-    vec3 normal = (state == 1) ? evalVolumeNormal(op) : fNormal;
+    vec3 normal = (state == 2) ? evalVolumeNormal(op, sphereMain) : fNormal;
 
     vec3 oWeights[MAX_LIGHTS];
     computeWeights(oWeights, op, normal, opaqueColor, debug2, 0.0);
 
-    vec3 color = (1.0-debug3)*computeLight(oWeights, op, normal, 1) + debug3*computeLight(oWeights, op, normal, 0);
-    color = (state >= 2) ? opaqueColor : color;
-
-    if ((rObjectId > 0) && (rDepth < opaqueDepth)) {
-        // Add regular objects in front of opaque ones semitransparently
-        vec3 rp = worldPosition(rDepth);
-        vec3 rNormal = octDecode(texture(regularNormalTex, vUv).xy);
-        // float rShadow = computeShadows(rp, rNormal, 0);
-        vec3 rColor = solid_compound(rp, rObjectId);
-
-        vec3 rWeights[MAX_LIGHTS];
-        computeWeights(rWeights, rp, rNormal, rColor, debug2, 0.0);
-
-        rColor = computeLight(rWeights, rp, rNormal, 0);
-
-        color = (1.0-debug3)*color + debug3*rColor;
-    }
+    vec3 color = computeLight(oWeights, op, normal);
 
     color = linearToSRGB(ACESFilm(color));
-    outColor = vec4(color, 1.0);
+    gl_FragDepth = opaqueDepth;
+    outColor = vec4(color, 0.0);
 
     // For debugging:
     int di = int(round(8.0*debug4));
