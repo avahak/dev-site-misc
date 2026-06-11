@@ -2,38 +2,25 @@ import React, { useEffect, useRef } from 'react';
 import { Box, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
-import { Scene as WoodScene } from './woodScene';
 import { Scene as ViewerScene } from './viewerScene';
+import { Scene as SolidScene } from './solidScene';
 
-const WoodSceneComponent: React.FC = () => {
+
+const SceneComponent: React.FC<{ solidTest: boolean }> = ({ solidTest }) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
-        const woodScene = new WoodScene(containerRef.current!);
+        const scene = solidTest ? new SolidScene(containerRef.current!) : new ViewerScene(containerRef.current!);
         return () => {
-            woodScene.dispose();
+            scene.dispose();
         };
     }, []);
 
     return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 };
 
-const ViewerSceneComponent: React.FC<{ debug: boolean }> = ({ debug }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        console.log("useEffect: ", containerRef.current);
-        const viewerScene = new ViewerScene(containerRef.current!);
-        return () => {
-            viewerScene.dispose();
-        };
-    }, []);
-
-    return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
-};
-
-const App: React.FC<{ debug: boolean }> = ({ debug }) => {
+const App: React.FC<{ solidTest: boolean }> = ({ solidTest }) => {
     return (
         <Container maxWidth="xl">
             <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
@@ -45,7 +32,7 @@ const App: React.FC<{ debug: boolean }> = ({ debug }) => {
                 <WoodSceneComponent />
             </Box> */}
             <Box style={{ width: "100%", height: "600px" }}>
-                <ViewerSceneComponent debug={debug} />
+                <SceneComponent solidTest={solidTest} />
             </Box>
             <MUILink component={RouterLink} to="/" variant="body1" color="primary">
                 Back

@@ -1,3 +1,5 @@
+#include <sWood>
+
 // Code for placeholder solid textures, mostly AI generated
 
 
@@ -121,8 +123,3 @@ vec3 solid_compound(vec3 p, int pattern) {
 
     return col;
 }
-
-// vec3 solid_compound(vec3 p, int pattern) {
-//     float c = hash22(vec2(float(pattern))).x;
-//     return vec3(c, c, c);
-// }

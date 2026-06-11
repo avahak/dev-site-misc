@@ -1,10 +1,11 @@
 // Shadows reference: https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderChunk/shadowmap_pars_fragment.glsl.js
 
 #include <sCommon>
-#include <sSolidTex>
 #include <sPBR>
 
 #include <sGlobalUBO>
+
+#include <sSolidTex>
 
 uniform sampler2D frontTex;
 uniform sampler2D frontDepthTex;
@@ -123,13 +124,10 @@ void main() {
         discard;
     }
 
-    vec3 fp = worldPosition(opaqueDepth);
-    vec3 opaqueColor = solid_compound(fp, fObjectId);
-
     vec3 op = worldPosition(opaqueDepth);
+    vec3 opaqueColor = solid_compound(op, fObjectId);
 
-    vec3 fNormal = octDecode(texture(frontNormalTex, vUv).xy);
-    vec3 normal = fNormal;
+    vec3 normal = octDecode(texture(frontNormalTex, vUv).xy);
 
     vec3 oWeights[MAX_LIGHTS];
     computeWeights(oWeights, op, normal, opaqueColor, debug2, 0.0);

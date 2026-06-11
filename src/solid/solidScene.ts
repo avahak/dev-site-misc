@@ -1,13 +1,11 @@
-/**
- * Basic template for a three.js scene decoupling three.js and React by writing
- * a standalone class to handle three.js.
- * 
- * Draws a cube and a square with custom shader.
- */
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-import vs from './shaders/vs.glsl?raw';
-import fs from './shaders/fs.glsl?raw';
+import { importShaders, resolveShaderChunk } from './shaderImport';
+const shaderChunks = importShaders(import.meta.glob(['./shaders/**/*.glsl'], {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+}));
 
 class Scene {
     container: HTMLDivElement;
@@ -20,7 +18,6 @@ class Scene {
     gui: any;
     isStopped: boolean = false;
 
-    shader!: THREE.ShaderMaterial;
     cube!: THREE.Mesh;
 
     constructor(container: HTMLDivElement) {
@@ -56,7 +53,7 @@ class Scene {
         }
         const res = new THREE.Vector2();
         this.renderer.getDrawingBufferSize(res);
-        this.shader.uniforms.resolution.value = res;
+        // this.shader.uniforms.resolution.value = res;
     }
 
     setupResizeRenderer() {
@@ -91,7 +88,6 @@ class Scene {
         for (const task of this.cleanUpTasks)
             task();
         this.renderer.dispose();
-        this.shader?.dispose();
 
         this.gui.destroy();
     }
@@ -110,17 +106,17 @@ class Scene {
         this.cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
         this.scene.add(this.cube);
 
-        this.shader = new THREE.ShaderMaterial({
-            uniforms: {
-                resolution: { value: null },
-            },
-            vertexShader: vs,
-            fragmentShader: fs,
-        });
+        // this.shader = new THREE.ShaderMaterial({
+        //     uniforms: {
+        //         resolution: { value: null },
+        //     },
+        //     vertexShader: vs,
+        //     fragmentShader: fs,
+        // });
 
-        const geometry = new THREE.PlaneGeometry(2, 2);
-        let mesh = new THREE.Mesh(geometry, this.shader);
-        this.scene.add(mesh);
+        // const geometry = new THREE.PlaneGeometry(2, 2);
+        // let mesh = new THREE.Mesh(geometry, this.shader);
+        // this.scene.add(mesh);
     }
 
     getResolution() {

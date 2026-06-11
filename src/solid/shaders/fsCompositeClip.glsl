@@ -1,10 +1,11 @@
 // Shadows reference: https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderChunk/shadowmap_pars_fragment.glsl.js
 
 #include <sCommon>
-#include <sSolidTex>
 #include <sPBR>
 
 #include <sGlobalUBO>
+
+#include <sSolidTex>
 
 uniform sampler2D backTex;
 uniform sampler2D frontTex;

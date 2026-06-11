@@ -1,11 +1,6 @@
-uniform vec2 resolution;
-uniform float debug1;
-uniform float debug2;
-uniform float debug3;
-uniform float debug4;
+// For more realistic model, see https://dl.acm.org/doi/10.1145/3528223.3530081,
+// https://www.youtube.com/watch?v=mMvoTtipJac https://www.shadertoy.com/view/fsyyzt
 
-in vec4 vPos;
-in vec2 vUv;
 
 const float BRANCH_ANGLE = 0.5;
 const float BRANCH_RADIUS = 0.05;
@@ -14,29 +9,21 @@ const float BRANCH_AGE_YEARS = 8.0;
 const vec3 COLOR1 = vec3(218.0,109.0,66.0)/255.0;
 const vec3 COLOR2 = vec3(255.0,193.0,140.0)/255.0;
 
-// float modDist(float x, float y, float s) {
-//     float d = x - y;
-//     d = mod(d + 0.5*s, s) - 0.5*s;
-//     return abs(d);
-// }
 
 // Flow of fbm noise vectorfield, integrated with RK4.
 vec3 flowWarp(vec3 p) {
-    const int ITERS = 3;
     float H = debug1;
     float WARP = debug2/10.0;     // time parameter for flow
-    float step = WARP / float(ITERS);
+    float s = WARP;
 
     vec3 offset = vec3(0.0);
-    
-    for(int i = 0; i < ITERS; i++) {
-        vec3 k1 = fbm33(p, H);
-        vec3 k2 = fbm33(p + 0.5*step*k1, H);
-        vec3 k3 = fbm33(p + 0.5*step*k2, H); 
-        vec3 k4 = fbm33(p + step*k3, H);
-        
-        offset += (step / 6.0) * (k1 + 2.0*k2 + 2.0*k3 + k4);
-    }
+
+    vec3 k1 = fbm33(p, H);
+    vec3 k2 = fbm33(p + 0.5*s*k1, H);
+    vec3 k3 = fbm33(p + 0.5*s*k2, H); 
+    vec3 k4 = fbm33(p + s*k3, H);
+    offset += (s / 6.0) * (k1 + 2.0*k2 + 2.0*k3 + k4);
+
     return p + offset;
 }
 
@@ -106,9 +93,11 @@ float annualRings(vec3 q, float age) {
     return s*s;
 }
 
-void main() {
-    vec3 p = vPos.xyz;
-    p = flowWarp(p);
+vec3 wood(vec3 p0) {
+    vec3 p = flowWarp(p0);
+    // vec3 p = p0;
+
+    // return mix(COLOR1, COLOR2, 0.5);
 
     // float d = spots(p);
     float c = 0.2;
@@ -129,10 +118,5 @@ void main() {
     if (c < 0.3)
         c = annualRings(p, age);
 
-    vec3 color = mix(COLOR1, COLOR2, c);
-
-    // vec3 w = vnoise33(vPos.xyz);
-    // vec3 w = fbm33(vPos.xyz, 2.0);
-    // gl_FragColor = vec4(w, 1.0);
-    gl_FragColor = vec4(color, 1.0);
+    return mix(COLOR1, COLOR2, c);
 }

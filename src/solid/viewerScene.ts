@@ -1,6 +1,8 @@
 /**
  * Rendering test with clipping solid objects.
  * TODO:
+ * - start on animations
+ * - actual solid textures
  * - For IBL check out https://github.com/jeweg/pbr-webgl-shenanigans/tree/master
  * - Refactor this module
  * - Consider precomputing volumeI (RT using RGFormat, FloatType)
@@ -14,7 +16,7 @@ import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import { TextGroup } from '../primitives/textRender';
 import { MCSDFFont } from '../primitives/font';
 import { importShaders, resolveShaderChunk } from './shaderImport';
-const shaderChunks = importShaders(import.meta.glob(['./shaders/*.glsl'], {
+const shaderChunks = importShaders(import.meta.glob(['./shaders/**/*.glsl'], {
     query: '?raw',
     import: 'default',
     eager: true,
