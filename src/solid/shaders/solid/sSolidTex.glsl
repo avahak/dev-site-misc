@@ -1,5 +1,3 @@
-#include <sWood>
-
 // Code for placeholder solid textures, mostly AI generated
 
 

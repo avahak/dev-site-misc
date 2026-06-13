@@ -18,6 +18,9 @@ is roughly 4.06/num^4 (for large num, see error_exact) at angles (0.5+k)*2*pi/nu
 For approximation num=6 (9 control points) is fine with max error ~0.0041. 
 For closer result can use num=8 (11 control points) with max err ~0.0012 (exact at +-e1,+-e2).
 All the errors are in the direction of the origin, in other words the curve is fully inside S^1.
+
+Note: if we want to balance error on both sides of S^1 instead of just one side,
+see alternate control point functions `control_points_circle_balanced` below.
 """
 
 import numpy as np
@@ -38,6 +41,45 @@ def control_points_circle(num):
     print(f'{num=}, {len(cpts)=}, {r=}')
     return cpts
 
+def control_points_circle_balanced(num):
+    # Balances error on both sides. Does not visit (1,0) though. See function below to 
+    # try to do this too (approximatively)
+    phi = 2 * np.pi / num
+    x = np.cos(phi)
+    r0 = 3 / (x + 2)
+    d_mid = (x + 11) * np.sqrt(2 * (x + 1)) / (8 * (x + 2))
+    s = 2 / (1 + d_mid)
+    r = s * r0
+    cpts = np.array([(r * np.cos(k * phi), r * np.sin(k * phi))
+                     for k in range(-1, num + 2)])
+    return cpts
+
+def _control_points_circle_balanced(num):
+    # circle approx that almost passes through (1,0).
+    # Note: need to parametrize curve with phi/4 offset for this to have C(0)\approx(1,0)
+    # - If C(0)=(1,0) is crucial, exact delta could be computed instead of -phi/4
+    phi = 2 * np.pi / num
+    delta = -phi / 4
+
+    # Basis weights at u = 1/4
+    w = np.array([27, 235, 121, 1]) / 384.0
+
+    # Control points with r = 1 for first segment
+    # Use indices k = -1, 0, 1, 2 (angles -5phi/4, -phi/4, 3phi/4, 7phi/4)
+    angles = np.array([-5, -1, 3, 7]) * phi / 4   # actually -5phi/4, -phi/4, 3phi/4, 7phi/4
+    pts = np.column_stack([np.cos(angles), np.sin(angles)])
+
+    # C(1/4) with r=1
+    C = w @ pts   # shape (2,)
+    d = np.linalg.norm(C)
+
+    r = 1.0 / d
+
+    # Build full control polygon
+    all_angles = np.arange(-1, num + 2) * phi + delta
+    cpts = r * np.column_stack([np.cos(all_angles), np.sin(all_angles)])
+    return cpts
+
 def plot_splines(control_points, m=1000, error_mag=10, title=''):
     # main plot
     # Uniform cubic B-spline setup
@@ -48,7 +90,9 @@ def plot_splines(control_points, m=1000, error_mag=10, title=''):
 
     spline = BSpline(knots, control_points, deg)
     curve = spline(np.linspace(knots[deg], knots[n], m))
-    circle = np.array([np.cos(2*np.pi*t), np.sin(2*np.pi*t)])
+    # delta = 2.0*np.pi/num/4.0
+    delta = 0
+    circle = np.array([np.cos(2*np.pi*t-delta), np.sin(2*np.pi*t-delta)])
 
     if error_mag > 0:
         curve_with_error_magnified = curve + error_mag*(curve - circle.T)
@@ -266,14 +310,20 @@ if __name__ == '__main__':
     # fit_and_plot_log_curve(max_errors)
 
     # Draw splines against circle with magnified error
-    for num in [6, 8]:
-        error = error_exact(num)
+    max_errors = []
+    for num in [6, 8, 10, 12]:
+        # error = error_exact(num)
         # mag = int(0.3/error)
-        mag = 10
-        cpts = control_points_circle(num)
+        mag = 100
+        # cpts = control_points_circle(num)
+        cpts = control_points_circle_balanced(num)
+        
+        errors = compute_error(cpts)
+        error = np.max(errors)
+        max_errors.append([num, error])
         plot_splines(cpts, error_mag=mag, title=f'{num=}, max_error={error:.1e}, error_mag={mag}')
 
-    # plot_error_data(max_errors)
+    plot_error_data(max_errors)
 
     # plot_error(control_points_circle(3))
     # derivative_test()

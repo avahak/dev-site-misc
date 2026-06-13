@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { importShaders, resolveShaderChunk } from './shaderImport';
 const shaderChunks = importShaders(import.meta.glob(['./shaders/**/*.glsl'], {
@@ -10,6 +11,7 @@ const shaderChunks = importShaders(import.meta.glob(['./shaders/**/*.glsl'], {
 class Scene {
     container: HTMLDivElement;
     camera!: THREE.Camera;
+    controls!: OrbitControls;
     scene!: THREE.Scene;
     renderer: THREE.WebGLRenderer;
     cleanUpTasks: (() => void)[] = [];
@@ -19,6 +21,7 @@ class Scene {
     isStopped: boolean = false;
 
     cube!: THREE.Mesh;
+    material!: THREE.ShaderMaterial;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -53,7 +56,7 @@ class Scene {
         }
         const res = new THREE.Vector2();
         this.renderer.getDrawingBufferSize(res);
-        // this.shader.uniforms.resolution.value = res;
+        // this.material.uniforms.resolution.value = res;
     }
 
     setupResizeRenderer() {
@@ -88,35 +91,37 @@ class Scene {
         for (const task of this.cleanUpTasks)
             task();
         this.renderer.dispose();
+        this.controls?.dispose();
 
         this.gui.destroy();
     }
 
     setupCamera() {
-        this.camera = new THREE.OrthographicCamera();
+        this.camera = new THREE.PerspectiveCamera();
+        this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
-        this.camera.position.set(0, 0, 1);
+        this.camera.position.set(1, 1, 2);
         this.camera.lookAt(new THREE.Vector3(0, 0, 0));
     }
 
     setupScene() {
         this.scene = new THREE.Scene();
-        const cubeGeometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-        const cubeMaterial = new THREE.MeshNormalMaterial();
-        this.cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+
+        this.material = new THREE.ShaderMaterial({
+            uniforms: {
+                clipPlane: { value: new THREE.Vector4(1, 0, 0, 0) },
+                // resolution: { value: null },
+            },
+            vertexShader: resolveShaderChunk("vsSolid", shaderChunks),
+            fragmentShader: resolveShaderChunk("fsSolid", shaderChunks),
+            depthWrite: true,
+            depthTest: true,
+            glslVersion: THREE.GLSL3,
+        });
+
+        const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+        this.cube = new THREE.Mesh(cubeGeometry, this.material);
         this.scene.add(this.cube);
-
-        // this.shader = new THREE.ShaderMaterial({
-        //     uniforms: {
-        //         resolution: { value: null },
-        //     },
-        //     vertexShader: vs,
-        //     fragmentShader: fs,
-        // });
-
-        // const geometry = new THREE.PlaneGeometry(2, 2);
-        // let mesh = new THREE.Mesh(geometry, this.shader);
-        // this.scene.add(mesh);
     }
 
     getResolution() {
@@ -126,6 +131,7 @@ class Scene {
 
     animate() {
         this.animateStep(false);
+        this.controls.update();
         this.animationRequestID = requestAnimationFrame(this.animate);
     }
 
@@ -139,7 +145,10 @@ class Scene {
 
     render() {
         const t = this.lastTime;
-        this.cube.setRotationFromEuler(new THREE.Euler(t, 2.0 * t, 3.0 * t));
+        // this.cube.setRotationFromEuler(new THREE.Euler(t, 2.0 * t, 3.0 * t));
+
+        const d = Math.max(-0.5, Math.min(0.5, 0.6 * Math.sin(10.0 * t)));
+        this.material.uniforms.clipPlane.value.set(1, 0, 0, d);
 
         this.renderer.render(this.scene, this.camera);
     }
