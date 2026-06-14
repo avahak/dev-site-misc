@@ -658,8 +658,8 @@ class Scene {
     }
 
     animate() {
-        this.animationRequestID = requestAnimationFrame(this.animate);
         this.controls.update();
+        this.animationRequestID = requestAnimationFrame(this.animate);
         this.animateStep(false);
     }
 
