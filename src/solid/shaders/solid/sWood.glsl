@@ -5,16 +5,16 @@
 
 
 struct Knot {
-    vec3 start;
-    float death;        // in [0,1]
-    float strength;     // in [0,1] to prevent overlapping branches
-    vec3 dir;           // (knot direction \beta, knot asymptotic verticality a, knot instant verticality b)
-    // etc.
+    vec3 start;         // Position on pith where the branch starts, could just be `float startHeight;`
+    float death;        // time of death, in [0,1]
+    vec2 dir;           // (knot direction, knot verticality at stem)
+
+    float strength;     // used to fade the branch influence to prevent overlapping branches, in [0,1]
 };
 
 struct LookupInfo {
-    float rStem;
-    vec2 pith;
+    float rStem;        // Growth rate for the stem at given height, direction
+    vec2 pith;          // (x,y) coordinates for the stem at given height
     Knot knot;
 };
 
@@ -42,7 +42,7 @@ float sminPow(float a, float b, float k) {
 
 
 vec2 getPith(float z) {
-    return 0.02*vnoise33(5.0*vec3(0.0, 0.0, z)).xy;
+    return 0.0*vnoise33(5.0*vec3(0.0, 0.0, z)).xy;
 }
 
 
@@ -54,7 +54,7 @@ LookupInfo lookupPlaceholder(vec3 p) {
     knot.start = vec3(getPith(0.0), 0.0);
     knot.death = debug2;
     knot.strength = 1.0;
-    knot.dir = vec3(-PI/2.0, debug3, debug4);
+    knot.dir = vec2(-PI/2.0, 2.0*debug3);
 
     LookupInfo lookup;
     lookup.knot = knot;
@@ -66,42 +66,54 @@ LookupInfo lookupPlaceholder(vec3 p) {
 
 
 vec4 wood(vec3 p) {
-    p = vec3(p.x, -p.z, p.y);        // TODO find more systematic way to do this
+    p = vec3(p.x, -p.z, p.y+time);        // TODO find more systematic way to do this
 
     LookupInfo lookup = lookupPlaceholder(p);
     Knot knot = lookup.knot;
 
-    vec2 v = p.xy - lookup.pith;
+    // Write p in cylinder coordinates as (r,phi,p.z).
+    vec2 v = p.xy - getPith(p.z);
     float phi = atan(v.y, v.x);
     float r = length(v);
-    // Now p is (r,phi,p.z) in cylinder coordinates.
+
+    int branchIndex = int(round(1024.0*texture(branchIndexTex, vec2(phi/TAU, p.z/zRange)).r));
+    vec4 branchZASD = branchesZASD[branchIndex];
+    vec4 branchR = branchesR[branchIndex];
+    knot.start = vec3(0.0, 0.0, branchZASD.x);
+    knot.dir = vec2(branchZASD.y, branchZASD.z);
+    knot.death = branchZASD.w;
+    float br = branchR.x;
+    vec3 h = hash33(vec3(float(branchIndex)));
+    // vec3 h = hash33(vec3(float(int(20.0*phi))));
+    // return vec4(h, 1.0);
+
+
 
     // knotP is considered closest point to p on the knot skeleton (NOTE this is an approximation)
     vec2 knotDirXY = vec2(cos(knot.dir.x), sin(knot.dir.x));
     vec3 knotP = knot.start + vec3(
         r*knotDirXY, 
-        knot.dir.y*r + knot.dir.z*r/(0.1+r)
+        knot.dir.y*(r < 1.0 ? r - 0.5*r*r : 0.5)
     );
 
     float dPith = r;
-    vec3 cp = closestRayPoint(p, knotP, vec3(knotDirXY, knot.dir.y));
-    float dKnot = distance(p, cp);      // or just: distance(p, knotP);
+    vec3 diff = p - knotP;
+    diff.z -= zRange * round(diff.z / zRange);        // z-tiling!
+    float dKnot = length(diff);
     
-    vec3 betaVec = p - knotP;
-    float betaKnot = atan(betaVec.z, dot(betaVec.xy, vec2(-knotDirXY.y, knotDirXY.x)));
-    // float cosBetaKnot = cos(betaKnot);
-    float rKnot = 0.2 - 0.0*sqrt(dPith) + 0.02*snoise(1.0*vec3(cos(betaKnot), sin(betaKnot), dPith));
+    float betaKnot = atan(diff.z, dot(diff.xy, vec2(-knotDirXY.y, knotDirXY.x)));
+    float rKnot = br - 0.1*sqrt(dPith) + 0.02*snoise(1.0*vec3(cos(betaKnot), sin(betaKnot), dPith));
 
     float t0 = dPith / lookup.rStem;
     float t1 = dKnot / rKnot;
 
     float tDelta = t0 - t1;
     float k = 1.75*tDelta/(0.3+abs(tDelta)) + 3.25;
+    // NOTE x/(a+abs(x)) is C^1, ->-1 at -\infty, ->1 at \infty, derivative at 0 is 1/a.
 
     float t = sminPow(t0, t1, k);
     float delta = t - min(t0, t1);
 
-    
     // Death
     float isAlive = 1.0;
     if (t > knot.death) {
@@ -117,10 +129,21 @@ vec4 wood(vec3 p) {
         float f = 0.35 - 0.85*s/(0.3+abs(s));
         delta = f*tempDelta;
     }
+
     t = min(t0, t1) + delta;
 
+    // Localize branch influence
+    // float branchInfluence = 1.0 - smoothstep(3.0, 5.0, t1/t0);    // 0 if t1 > 5*t0
+    float branchInfluence = 1.0 - smoothstep(2.5, 3.0, t1/t0);    // 0 if t1 > 5*t0
+    t = mix(t0, t, branchInfluence);
+
+
+    if (debug6 > 2.0/3.0)
+        t = t0;
 
     // t = mix(t0, t, knot.strength);
 
-    return vec4(vec2(sin(100.0/(0.1+debug5)*t)), isAlive, 1.0);
+    float g = 1.0/pow(clamp((1.0+debug7)*t1-t0,0.001,1.0)+1.0,4.0);
+    float q = 1.0 - 30.0*abs((0.25+debug7)*(debug4 < 0.5 ? dKnot / rKnot : t1) - t0);
+    return vec4(0.5*sin(30.0/(0.1+debug5)*t), debug6 < 1.0/3.0 ? 30.0*abs(t-t0) : 0.0, branchInfluence, 1.0);
 }

@@ -1,5 +1,7 @@
 #include <sCommon>
 
+const int MAX_BRANCHES = 1024;
+
 uniform vec3 cameraPos;
 uniform vec2 cameraNearFar;
 uniform mat4 vMat;
@@ -8,6 +10,10 @@ uniform mat4 pvMatInv;
 
 uniform vec2 resolution;
 uniform float time;
+
+uniform sampler3D noiseTexture;
+
+uniform sampler2D branchIndexTex;
 
 uniform vec4 clipPlane; // (dirX,dirY,dirY,offset), dir is unit length, points in half-space are vec3 p with dot(p,clipPlane.xyz)>=clipPlane.w
 
@@ -19,6 +25,13 @@ uniform float debug5;
 uniform float debug6;
 uniform float debug7;
 uniform float debug8;
+
+uniform globalUBO {
+    uniform float zRange;
+    uniform int numBranches;
+    vec4 branchesZASD[MAX_BRANCHES];
+    vec4 branchesR[MAX_BRANCHES];
+};
 
 in vec4 vPos;
 
@@ -39,14 +52,12 @@ vec3 depthToWorldPosition(float depth) {
     return worldPos.xyz / worldPos.w;
 }
 
-vec2 cubeClip() {
+vec2 cubeClip(float r) {
     vec3 rd0 = depthToWorldPosition(1.0) - cameraPos;   // Using far-plane is better for accuracy
     float tFar = length(rd0);
     float tNear = cameraNearFar.x / cameraNearFar.y * tFar;
     vec3 rd = rd0 / tFar;
 
-    float r = 0.5;
-    
     // Avoid division by zero
     vec3 safeRd = vec3(
         rd.x == 0.0 ? 1e-6 : rd.x,
@@ -73,14 +84,12 @@ vec2 cubeClip() {
     return vec2(worldToDepth(cameraPos + rd*tStart), worldToDepth(cameraPos + rd*tEnd));
 }
 
-vec2 ballClip() {
+vec2 ballClip(float r) {
     vec3 rd0 = depthToWorldPosition(1.0) - cameraPos;   // Using far-plane is better for accuracy
     float tFar = length(rd0);
     float tNear = cameraNearFar.x / cameraNearFar.y * tFar;
     vec3 rd = rd0 / tFar;
 
-    float r = 0.5;
-    
     float b = dot(cameraPos, rd);
     float c = dot(cameraPos, cameraPos) - r*r;
     float h = b*b - c;
@@ -103,15 +112,15 @@ vec2 ballClip() {
     return vec2(worldToDepth(cameraPos + rd*tStart), worldToDepth(cameraPos + rd*tEnd));
 }
 
-vec2 cylinderClip() {
+vec2 cylinderClip(float r) {
     vec3 rd0 = depthToWorldPosition(1.0) - cameraPos;   // Using far-plane is better for accuracy
     float tFar = length(rd0);
     float tNear = cameraNearFar.x / cameraNearFar.y * tFar;
     vec3 rd = rd0 / tFar;
 
     vec3 cylinderDir = normalize(vec3(0.0, 1.0, 0.0));
-    float cylinderLength = 1.0;
-    float cylinderRadius = 0.5;
+    float cylinderLength = 2.0*r;
+    float cylinderRadius = r;
 
     float halfL = cylinderLength * 0.5;
     
@@ -211,9 +220,9 @@ vec3 testSolid(vec3 p) {
 }
 
 void main() {
-    // vec2 interval = ballClip();
-    vec2 interval = cubeClip();
-    // vec2 interval = cylinderClip();
+    // vec2 interval = ballClip(1.0);
+    // vec2 interval = cubeClip(1.0);
+    vec2 interval = cylinderClip(1.0);
 
     interval = clipPlaneIntersect(interval);
     if (interval.x == interval.y)
@@ -223,4 +232,7 @@ void main() {
     
     outColor = vec4(wood(pStart).rgb, 1.0);
     // outColor = vec4(testSolid(pStart), 1.0);
+
+    // float x = texture(noiseTexture, 2.0*pStart).r;
+    // outColor = vec4(x, x, x, 1.0);
 }
