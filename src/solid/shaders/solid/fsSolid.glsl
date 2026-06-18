@@ -12,8 +12,10 @@ uniform vec2 resolution;
 uniform float time;
 
 uniform sampler3D noiseTexture;
-
 uniform sampler2D branchIndexTex;
+uniform sampler2D profileTexture;
+
+uniform vec3 knotColor;     // (0.2, 0.2, 0.15)
 
 uniform vec4 clipPlane; // (dirX,dirY,dirY,offset), dir is unit length, points in half-space are vec3 p with dot(p,clipPlane.xyz)>=clipPlane.w
 
@@ -235,4 +237,9 @@ void main() {
 
     // float x = texture(noiseTexture, 2.0*pStart).r;
     // outColor = vec4(x, x, x, 1.0);
+
+    // float r = length(pStart.xz);
+    // vec2 v = vec2(r < 1.0 ? 0.5*r : 0.5 + mod(r-0.5, 0.5), 0.5);
+    // vec3 col = texture(profileTexture, v).rgb;
+    // outColor = vec4(col, 1.0);
 }

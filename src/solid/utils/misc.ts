@@ -172,8 +172,34 @@ function sample<T>(distribution: Distribution<T>): T {
     return distribution[distribution.length - 1][0];
 }
 
+function clamp(v: number) {
+    return Math.max(0, Math.min(1, v));
+}
 
+function lerp(a: Point3D, b: Point3D, t: number): Point3D {
+    return {
+        x: clamp(a.x + (b.x - a.x) * t),
+        y: clamp(a.y + (b.y - a.y) * t),
+        z: clamp(a.z + (b.z - a.z) * t),
+    };
+}
+
+function scale(c: Point3D, s: number): Point3D {
+    return {
+        x: clamp(c.x * s),
+        y: clamp(c.y * s),
+        z: clamp(c.z * s),
+    };
+}
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+    const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+}
+
+
+export type { Point3D };
 export {
     bitReverse, complexGaussian, normalize, generateRandomWeights,
-    isCylinderIntersectionEmpty, sample
+    isCylinderIntersectionEmpty, sample, lerp, clamp, smoothstep, scale,
 };

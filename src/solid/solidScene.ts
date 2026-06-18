@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { importShaders, resolveShaderChunk } from './shaderImport';
-import { FFT } from './utils/fft';
+import { FFT } from './utils/fft_backup';
 import { FatUCBSplineGroup } from '../primitives/FatUCBSpline';
 import { Branch, WoodSetup } from './woodSetup';
 const shaderChunks = importShaders(import.meta.glob(['./shaders/**/*.glsl'], {
@@ -263,6 +263,16 @@ class Scene {
         });
 
 
+        // TODO dispose, etc.
+        const profileTexture = new THREE.DataTexture(this.setupWood.profile, this.setupWood.profile.length / 4, 1);
+        profileTexture.type = THREE.FloatType;
+        profileTexture.format = THREE.RGBAFormat;
+        profileTexture.wrapT = THREE.ClampToEdgeWrapping;
+        profileTexture.magFilter = THREE.LinearFilter;
+        profileTexture.minFilter = THREE.LinearFilter;
+        profileTexture.needsUpdate = true;
+
+
         this.material = new THREE.ShaderMaterial({
             uniforms: {
                 cameraPos: { value: new THREE.Vector3() },
@@ -275,8 +285,10 @@ class Scene {
                 time: { value: null },
 
                 noiseTexture: { value: noise },
-
                 branchIndexTex: { value: this.setupRT.texture },
+                profileTexture: { value: profileTexture },
+
+                knotColor: { value: new THREE.Vector3(0.2, 0.2, 0.15) },
 
                 clipPlane: { value: new THREE.Vector4(1, 0, 0, 0) },
                 debug1: { value: 0.2 },

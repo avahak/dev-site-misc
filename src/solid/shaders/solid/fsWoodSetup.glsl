@@ -85,7 +85,7 @@ int computeIndex(float phi, float z) {
             float r = float(rk) / float(RN);
             vec3 p = vec3(lookup.pith, 0.0) + vec3(r*cos(phi), r*sin(phi), z);
 
-            lookup.rStem = (2.0 + 0.2*snoise(0.5*vec3(normalize(p.xy-lookup.pith), p.z))) / 3.0;
+            lookup.rStem = (4.0 + 0.2*snoise(0.5*vec3(normalize(p.xy-lookup.pith), p.z))) / 3.0;
             float z0 = branchesZASD[bk].x;
             float br = branchesR[bk].x;
             knot.start = vec3(getPith(z0), z0);
@@ -105,7 +105,7 @@ int computeIndex(float phi, float z) {
             float dKnot = length(diff);
             
             float betaKnot = atan(diff.z, dot(diff.xy, vec2(-knotDirXY.y, knotDirXY.x)));
-            float rKnot = br - 0.1*sqrt(dPith) + 0.02*snoise(1.0*vec3(cos(betaKnot), sin(betaKnot), dPith));
+            float rKnot = br - 0.05*sqrt(dPith) + 0.02*snoise(1.0*vec3(cos(betaKnot), sin(betaKnot), dPith));
 
             float t0 = dPith / lookup.rStem;
             float t1 = dKnot / rKnot;
@@ -160,5 +160,5 @@ void main() {
 
     // vec3 h = hash33(vec3(float(index)));
     // outColor = vec4(h, 1.0);
-    outColor = vec4(float(index)/1024.0, 0.0, 0.0, 0.0);
+    outColor = vec4(float(index)/float(MAX_BRANCHES), 0.0, 0.0, 0.0);
 }
