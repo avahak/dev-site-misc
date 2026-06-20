@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { importShaders, resolveShaderChunk } from './shaderImport';
-import { FFT } from './utils/fft_backup';
+import { FFT } from './utils/fft';
 import { FatUCBSplineGroup } from '../primitives/FatUCBSpline';
 import { Branch, WoodSetup } from './woodSetup';
 const shaderChunks = importShaders(import.meta.glob(['./shaders/**/*.glsl'], {
@@ -23,7 +23,16 @@ interface SolidSceneGlobalUniforms {
 
 
 function noiseTexture3D(N: number, alpha: number): THREE.Data3DTexture {
-    const noiseData = FFT.generateNoise3D(N, alpha);
+    const noiseData = FFT.generateNoise3D(N, N, N, alpha);
+    let minValue = Infinity;
+    let maxValue = -Infinity;
+    for (let k = 0; k < noiseData.length; k++) {
+        minValue = Math.min(noiseData[k], minValue);
+        maxValue = Math.max(noiseData[k], maxValue);
+    }
+    for (let k = 0; k < noiseData.length; k++)
+        noiseData[k] = -1 + 2 * (noiseData[k] - minValue) / (maxValue - minValue);
+    console.log(noiseData);
 
     const tex = new THREE.Data3DTexture(noiseData, N, N, N);
 
@@ -39,6 +48,28 @@ function noiseTexture3D(N: number, alpha: number): THREE.Data3DTexture {
     tex.needsUpdate = true;
     return tex;
 }
+
+
+interface ChannelStats {
+    min: number;
+    max: number;
+    mean: number;
+    std: number;
+    percentiles: {
+        p25: number;
+        p50: number; // Median
+        p75: number;
+        p95: number;
+    };
+}
+
+interface MRTTextureStats {
+    r: ChannelStats;
+    g: ChannelStats;
+    b: ChannelStats;
+    a: ChannelStats;
+}
+
 
 class Scene {
     static setupResolution = new THREE.Vector2(256, 1024);
@@ -226,8 +257,66 @@ class Scene {
         this.quadCamera.position.set(0, 0, 1);
     }
 
+    // Just for debug!
+    computeSetupRTTextureStats(): MRTTextureStats {
+        const width = this.setupRT.width;
+        const height = this.setupRT.height;
+        const numPixels = width * height;
+
+        const rawBuffer = new Float32Array(numPixels * 4);
+
+        // Read from 2nd color attachment
+        this.renderer.readRenderTargetPixels(this.setupRT, 0, 0, width, height, rawBuffer, 0, 1);
+
+        // Create a reusable single-channel buffer to conserve CPU memory
+        const channelBuffer = new Float32Array(numPixels);
+        const channelNames: Array<keyof MRTTextureStats> = ["r", "g", "b", "a"];
+        const result = {} as MRTTextureStats;
+
+        // Process each color channel completely independently
+        for (let c = 0; c < 4; c++) {
+            let sum = 0;
+            let min = Infinity;
+            let max = -Infinity;
+
+            for (let i = 0; i < numPixels; i++) {
+                const val = rawBuffer[i * 4 + c];
+                channelBuffer[i] = val;
+                sum += val;
+                if (val < min) min = val;
+                if (val > max) max = val;
+            }
+
+            const mean = sum / numPixels;
+
+            let varianceSum = 0;
+            for (let i = 0; i < numPixels; i++) {
+                const diff = channelBuffer[i] - mean;
+                varianceSum += diff * diff;
+            }
+            const std = Math.sqrt(varianceSum / numPixels);
+
+            channelBuffer.sort();
+
+            result[channelNames[c]] = {
+                min,
+                max,
+                mean,
+                std,
+                percentiles: {
+                    p25: channelBuffer[Math.floor(numPixels * 0.25)],
+                    p50: channelBuffer[Math.floor(numPixels * 0.50)],
+                    p75: channelBuffer[Math.floor(numPixels * 0.75)],
+                    p95: channelBuffer[Math.floor(numPixels * 0.95)],
+                },
+            };
+        }
+
+        return result;
+    }
+
     setupScene() {
-        const noise = noiseTexture3D(64, 1.5);
+        const noise = noiseTexture3D(64, 2.5);
         this.setupWood = new WoodSetup();
 
 
@@ -254,8 +343,9 @@ class Scene {
         this.globalUBO.add(this.globalUniforms.branchesR);
 
         this.setupRT = new THREE.WebGLRenderTarget(Scene.setupResolution.x, Scene.setupResolution.y, {
-            format: THREE.RedFormat,       // red: branch index
-            type: THREE.HalfFloatType,
+            count: 2,
+            format: THREE.RGBAFormat,
+            type: THREE.FloatType,
             minFilter: THREE.NearestFilter,
             magFilter: THREE.NearestFilter,
             wrapS: THREE.RepeatWrapping,
@@ -285,7 +375,7 @@ class Scene {
                 time: { value: null },
 
                 noiseTexture: { value: noise },
-                branchIndexTex: { value: this.setupRT.texture },
+                branchIndexTex: { value: this.setupRT.textures[0] },
                 profileTexture: { value: profileTexture },
 
                 knotColor: { value: new THREE.Vector3(0.2, 0.2, 0.15) },
@@ -328,7 +418,7 @@ class Scene {
         this.helperScene = new THREE.Scene();
         const cylinder = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 10), new THREE.MeshNormalMaterial());
         // this.helperScene.add(cylinder);
-        const cube = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ map: this.setupRT.texture }));
+        const cube = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ map: this.setupRT.textures[0] }));
         this.helperScene.add(cube);
 
         // interface Branch {
@@ -370,6 +460,8 @@ class Scene {
         this.renderer.setRenderTarget(this.setupRT);
         this.quadScene.overrideMaterial = this.setupMaterial;
         this.renderer.render(this.quadScene, this.quadCamera);
+
+        console.table(this.computeSetupRTTextureStats());
     }
 
     getResolution() {

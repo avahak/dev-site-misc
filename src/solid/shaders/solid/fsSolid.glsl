@@ -223,8 +223,8 @@ vec3 testSolid(vec3 p) {
 
 void main() {
     // vec2 interval = ballClip(1.0);
-    // vec2 interval = cubeClip(1.0);
-    vec2 interval = cylinderClip(1.0);
+    vec2 interval = cubeClip(1.0);
+    // vec2 interval = cylinderClip(1.0);
 
     interval = clipPlaneIntersect(interval);
     if (interval.x == interval.y)
@@ -235,7 +235,7 @@ void main() {
     outColor = vec4(wood(pStart).rgb, 1.0);
     // outColor = vec4(testSolid(pStart), 1.0);
 
-    // float x = texture(noiseTexture, 2.0*pStart).r;
+    // float x = 0.5 + 0.5*texture(noiseTexture, pStart).r;
     // outColor = vec4(x, x, x, 1.0);
 
     // float r = length(pStart.xz);

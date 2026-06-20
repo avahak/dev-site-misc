@@ -25,37 +25,37 @@ uniform globalUBO {
 
 in vec4 vPos;
 
-layout(location = 0) out vec4 outColor;
+layout(location = 0) out vec4 outIndices;
+layout(location = 1) out vec4 outValues;
 
 
-struct Knot {
-    vec3 start;         // Position on pith where the branch starts, could just be `float startHeight;`
-    float death;        // time of death, in [0,1]
-    vec2 dir;           // (knot direction, knot verticality at stem)
-
-    float strength;     // used to fade the branch influence to prevent overlapping branches, in [0,1]
+struct MinInfo {
+    ivec4 indices;
+    vec4 values;
 };
 
-struct LookupInfo {
-    float rStem;        // Growth rate for the stem at given height, direction
-    vec2 pith;          // (x,y) coordinates for the stem at given height
-    Knot knot;
+struct BranchState {
+    float tb;
+    float delta;
+    float death;
+    float beta;
+
+    float isAlive;
 };
 
 
-vec3 closestRayPoint(vec3 p, vec3 base, vec3 dir){
-    // Returns closest point on ray { base+t*dir: t>=0 } to p
-    float t = max(0.0, dot(p - base, dir));
-    vec3 cp = base + t*dir;
-    return cp;
-}
-
-float pointRayDistance(vec3 p, vec3 base, vec3 dir){
-    // Returns dist(p, { base+t*dir: t>=0 })
-    float t = max(0.0, dot(p - base, dir));
-    vec3 cp = base + t*dir;
-    return length(p - cp);
-}
+// vec3 closestRayPoint(vec3 p, vec3 base, vec3 dir){
+//     // Returns closest point on ray { base+t*dir: t>=0 } to p
+//     float t = max(0.0, dot(p - base, dir));
+//     vec3 cp = base + t*dir;
+//     return cp;
+// }
+// float pointRayDistance(vec3 p, vec3 base, vec3 dir){
+//     // Returns dist(p, { base+t*dir: t>=0 })
+//     float t = max(0.0, dot(p - base, dir));
+//     vec3 cp = base + t*dir;
+//     return length(p - cp);
+// }
 
 float sminPow(float a, float b, float k) {
     // Power smooth minumim, see: https://iquilezles.org/articles/smin/
@@ -66,99 +66,126 @@ float sminPow(float a, float b, float k) {
 
 
 vec2 getPith(float z) {
-    return 0.0*vnoise33(5.0*vec3(0.0, 0.0, z)).xy;
+    return 0.01*vnoise33(5.0*vec3(0.0, 0.0, z)).xy;
+}
+
+// This should match between setup and lookup
+BranchState computeBranchState(vec3 p, float r, float phi, float z, float ts, int index) {
+    float z0 = branchesZASD[index].x;
+    vec2 dir = branchesZASD[index].yz;
+    float death = branchesZASD[index].w;
+    float br = branchesR[index].x;
+
+    vec3 start = vec3(getPith(z0), z0);
+    vec2 dirXY = vec2(cos(dir.x), sin(dir.x));
+
+    // branchP is the "pseudo-closest" point to p on the branch skeleton 
+    float branchZ = dir.y*(r < 1.0 ? r - 0.5*r*r : 0.5);
+    vec3 branchP = start + vec3(r*dirXY, branchZ);
+
+    vec3 diff = p - branchP;
+    diff.z -= zRange * round(diff.z / zRange);        // for z-tiling
+    float dBranch = length(diff);
+    float beta = atan(diff.z, dot(diff.xy, vec2(-dirXY.y, dirXY.x)));
+    float rBranch = br - 0.1*sqrt(r) + 0.02*snoise(1.0*vec3(cos(beta), sin(beta), r));
+
+    float tb = dBranch / rBranch;
+
+    float tDelta = ts - tb;
+    float k = 1.75*tDelta/(0.3+abs(tDelta)) + 3.25;
+    // NOTE x/(a+abs(x)) is C^1, ->-1 at -\infty, ->1 at \infty, derivative at 0 is 1/a.
+
+    float t = sminPow(ts, tb, k);
+    float delta = t - min(ts, tb);
+
+    // Death
+    float isAlive = 1.0;
+    if (t > death) {
+        isAlive = 0.0;
+        float tDead = abs(ts - death);
+        tb += tDead;
+
+        float kDeath = k + 5.0*tDead;
+        float t = sminPow(ts, tb, kDeath);
+        float tempDelta = t - min(ts, tb);
+
+        float s = 8.0*tDead - 1.0;
+        float f = 0.35 - 0.85*s/(0.3+abs(s));
+        delta = f*tempDelta;
+    }
+
+    return BranchState(tb, delta, death, beta, isAlive);
+}
+
+float computeRatio(float phi, float z, int index) {
+    float bestRatio = 1e38;
+
+    const int RN = 10;
+    for (int rk = 1; rk < RN; rk++) {
+        float r = float(rk) / float(RN);
+        vec2 pith = getPith(z);
+        vec3 p = vec3(pith + r*vec2(cos(phi), sin(phi)), z);
+        float rStem = (4.0 + 0.2*snoise(0.5*vec3(normalize(p.xy-pith), p.z))) / 3.0;
+        float ts = r / rStem;
+
+        BranchState bs = computeBranchState(p, r, phi, z, ts, index);
+
+        float ratio = bs.tb / ts;
+        bestRatio = min(ratio, bestRatio);
+    }
+    return bestRatio;
 }
 
 
-int computeIndex(float phi, float z) {
-    int bestIndex = 0;
-    float bestRatio = 1e6;
-    LookupInfo lookup;
-    Knot knot;
-    lookup.pith = getPith(z);
+MinInfo computeMinValues(float phi, float z) {
+    const int M = 4;
+    float minValues[M];
+    int minIndices[M];
+    for (int i = 0; i < M; i++) {
+        minValues[i] = 3e38; 
+        minIndices[i] = -1;
+    }
 
-    const int RN = 10;
-    for (int bk = 0; bk < MAX_BRANCHES; bk++) {
-        if (bk >= int(round(numBranches)))
+    for (int i = 0; i < MAX_BRANCHES; i++) {
+        if (i >= int(round(numBranches)))
             break;
-        for (int rk = 1; rk < RN; rk++) {
-            float r = float(rk) / float(RN);
-            vec3 p = vec3(lookup.pith, 0.0) + vec3(r*cos(phi), r*sin(phi), z);
 
-            lookup.rStem = (4.0 + 0.2*snoise(0.5*vec3(normalize(p.xy-lookup.pith), p.z))) / 3.0;
-            float z0 = branchesZASD[bk].x;
-            float br = branchesR[bk].x;
-            knot.start = vec3(getPith(z0), z0);
-            knot.death = branchesZASD[bk].w;
-            knot.dir = branchesZASD[bk].yz;
+        float val = computeRatio(phi, z, i);
 
-            // knotP is considered closest point to p on the knot skeleton (NOTE this is an approximation)
-            vec2 knotDirXY = vec2(cos(knot.dir.x), sin(knot.dir.x));
-            vec3 knotP = knot.start + vec3(
-                r*knotDirXY, 
-                knot.dir.y*(r < 1.0 ? r - 0.5*r*r : 0.5)
-            );
-
-            float dPith = r;
-            vec3 diff = p - knotP;
-            diff.z -= zRange * round(diff.z / zRange);        // z-tiling!
-            float dKnot = length(diff);
-            
-            float betaKnot = atan(diff.z, dot(diff.xy, vec2(-knotDirXY.y, knotDirXY.x)));
-            float rKnot = br - 0.05*sqrt(dPith) + 0.02*snoise(1.0*vec3(cos(betaKnot), sin(betaKnot), dPith));
-
-            float t0 = dPith / lookup.rStem;
-            float t1 = dKnot / rKnot;
-
-            float tDelta = t0 - t1;
-            float k = 1.75*tDelta/(0.3+abs(tDelta)) + 3.25;
-            // NOTE x/(a+abs(x)) is C^1, ->-1 at -\infty, ->1 at \infty, derivative at 0 is 1/a.
-
-            float t = sminPow(t0, t1, k);
-            float delta = t - min(t0, t1);
-
-            // Death
-            float isAlive = 1.0;
-            if (t > knot.death) {
-                isAlive = 0.0;
-                float tDead = abs(t0 - knot.death);
-                t1 += tDead;
-
-                float kDead = k + 5.0*tDead;
-                float t = sminPow(t0, t1, kDead);
-                float tempDelta = t - min(t0, t1);
-
-                float s = 8.0*tDead - 1.0;
-                float f = 0.35 - 0.85*s/(0.3+abs(s));
-                delta = f*tempDelta;
-            }
-
-            t = min(t0, t1) + delta;
-
-            float ratio = t1 / t0;
-            if (ratio < bestRatio) {
-                bestIndex = bk;
-                bestRatio = ratio;
-            }
+        for (int j = M - 1; j >= 0; j--) {
+            if (val < minValues[j]) {
+                if (j < M - 1) {
+                    minValues[j + 1] = minValues[j];
+                    minIndices[j + 1] = minIndices[j];
+                }
+                minValues[j] = val;
+                minIndices[j] = i;
+            } else
+                break;
         }
     }
-    return bestIndex;
+
+    MinInfo result;
+    result.indices = ivec4(minIndices[0], minIndices[1], minIndices[2], minIndices[3]);
+    result.values = vec4(minValues[0], minValues[1], minValues[2], minValues[3]);
+    return result;
 }
 
 void main() {
     // - Transform pixel gl_FragCoord.xy/resolution to (phi,z)
-    // - Loop over r\in(0,1] to get p=(r,phi,z)
-    // - Loop over branches and compute t0,t1 for each branch
-    // - (TODO rethink) Store index to smallest t1/t0
+    // - Loop over r\in(0,1] to get p=(r,phi,z), ts
+    // - Loop over branches and compute tb for each branch
+    // - Store index to smallest tb/ts
     // - Write out color from index
 
     vec2 xy = gl_FragCoord.xy / resolution;
     float phi = TAU * xy.x;
     float z = xy.y * zRange;
 
-    int index = computeIndex(phi, z);
+    MinInfo minInfo = computeMinValues(phi, z);
 
     // vec3 h = hash33(vec3(float(index)));
     // outColor = vec4(h, 1.0);
-    outColor = vec4(float(index)/float(MAX_BRANCHES), 0.0, 0.0, 0.0);
+    outIndices = vec4(minInfo.indices) / float(MAX_BRANCHES);
+    outValues = minInfo.values;
 }

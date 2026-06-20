@@ -73,7 +73,7 @@ const testWoodConfig: WoodConfig = {
     whorlNum: 8,
     whorlOffsetDispersion: 0.1,       // TODO needs testing
     verticalSlopeRange: [0.2, 0.5],
-    radiusRange: [0.1, 0.15],
+    radiusRange: [0.2, 0.25],
     deathRange: [0.2, 1.0],
 
     knotColor: [0.2, 0.2, 0.15],
@@ -186,7 +186,6 @@ class WoodSetup {
             Math.exp(params.ringWidthDispersion * (2 * z[k] - 1))
         );
         const wSum = weights.reduce((s, v) => s + v, 0);
-        console.log(weights, wSum);
         for (let k = 0; k < N; k++)
             weights[k] /= wSum;
         const boundaries: number[] = [0];
