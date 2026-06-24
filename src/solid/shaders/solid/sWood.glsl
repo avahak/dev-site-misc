@@ -2,6 +2,8 @@
 // https://www.youtube.com/watch?v=mMvoTtipJac https://www.shadertoy.com/view/fsyyzt
 // and https://github.com/marialarsson/procedural_knots
 
+// See https://www.reddit.com/r/woodworking/comments/1u9m1d1/heard_yall_like_grain/
+
 
 struct BranchState {
     float tb;
@@ -10,6 +12,8 @@ struct BranchState {
     float beta;
 
     float isAlive;
+
+    float oldT;        // For DEBUG
 };
 
 // vec3 closestRayPoint(vec3 p, vec3 base, vec3 dir){
@@ -24,6 +28,12 @@ struct BranchState {
 //     vec3 cp = base + t*dir;
 //     return length(p - cp);
 // }
+
+float bump(float x1, float x2, float y1, float y2, float t) {
+    float s1 = smoothstep(x1, x2, t);
+    float s2 = smoothstep(y1, y2, t);
+    return s1 * (1.0-s2);
+}
 
 float sminPow(float a, float b, float k) {
     // Power smooth minimum, see: https://iquilezles.org/articles/smin/
@@ -41,7 +51,7 @@ float sminPow4(vec4 A, float k) {
 }
 
 vec2 getPith(float z) {
-    return 0.01*vnoise33(5.0*vec3(0.0, 0.0, z)).xy;
+    return 0.1*vnoise33(5.0*vec3(0.0, 0.0, z)).xy;
 }
 
 // This should match between setup and lookup
@@ -62,7 +72,7 @@ BranchState computeBranchState(vec3 p, float r, float phi, float z, float ts, in
     diff.z -= zRange * round(diff.z / zRange);        // for z-tiling
     float dBranch = length(diff);
     float beta = atan(diff.z, dot(diff.xy, vec2(-dirXY.y, dirXY.x)));
-    float rBranch = br - 0.1*sqrt(r) + 0.02*snoise(1.0*vec3(cos(beta), sin(beta), r));
+    float rBranch = br - 0.1*sqrt(r) + 0.01*snoise(1.0*vec3(cos(beta), sin(beta), r));
 
     float tb = dBranch / rBranch;
 
@@ -75,13 +85,14 @@ BranchState computeBranchState(vec3 p, float r, float phi, float z, float ts, in
 
     // Death
     float isAlive = 1.0;
+    float oldT = t;
     if (t > death) {
         isAlive = 0.0;
         float tDead = abs(ts - death);
         tb += tDead;
 
         float kDeath = k + 5.0*tDead;
-        float t = sminPow(ts, tb, kDeath);
+        t = sminPow(ts, tb, kDeath);
         float tempDelta = t - min(ts, tb);
 
         float s = 8.0*tDead - 1.0;
@@ -89,7 +100,7 @@ BranchState computeBranchState(vec3 p, float r, float phi, float z, float ts, in
         delta = f*tempDelta;
     }
 
-    return BranchState(tb, delta, death, beta, isAlive);
+    return BranchState(tb, delta, death, beta, isAlive, oldT);
 }
 
 
@@ -97,7 +108,6 @@ vec4 wood(vec3 p) {
     p = vec3(p.x, -p.z, p.y+time);        // TODO find more systematic way to do this
 
     vec2 pith = getPith(p.z);
-    float rStem = (4.0 + 0.2*snoise(0.5*vec3(normalize(p.xy-pith), p.z))) / 3.0;
 
     float deadColorFactor = 0.0;
     float deadOutlineFactor = 1.0;
@@ -106,11 +116,12 @@ vec4 wood(vec3 p) {
     vec2 v = p.xy - getPith(p.z);
     float phi = atan(v.y, v.x);
     float r = length(v);
+float rStem = (4.0 + 0.5*snoise(0.5*vec3((0.5+debug8*sin(r))*normalize(p.xy-pith), p.z))) / 3.0;
     float ts = r / rStem;
 
     ivec4 branchIndices = ivec4(round(float(MAX_BRANCHES)*texture(branchIndexTex, vec2(phi/TAU, p.z/zRange))));
 
-    float tb, delta, death, beta, isAlive;
+    float tb, delta, death, beta, isAlive, oldT;
     float deltaSum = 0.0;
     vec4 tbVec = vec4(0.0);
     for (int bk = 3; bk >= 0; bk--) {   // dominating term last
@@ -120,14 +131,19 @@ vec4 wood(vec3 p) {
         death = bs.death;
         beta = bs.beta;
         isAlive = bs.isAlive;
+        oldT = bs.oldT;
 
         // Localize branch influence
-        float branchInfluence = 1.0 - smoothstep(6.0, 9.0, tb/ts);    // 0 if tb > c*ts
+        float branchInfluence = 1.0 - smoothstep(7.0, 8.5, tb/ts);    // 0 if tb > c*ts
         delta = mix(0.0, delta, branchInfluence);
 
         deltaSum += delta;
         tbVec[bk] = tb;
     }
+
+    float tbMin = min(min(tbVec.x, tbVec.y), min(tbVec.z, tbVec.w));
+    float tbSmoothMin = sminPow4(tbVec, 2.0);
+    float t = min(ts, tbMin) + deltaSum;
 
     if (tb < death) {
         // Since a point can only belong to one knot, this only needs to be done for the dominant branch
@@ -137,20 +153,44 @@ vec4 wood(vec3 p) {
         // Dead knot outline
         float noise = snoise(vec3(cos(beta), sin(beta), ts));
         float thickness = 0.02 + 0.02*noise;  // 0 <~ thickness <~ 0.04
-        float tTemp = min(ts, tb) + delta;      // TODO rethink 
-        if (abs(tTemp - death) < thickness)
-            deadOutlineFactor = 0.65;
+        if (abs(oldT - death) < thickness)
+            deadOutlineFactor = 0.5;     // 0.65
     }
 
-    float tbMin = min(min(tbVec.x, tbVec.y), min(tbVec.z, tbVec.w));
-    float tbSmoothMin = sminPow4(tbVec, 2.0);
-    float t = min(ts, tbMin) + deltaSum;
 
-    vec3 texColor = texture(profileTexture, vec2(t, 0.5)).rgb;
-    float g = 1.0 / pow(clamp(1.2*tbSmoothMin-ts, 0.001, 1.0) + 1.0, 14.0);
+    vec2 vProfile = vec2(t < 1.0 ? 0.5*t : 0.5 + 0.5*mod(t-1.0, 1.0), 0.5);
+    vec3 texColor = texture(profileTexture, vProfile).rgb;
+    float g0 = clamp(1.2*tbSmoothMin-ts, 0.001, 1.0) + 1.0;    // 1.2
+    float g = 0.5 / pow(g0, 14.0);
     texColor -= g * knotColor;      // darken knot (alive and dead)
     texColor -= g * clamp(3.0*deadColorFactor, 0.0, 0.5) * knotColor;  //further darken dead knot
     texColor = deadOutlineFactor * texColor;    //outline of dead knot
 
-    return vec4(texColor, 1.0);
+    if (debug1 > 0.8) {
+        float x = (1.0+debug7)*tbSmoothMin - ts;
+        float s = bump(-0.02, -0.01, 0.01, 0.02, x) * 0.0 + 1.0;
+        s = tb < death && ts > death ? s : 0.0;
+        return vec4(s, s, s, 1.0);
+    }
+    if (debug1 > 0.6) {
+        float s = abs(oldT - death);
+        float s1 = bump(-1.0, 0.0, 0.09*debug8, 0.11*debug8, s);
+        float s2 = tb < death ? 1.0 : 0.0;
+        float s3 = ts > death ? 1.0 : 0.0;
+        return vec4(s1, s2, s3, 1.0);
+    }
+    if (debug1 > 0.4) {
+        float t2 = min(ts, tb) + delta;
+        float s = abs(t2 - death);
+        return vec4(tb < death ? 1.0 : 0.0, 0.0, 0.0, 1.0);
+    }
+    if (debug1 > 0.2) {
+        if (deadOutlineFactor < 1.0)
+            return vec4(1.0, 0.0, 0.0, 1.0);
+        return vec4(texColor, 1.0);
+    }
+
+    return vec4(fract(20.0*r), 0.0, 0.0, 1.0);
+
+    // return vec4(texColor, 1.0);
 }

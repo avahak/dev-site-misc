@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-import { importShaders, resolveShaderChunk } from './shaderImport';
 import { FFT } from './utils/fft';
 import { FatUCBSplineGroup } from '../primitives/FatUCBSpline';
 import { Branch, WoodSetup } from './woodSetup';
+import { computeStats, Stats } from './utils/misc';
+import { WoodScene } from './woodScene';
+import { importShaders, resolveShaderChunk } from './shaderImport';
 const shaderChunks = importShaders(import.meta.glob(['./shaders/**/*.glsl'], {
     query: '?raw',
     import: 'default',
@@ -30,9 +32,9 @@ function noiseTexture3D(N: number, alpha: number): THREE.Data3DTexture {
         minValue = Math.min(noiseData[k], minValue);
         maxValue = Math.max(noiseData[k], maxValue);
     }
+
     for (let k = 0; k < noiseData.length; k++)
         noiseData[k] = -1 + 2 * (noiseData[k] - minValue) / (maxValue - minValue);
-    console.log(noiseData);
 
     const tex = new THREE.Data3DTexture(noiseData, N, N, N);
 
@@ -43,35 +45,22 @@ function noiseTexture3D(N: number, alpha: number): THREE.Data3DTexture {
 
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
-    tex.wrapR = THREE.RepeatWrapping;   // !
+    tex.wrapR = THREE.RepeatWrapping;
 
     tex.needsUpdate = true;
     return tex;
 }
 
 
-interface ChannelStats {
-    min: number;
-    max: number;
-    mean: number;
-    std: number;
-    percentiles: {
-        p25: number;
-        p50: number; // Median
-        p75: number;
-        p95: number;
-    };
-}
-
 interface MRTTextureStats {
-    r: ChannelStats;
-    g: ChannelStats;
-    b: ChannelStats;
-    a: ChannelStats;
+    r: Stats;
+    g: Stats;
+    b: Stats;
+    a: Stats;
 }
 
 
-class Scene {
+class RenderManager {
     static setupResolution = new THREE.Vector2(256, 1024);
     static MAX_BRANCHES = 1024;     // Has to match value in shaders
 
@@ -95,6 +84,8 @@ class Scene {
 
     helperScene!: THREE.Scene;
 
+    woodScene!: WoodScene;
+
     setupRT!: THREE.WebGLRenderTarget;
     setupMaterial!: THREE.ShaderMaterial;
     setupWood!: WoodSetup;
@@ -103,6 +94,9 @@ class Scene {
     globalUBO!: THREE.UniformsGroup;
 
     splineGroup!: FatUCBSplineGroup;
+
+    noise3d!: THREE.Data3DTexture;
+    profileTexture!: THREE.DataTexture;
 
 
     constructor(container: HTMLDivElement) {
@@ -239,6 +233,11 @@ class Scene {
         for (const task of this.cleanUpTasks)
             task();
         this.splineGroup.dispose();
+        this.globalUBO.dispose();
+        this.setupRT.dispose();
+        this.material.dispose();
+        this.setupMaterial.dispose();
+        this.noise3d.dispose();
         this.renderer.dispose();
         this.controls?.dispose();
 
@@ -275,57 +274,25 @@ class Scene {
 
         // Process each color channel completely independently
         for (let c = 0; c < 4; c++) {
-            let sum = 0;
-            let min = Infinity;
-            let max = -Infinity;
-
-            for (let i = 0; i < numPixels; i++) {
-                const val = rawBuffer[i * 4 + c];
-                channelBuffer[i] = val;
-                sum += val;
-                if (val < min) min = val;
-                if (val > max) max = val;
-            }
-
-            const mean = sum / numPixels;
-
-            let varianceSum = 0;
-            for (let i = 0; i < numPixels; i++) {
-                const diff = channelBuffer[i] - mean;
-                varianceSum += diff * diff;
-            }
-            const std = Math.sqrt(varianceSum / numPixels);
-
-            channelBuffer.sort();
-
-            result[channelNames[c]] = {
-                min,
-                max,
-                mean,
-                std,
-                percentiles: {
-                    p25: channelBuffer[Math.floor(numPixels * 0.25)],
-                    p50: channelBuffer[Math.floor(numPixels * 0.50)],
-                    p75: channelBuffer[Math.floor(numPixels * 0.75)],
-                    p95: channelBuffer[Math.floor(numPixels * 0.95)],
-                },
-            };
+            for (let i = 0; i < numPixels; i++)
+                channelBuffer[i] = rawBuffer[i * 4 + c];
+            const stats = computeStats(channelBuffer);
+            result[channelNames[c]] = stats;
         }
 
         return result;
     }
 
     setupScene() {
-        const noise = noiseTexture3D(64, 2.5);
+        this.noise3d = noiseTexture3D(64, 2.5);
         this.setupWood = new WoodSetup();
-
 
         const n = this.setupWood.branches.length;
         this.globalUniforms = {
             zRange: new THREE.Uniform(this.setupWood.woodConfig.zRange),
             numBranches: new THREE.Uniform(n),
-            branchesZASD: Array.from({ length: Scene.MAX_BRANCHES }, () => new THREE.Uniform(new THREE.Vector4())),
-            branchesR: Array.from({ length: Scene.MAX_BRANCHES }, () => new THREE.Uniform(new THREE.Vector4())),
+            branchesZASD: Array.from({ length: RenderManager.MAX_BRANCHES }, () => new THREE.Uniform(new THREE.Vector4())),
+            branchesR: Array.from({ length: RenderManager.MAX_BRANCHES }, () => new THREE.Uniform(new THREE.Vector4())),
         };
         for (let k = 0; k < n; k++) {
             const branch = this.setupWood.branches[k];
@@ -342,7 +309,7 @@ class Scene {
         this.globalUBO.add(this.globalUniforms.branchesZASD);
         this.globalUBO.add(this.globalUniforms.branchesR);
 
-        this.setupRT = new THREE.WebGLRenderTarget(Scene.setupResolution.x, Scene.setupResolution.y, {
+        this.setupRT = new THREE.WebGLRenderTarget(RenderManager.setupResolution.x, RenderManager.setupResolution.y, {
             count: 2,
             format: THREE.RGBAFormat,
             type: THREE.FloatType,
@@ -353,14 +320,14 @@ class Scene {
         });
 
 
-        // TODO dispose, etc.
-        const profileTexture = new THREE.DataTexture(this.setupWood.profile, this.setupWood.profile.length / 4, 1);
-        profileTexture.type = THREE.FloatType;
-        profileTexture.format = THREE.RGBAFormat;
-        profileTexture.wrapT = THREE.ClampToEdgeWrapping;
-        profileTexture.magFilter = THREE.LinearFilter;
-        profileTexture.minFilter = THREE.LinearFilter;
-        profileTexture.needsUpdate = true;
+        this.profileTexture = new THREE.DataTexture(this.setupWood.profile, this.setupWood.profile.length / 4, 1);
+        this.profileTexture.type = THREE.FloatType;
+        this.profileTexture.format = THREE.RGBAFormat;
+        this.profileTexture.wrapT = THREE.ClampToEdgeWrapping;
+        this.profileTexture.magFilter = THREE.LinearFilter;
+        this.profileTexture.minFilter = THREE.LinearFilter;
+        this.profileTexture.needsUpdate = true;
+        this.cleanUpTasks.push(() => this.profileTexture.dispose());
 
 
         this.material = new THREE.ShaderMaterial({
@@ -374,9 +341,9 @@ class Scene {
                 resolution: { value: new THREE.Vector2() },
                 time: { value: null },
 
-                noiseTexture: { value: noise },
+                noiseTexture: { value: this.noise3d },
                 branchIndexTex: { value: this.setupRT.textures[0] },
-                profileTexture: { value: profileTexture },
+                profileTexture: { value: this.profileTexture },
 
                 knotColor: { value: new THREE.Vector3(0.2, 0.2, 0.15) },
 
@@ -400,8 +367,8 @@ class Scene {
 
         this.setupMaterial = new THREE.ShaderMaterial({
             uniforms: {
-                resolution: { value: Scene.setupResolution },
-                noiseTexture: { value: noise },
+                resolution: { value: RenderManager.setupResolution },
+                noiseTexture: { value: this.noise3d },
             },
             vertexShader: resolveShaderChunk("vsPlain", shaderChunks),
             fragmentShader: resolveShaderChunk("fsWoodSetup", shaderChunks),
@@ -420,14 +387,6 @@ class Scene {
         // this.helperScene.add(cylinder);
         const cube = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ map: this.setupRT.textures[0] }));
         this.helperScene.add(cube);
-
-        // interface Branch {
-        //     zStart: number;                         // z for branch start at stem
-        //     xyAngle: number;                        // angular direction around the stem
-        //     initialSlope: number;                   // slope at the stem
-        //     death: number;                          // time of death
-        //     radius: number;                         // radius of the branch
-        // }
 
         this.splineGroup = new FatUCBSplineGroup(16, 8, 0.5);
         const branchCurve = (branch: Branch, r: number) => {
@@ -453,7 +412,7 @@ class Scene {
         }
         const p1 = new THREE.Vector3(0, 0, 0);
         const p2 = new THREE.Vector3(0, this.setupWood.woodConfig.zRange, 0);
-        this.splineGroup.addSpline([p1, p1, p1, p2, p2, p2], () => [0.5, 0.5, 1], () => [0.02, 10], false, true, true);
+        this.splineGroup.addSpline([p1, p1, p1, p2, p2, p2], () => [0.5, 0.5, 1], () => [0.1, 20], false, true, true);
 
         console.log(this.setupWood.branches);
 
@@ -462,6 +421,9 @@ class Scene {
         this.renderer.render(this.quadScene, this.quadCamera);
 
         console.table(this.computeSetupRTTextureStats());
+
+        // woodScene
+        this.woodScene = new WoodScene(this, shaderChunks);
     }
 
     getResolution() {
@@ -507,13 +469,15 @@ class Scene {
         this.material.uniforms.time.value = t;
 
         this.renderer.setRenderTarget(null);
-        if (this.useHelperScene)
-            this.renderer.render(this.helperScene, this.mainCamera);
-        else {
+        if (this.useHelperScene) {
+            // this.renderer.render(this.helperScene, this.mainCamera);
+            this.woodScene.prepareRender(this);
+            this.renderer.render(this.woodScene, this.mainCamera);
+        } else {
             this.quadScene.overrideMaterial = null;
             this.renderer.render(this.quadScene, this.quadCamera);
         }
     }
 }
 
-export { Scene };
+export { RenderManager };

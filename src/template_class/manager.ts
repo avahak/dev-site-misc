@@ -9,7 +9,7 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import vs from './shaders/vs.glsl?raw';
 import fs from './shaders/fs.glsl?raw';
 
-class Scene {
+export class RenderManager {
     container: HTMLDivElement;
     camera!: THREE.Camera;
     scene!: THREE.Scene;
@@ -148,5 +148,3 @@ class Scene {
         this.renderer.render(this.scene, this.camera);
     }
 }
-
-export { Scene };

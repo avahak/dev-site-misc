@@ -3,7 +3,7 @@
  * Supports arbitrary signal lengths via radix-2 (power-of-two) or Bluestein's algorithm.
  * All noise outputs are real-valued and tileable (periodic) thanks to enforced Hermitian symmetry.
  * 
- * NOTE: AI-generated
+ * NOTE: Almost all AI-generated
  */
 
 import { complexGaussian } from './misc';
@@ -379,6 +379,8 @@ export class FFT {
             imag[i] = gi;
         }
 
+        let sumVariance = 0;
+
         // Apply spectral weight and enforce Hermitian symmetry
         const half = N >>> 1;
         for (let k = 0; k < N; k++) {
@@ -392,6 +394,8 @@ export class FFT {
             const weight = 1 / Math.pow(mag, alpha / 2);
             real[k] *= weight;
             imag[k] *= weight;
+            const isFixedBin = ((2 * k) % N == 0);
+            sumVariance += (isFixedBin ? 1 : 2) * weight * weight;
         }
 
         // Enforce Hermitian symmetry: X[N-k] = conj(X[k]) for k > 0
@@ -409,6 +413,10 @@ export class FFT {
         }
 
         FFT.fft1D(real, imag, true);
+
+        const stdDev = Math.sqrt(sumVariance) / N;
+        for (let k = 1; k < N; k++)
+            real[k] /= stdDev;
 
         // Extract real part only
         return new Float32Array(real);
@@ -435,6 +443,8 @@ export class FFT {
             grid[i * 2 + 1] = gi;
         }
 
+        let sumVariance = 0;
+
         // Apply spectral weight (PSD ∝ 1/f^α)
         const halfW = width >>> 1;
         const halfH = height >>> 1;
@@ -453,6 +463,8 @@ export class FFT {
                 const weight = 1.0 / Math.pow(magSq, alpha / 4);
                 grid[idx] *= weight;
                 grid[idx + 1] *= weight;
+                const isFixedBin = ((2 * x) % width == 0) && ((2 * y) % height == 0);
+                sumVariance += (isFixedBin ? 1 : 2) * weight * weight;
             }
         }
 
@@ -475,10 +487,12 @@ export class FFT {
 
         FFT.fft2D(grid, width, height, true);
 
+        const stdDev = Math.sqrt(sumVariance) / total;
+
         // Extract real part
         const result = new Float32Array(total);
         for (let i = 0; i < total; i++) {
-            result[i] = grid[i * 2];
+            result[i] = grid[i * 2] / stdDev;
         }
         return result;
     }
@@ -509,6 +523,8 @@ export class FFT {
             grid[i * 2 + 1] = gi;
         }
 
+        let sumVariance = 0;
+
         // Apply spectral weight
         const halfW = width >>> 1;
         const halfH = height >>> 1;
@@ -529,6 +545,8 @@ export class FFT {
                     const weight = 1.0 / Math.pow(magSq, alpha / 4);
                     grid[idx] *= weight;
                     grid[idx + 1] *= weight;
+                    const isFixedBin = ((2 * x) % width == 0) && ((2 * y) % height == 0) && ((2 * z) % depth == 0);
+                    sumVariance += (isFixedBin ? 1 : 2) * weight * weight;
                 }
             }
         }
@@ -554,9 +572,11 @@ export class FFT {
 
         FFT.fft3D(grid, width, height, depth, true);
 
+        const stdDev = Math.sqrt(sumVariance) / total;
+
         const result = new Float32Array(total);
         for (let i = 0; i < total; i++) {
-            result[i] = grid[i * 2];
+            result[i] = grid[i * 2] / stdDev;
         }
         return result;
     }

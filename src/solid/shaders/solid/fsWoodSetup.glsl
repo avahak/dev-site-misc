@@ -66,7 +66,7 @@ float sminPow(float a, float b, float k) {
 
 
 vec2 getPith(float z) {
-    return 0.01*vnoise33(5.0*vec3(0.0, 0.0, z)).xy;
+    return 0.1*vnoise33(5.0*vec3(0.0, 0.0, z)).xy;
 }
 
 // This should match between setup and lookup
@@ -87,7 +87,7 @@ BranchState computeBranchState(vec3 p, float r, float phi, float z, float ts, in
     diff.z -= zRange * round(diff.z / zRange);        // for z-tiling
     float dBranch = length(diff);
     float beta = atan(diff.z, dot(diff.xy, vec2(-dirXY.y, dirXY.x)));
-    float rBranch = br - 0.1*sqrt(r) + 0.02*snoise(1.0*vec3(cos(beta), sin(beta), r));
+    float rBranch = br - 0.1*sqrt(r) + 0.01*snoise(1.0*vec3(cos(beta), sin(beta), r));
 
     float tb = dBranch / rBranch;
 
@@ -125,7 +125,7 @@ float computeRatio(float phi, float z, int index) {
         float r = float(rk) / float(RN);
         vec2 pith = getPith(z);
         vec3 p = vec3(pith + r*vec2(cos(phi), sin(phi)), z);
-        float rStem = (4.0 + 0.2*snoise(0.5*vec3(normalize(p.xy-pith), p.z))) / 3.0;
+        float rStem = (4.0 + 0.5*snoise(1.0*vec3(normalize(p.xy-pith), p.z))) / 3.0;
         float ts = r / rStem;
 
         BranchState bs = computeBranchState(p, r, phi, z, ts, index);

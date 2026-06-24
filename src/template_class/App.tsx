@@ -2,14 +2,14 @@ import React, { useEffect, useRef } from 'react';
 import { Box, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
-import { Scene } from './scene';
+import { RenderManager } from './manager';
 
 const SceneComponent: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
-        const scene = new Scene(containerRef.current!);
+        const scene = new RenderManager(containerRef.current!);
         return () => {
             scene.dispose();
         };
@@ -21,7 +21,7 @@ const SceneComponent: React.FC = () => {
 const App: React.FC = () => {
     return (
         <Container maxWidth="xl">
-            <Box display="flex" justifyContent="center" sx={{py: 2}}>
+            <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                 <Typography variant="h2">
                     Template (class)
                 </Typography>

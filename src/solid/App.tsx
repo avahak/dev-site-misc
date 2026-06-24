@@ -2,8 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { Box, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
-import { Scene as ViewerScene } from './viewerScene';
-import { Scene as SolidScene } from './solidScene';
+import { RenderManager as ViewerRenderManager } from './viewerManager';
+import { RenderManager as SolidRenderManager } from './solidManager';
 
 
 const SceneComponent: React.FC<{ solidTest: boolean }> = ({ solidTest }) => {
@@ -11,7 +11,7 @@ const SceneComponent: React.FC<{ solidTest: boolean }> = ({ solidTest }) => {
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
-        const scene = solidTest ? new SolidScene(containerRef.current!) : new ViewerScene(containerRef.current!);
+        const scene = solidTest ? new SolidRenderManager(containerRef.current!) : new ViewerRenderManager(containerRef.current!);
         return () => {
             scene.dispose();
         };

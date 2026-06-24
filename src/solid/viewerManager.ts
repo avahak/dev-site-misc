@@ -1,6 +1,9 @@
 /**
  * Rendering test with clipping solid objects.
  * TODO:
+ * 
+ * - IMPORTANT! Reconsider going three.js route for rendering.
+ * 
  * - start on animations
  * - actual solid textures
  * - For IBL check out https://github.com/jeweg/pbr-webgl-shenanigans/tree/master
@@ -78,7 +81,7 @@ interface ViewerSceneGlobalUniforms {
     shadowSpheres: THREE.Uniform<THREE.Matrix4>[];
 }
 
-class Scene {
+class RenderManager {
     container: HTMLDivElement;
     renderer: THREE.WebGLRenderer;
     controls!: OrbitControls;
@@ -827,4 +830,4 @@ class Scene {
     }
 }
 
-export { Scene };
+export { RenderManager };

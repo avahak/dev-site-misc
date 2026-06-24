@@ -6,6 +6,18 @@ interface Point3D {
 
 type Distribution<T> = [value: T, weight: number][];
 
+interface Stats {
+    min: number;
+    max: number;
+    mean: number;
+    std: number;
+    percentiles: {
+        p10: number;
+        p50: number; // Median
+        p90: number;
+    };
+}
+
 
 /**
  * @returns A random Gaussian-distributed pair of reals.
@@ -197,9 +209,47 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
     return t * t * (3 - 2 * t);
 }
 
+function computeStats(orignalArray: Float32Array | number[]): Stats {
+    const array = [...orignalArray].sort((a, b) => a - b);     // Slow and bad
 
-export type { Point3D };
+    const n = array.length;
+    // Process each color channel completely independently
+    let sum = 0;
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (let i = 0; i < n; i++) {
+        const val = array[i];
+        sum += val;
+        min = Math.min(val, min);
+        max = Math.max(val, max);
+    }
+
+    const mean = sum / n;
+
+    let varianceSum = 0;
+    for (let i = 0; i < n; i++) {
+        const diff = array[i] - mean;
+        varianceSum += diff * diff;
+    }
+    const std = Math.sqrt(varianceSum / n);
+
+    return {
+        min,
+        max,
+        mean,
+        std,
+        percentiles: {
+            p10: array[Math.floor(n * 0.10)],
+            p50: array[Math.floor(n * 0.50)],
+            p90: array[Math.floor(n * 0.90)],
+        },
+    };
+}
+
+
+export type { Point3D, Stats };
 export {
     bitReverse, complexGaussian, normalize, generateRandomWeights,
-    isCylinderIntersectionEmpty, sample, lerp, clamp, smoothstep, scale,
+    isCylinderIntersectionEmpty, sample, lerp, clamp, smoothstep, scale, computeStats,
 };

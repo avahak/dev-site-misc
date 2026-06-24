@@ -66,8 +66,8 @@ interface WoodProfileParams {
     noiseAmplitude: number;        // amplitude of per-channel colour noise
 }
 
-const testWoodConfig: WoodConfig = {
-    name: "Test_tree",
+const testWoodWhorl4: WoodConfig = {
+    name: "Test_tree_whorl4",
     zRange: 10,
     whorlSizes: [[4, 0.65], [3, 0.35]],
     whorlNum: 8,
@@ -79,18 +79,32 @@ const testWoodConfig: WoodConfig = {
     knotColor: [0.2, 0.2, 0.15],
 };
 
+const testWoodAlternate: WoodConfig = {
+    name: "Test_tree_alternate",
+    zRange: 8,
+    whorlSizes: [[1, 1]],
+    whorlNum: 20,
+    whorlOffsetDispersion: 0.15,
+    verticalSlopeRange: [1.0, 1.5],
+    radiusRange: [0.2, 0.3],
+    deathRange: [0.2, 1.0],
+    alternateAngle: 2.4,
+
+    knotColor: [0.2, 0.2, 0.15],
+};
+
 const testProfileParams: WoodProfileParams = {
     heartwoodColor: { x: 0.6, y: 0.4, z: 0.3 },
     sapwoodColor: { x: 0.7, y: 0.5, z: 0.3 },
     heartwoodRadius: 0.4,
     transitionWidth: 0.1,
-    ageAtOne: 50,
+    ageAtOne: 60,
     ringWidthDispersion: 0.1,
     ringWidthNoiseAlpha: 0.1,
-    ringShapeExponent: 3,
-    earlywoodLighten: 0.3,
-    latewoodDarken: 0.5,
-    noiseAmplitude: 0.05,
+    ringShapeExponent: 0.1,
+    earlywoodLighten: 0.1,
+    latewoodDarken: 0.8,
+    noiseAmplitude: 0.02,
 };
 
 class WoodSetup {
@@ -99,7 +113,7 @@ class WoodSetup {
     profile: Float32Array;
 
     constructor() {
-        this.woodConfig = testWoodConfig;
+        this.woodConfig = testWoodAlternate;
         this.branches = this.generateBranches();
         this.profile = this.generateRadialProfile(testProfileParams, 1024);
     }
@@ -204,7 +218,7 @@ class WoodSetup {
         const total = 2 * width;
         const profile: Float32Array = new Float32Array(4 * total);
 
-        const noise = FFT.generateNoise1D(width, 0.5);
+        const noise = FFT.generateNoise1D(N, 1.0);
 
         for (let x = 0; x < total; x++) {
             const r = (x < width) ? (x / (width - 1)) : (1 + (x - width) / (width - 1));
@@ -220,22 +234,25 @@ class WoodSetup {
 
             // Ring modulation
             let ringColor: Point3D;
+            let age = 0;
             if (r <= 1) {
                 let i = 1;
                 while (i < N && r >= boundaries[i]) i++;
+                age = i;
                 const u = (r - boundaries[i - 1]) / (boundaries[i] - boundaries[i - 1]);
                 const t = Math.pow(u, params.ringShapeExponent);
                 ringColor = lerp(scale(base, params.earlywoodLighten), scale(base, params.latewoodDarken), t);
             } else {
                 let i = 1;
                 while (i < N && r - 1 >= boundaries[i]) i++;
+                age = i + N;
                 const u = (r - 1 - boundaries[i - 1]) / (boundaries[i] - boundaries[i - 1]);
                 const t = Math.pow(u, params.ringShapeExponent);
                 ringColor = lerp(scale(base, params.earlywoodLighten), scale(base, params.latewoodDarken), t);
             }
 
             // Fine grain noise
-            const grain = (noise[x % width] - 0.5) * 2 * params.noiseAmplitude;
+            const grain = noise[age % N] * params.noiseAmplitude;
             profile[4 * x + 0] = clamp(ringColor.x + grain);
             profile[4 * x + 1] = clamp(ringColor.y + grain);
             profile[4 * x + 2] = clamp(ringColor.z + grain);
