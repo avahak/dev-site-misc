@@ -75,7 +75,7 @@ vec4 uvec4To01Vec4(uvec4 h) {
 
 uvec2 uintHashVec2ToVec2(highp vec2 f) {
     uint fx = fixZero(f.x), fy = fixZero(f.y);
-    highp uint h = 3u;
+    highp uint h = 2u;
     h = hashUint(h + fx, MAGIC_NUMBERS[0]);
     h = hashUint(h + fy, MAGIC_NUMBERS[1]);
     return uvec2(
@@ -99,7 +99,7 @@ uvec3 uintHashVec3ToVec3(highp vec3 f) {
 
 uvec4 uintHashVec4ToVec4(highp vec4 f) {
     uint fx = fixZero(f.x), fy = fixZero(f.y), fz = fixZero(f.z), fw = fixZero(f.w);
-    highp uint h = 3u;
+    highp uint h = 4u;
     h = hashUint(h + fx, MAGIC_NUMBERS[0]);
     h = hashUint(h + fy, MAGIC_NUMBERS[1]);
     h = hashUint(h + fz, MAGIC_NUMBERS[2]);
@@ -110,6 +110,13 @@ uvec4 uintHashVec4ToVec4(highp vec4 f) {
         hashUint(h, MAGIC_NUMBERS[2]),
         hashUint(h, MAGIC_NUMBERS[3])
     );
+}
+
+float hash(highp float f) {
+    highp uint fx = fixZero(f);
+    highp uint h = 1u; 
+    h = hashUint(h + fx, MAGIC_NUMBERS[0]);
+    return uintTo01Float(h);
 }
 
 vec2 hash22(highp vec2 f) {

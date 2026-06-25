@@ -30,7 +30,7 @@ uniform globalUBO {
     vec4 branchesR[MAX_BRANCHES];
 };
 
-in vec4 vPos;
+in vec3 vPos;
 
 layout(location = 0) out vec4 outColor;
 
@@ -38,16 +38,7 @@ layout(location = 0) out vec4 outColor;
 
 
 void main() {
-    vec3 p = vPos.xyz;
-
-    // float wWedge = PI * (size.z + 2.0*gap) / 2.0;
-    // vec3 v = 2.0*boxCoords-vec3(1.0);
-    // float c = 0.98;
-    // int vc = (abs(v.x) > c ? 1 : 0) + (abs(v.y) > c ? 1 : 0) + (abs(v.z) > c ? 1 : 0);
-    // if (abs(v.z) > 0.98 && abs(v.y) > 0.998) {
-    //     outColor = vec4(1.0, boxCoords.x*size.x < wWedge ? 1.0 : 0.0, 0.0, 1.0);
-    //     return;
-    // }
+    vec3 p = vPos;
 
     outColor = wood(p);
 }

@@ -38,7 +38,7 @@ vec3 spiralGeometry(vec3 p, float g, float d) {
     float r = spiralRadius(p.x, p.z, g, d);
     float Z = r*cos(theta);
     float X = r*sin(theta);
-    return vec3(X, p.y, Z);
+    return vec3(X, -Z, p.y);
 }
 
 vec3 peelGeometry(vec3 p, float peelFront, float g, float d) {
@@ -60,7 +60,7 @@ vec3 peelGeometry(vec3 p, float peelFront, float g, float d) {
     p.z = clamp(p.z, 0.0, sheetThickness(p.x, g, d));
 
     if (p.x >= peelFront)
-        return vec3(p.x-peelFront, p.y, p.z);       // flat part
+        return vec3(p.x-peelFront, -p.z, p.y);       // flat part
 
     // Now x < peelFront: spiral
     float theta = spiralAngle(p.x, g, d) - spiralAngle(peelFront, g, d);
@@ -68,5 +68,5 @@ vec3 peelGeometry(vec3 p, float peelFront, float g, float d) {
     float zOffset = spiralRadius(peelFront, 0.0, g, d);
     float Z = zOffset - r*cos(theta);
     float X = r*sin(theta);      // translated so that X=0 for x=peelFront
-    return vec3(X, p.y, Z);
+    return vec3(X, -Z, p.y);
 }

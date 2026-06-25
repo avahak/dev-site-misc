@@ -105,7 +105,7 @@ class RenderManager {
         this.renderer.setClearColor(0x000000, 0);
         container.appendChild(this.renderer.domElement);
 
-        this.renderer.getContext().getExtension('EXT_float_blend');
+        THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
         this.setupCamera();
         this.setupScene();

@@ -105,7 +105,7 @@ BranchState computeBranchState(vec3 p, float r, float phi, float z, float ts, in
 
 
 vec4 wood(vec3 p) {
-    p = vec3(p.x, -p.z, p.y+time);        // TODO find more systematic way to do this
+    // p.z += time;
 
     vec2 pith = getPith(p.z);
 
@@ -190,7 +190,7 @@ float rStem = (4.0 + 0.5*snoise(0.5*vec3((0.5+debug8*sin(r))*normalize(p.xy-pith
         return vec4(texColor, 1.0);
     }
 
-    return vec4(fract(20.0*r), 0.0, 0.0, 1.0);
+    // return vec4(fract(0.5+atan(p.y, p.x)/TAU), fract(0.0*p.y), fract(0.0*p.z), 1.0);
 
-    // return vec4(texColor, 1.0);
+    return vec4(texColor, 1.0);
 }

@@ -1,12 +1,10 @@
 /**
  * Rendering test with clipping solid objects.
  * TODO:
- * 
- * - IMPORTANT! Reconsider going three.js route for rendering.
- * 
  * - start on animations
  * - actual solid textures
  * - For IBL check out https://github.com/jeweg/pbr-webgl-shenanigans/tree/master
+ * - Use as reference: https://grgrdvrt.github.io/three_shaders_source/meshphysical.html
  * - Refactor this module
  * - Consider precomputing volumeI (RT using RGFormat, FloatType)
  * - How should interpolation work in the main passes?

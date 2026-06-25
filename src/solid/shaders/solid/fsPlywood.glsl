@@ -29,7 +29,7 @@ uniform globalUBO {
     vec4 branchesR[MAX_BRANCHES];
 };
 
-in vec4 vPos;
+in vec3 vPos;
 
 layout(location = 0) out vec4 outColor;
 
@@ -38,7 +38,7 @@ layout(location = 0) out vec4 outColor;
 
 
 void main() {
-    vec3 p = vPos.xyz;
+    vec3 p = vPos;
 
     float width = size.x;
     float depth = size.z / float(numLayers);        // depth of one layer
@@ -56,7 +56,8 @@ void main() {
         p = vec3(p.x, size.y-p.y, depth-p.z);
     }
 
+    p.x = p.x + 50.0;       // Move from center a bit, TODO what is the best way to handle this?
     vec3 pTrunk = spiralGeometry(p, 0.0, depth);
 
-    outColor = wood(p);
+    outColor = wood(pTrunk);
 }
