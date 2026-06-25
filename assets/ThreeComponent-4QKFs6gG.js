@@ -1,4 +1,4 @@
-import{i as e,n as t,t as n}from"./jsx-runtime-BnxRlLMJ.js";import{$ as r,C as i,J as a,U as o,X as s,Z as c,at as l,c as u,et as d,g as f,i as p,jt as m,kt as h,mt as g,pt as _,r as v,s as y,tt as b,yt as x}from"./three.module-RnW-e9YK.js";import{o as S,s as C}from"./index-KTcpXFG_.js";var w=e(t(),1),T=`// From three.js: position, uv, normal, time, etc.\r
+import{i as e,n as t,t as n}from"./jsx-runtime-BnxRlLMJ.js";import{$ as r,C as i,J as a,U as o,X as s,Z as c,at as l,c as u,et as d,g as f,i as p,jt as m,kt as h,mt as g,pt as _,r as v,s as y,tt as b,yt as x}from"./three.module-RnW-e9YK.js";import{o as S,s as C}from"./index-CRNFBhIp.js";var w=e(t(),1),T=`// From three.js: position, uv, normal, time, etc.\r
 \r
 varying vec2 vUv;\r
 \r
