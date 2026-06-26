@@ -44,7 +44,7 @@ interface WoodConfig {
     knotColor: [number, number, number];
 }
 
-interface Branch {
+export interface Branch {
     zStart: number;                         // z for branch start at stem
     xyAngle: number;                        // angular direction around the stem
     initialSlope: number;                   // slope at the stem
@@ -107,7 +107,7 @@ const testProfileParams: WoodProfileParams = {
     noiseAmplitude: 0.02,
 };
 
-class WoodSetup {
+export class WoodSetup {
     woodConfig: WoodConfig;
     branches: Branch[];
     profile: Float32Array;
@@ -155,40 +155,6 @@ class WoodSetup {
         }
 
         return branches;
-    }
-
-    /**
-     * Checks if the influences of branches overlap in the unit radius cylinder.
-     * TODO: Rethink the approach
-     */
-    static hasOverlap(config: WoodConfig, branches: Branch[]): boolean {
-        const n = branches.length;
-        const deltaR = 0.01;
-        const branchPoints: [number, number, number][] = Array.from({ length: n }, () => [0, 0, 0]);
-        for (let r = 0; r < 1; r += deltaR) {
-            for (let k = 0; k < n; k++) {
-                const branch = branches[k];
-                branchPoints[k][0] = r * Math.cos(branch.xyAngle);
-                branchPoints[k][1] = r * Math.sin(branch.xyAngle);
-                branchPoints[k][2] = (branch.zStart + branch.initialSlope * (r < 1 ? r - 0.5 * r * r : 0.5)) % config.zRange;
-            }
-
-            for (let k1 = 0; k1 < n; k1++) {
-                for (let k2 = 0; k2 < n; k2++) {
-                    // NOTE! these have to match shader implementation!
-                    const rStemMin = 1.8 / 3;
-                    const rBranchMax = 0.22;
-                    const c = 5 * rBranchMax / rStemMin;
-                    // Branch has no influence if t1 > 5*t0. If dBranch >= c*dStem then
-                    // t1 >= dBranch/rBranchMax >= c*dStem/rBranchMax = 5*dStem/rStemMin >= 5*t0
-                    // So: if dBranch >= c*dStem then branch has no influence.
-
-                    //...
-                }
-            }
-        }
-
-        return false;
     }
 
 
@@ -262,6 +228,3 @@ class WoodSetup {
         return profile;
     }
 }
-
-export type { Branch };
-export { WoodSetup };

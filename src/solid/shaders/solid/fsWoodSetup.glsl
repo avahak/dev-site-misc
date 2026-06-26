@@ -16,11 +16,12 @@ uniform float debug6;
 uniform float debug7;
 uniform float debug8;
 
-uniform globalUBO {
+uniform branchUBO {
     uniform float zRange;
     uniform float numBranches;
     vec4 branchesZASD[MAX_BRANCHES];
     vec4 branchesR[MAX_BRANCHES];
+    uniform vec4 knotColor;
 };
 
 in vec4 vPos;

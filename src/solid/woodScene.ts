@@ -14,6 +14,9 @@
 import * as THREE from 'three';
 import { resolveShaderChunk } from './shaderImport';
 import { RenderManager as SolidRenderManager } from './solidManager';
+import { WoodExtension } from './woodExtension';
+import { NoiseExtension } from './noiseExtension';
+import { DebugExtension } from './debugExtension';
 
 
 export class WoodScene extends THREE.Scene {
@@ -28,51 +31,43 @@ export class WoodScene extends THREE.Scene {
     parquetMaterial: THREE.ShaderMaterial;
 
 
-    constructor(solidRenderManager: SolidRenderManager, shaderChunks: Record<string, string>) {
+
+    constructor(shaderChunks: Record<string, string>, woodExtension: WoodExtension, noiseExtension: NoiseExtension, debugExtension: DebugExtension) {
         super();
 
 
         // Veneer
 
-        this.veneerSize = new THREE.Vector3(200, 4, 0.01);
+        this.veneerSize = new THREE.Vector3(100, 2, 0.05);
 
+        const numSegments = 128;
         this.veneerMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 phase: { value: 50 },        // unrolled-rolled up
                 size: { value: this.veneerSize },
                 gap: { value: 0.0 },
+                numSegments: { value: numSegments },
 
                 // time: { value: null },
-
-                noiseTexture: { value: solidRenderManager.noise3d },
-                branchIndexTex: { value: solidRenderManager.setupRT.textures[0] },
-                profileTexture: { value: solidRenderManager.profileTexture },
-
-                knotColor: { value: new THREE.Vector3(0.2, 0.2, 0.15) },
-
-                debug1: { value: 0.2 },
-                debug2: { value: 0.2 },
-                debug3: { value: 0.5 },
-                debug4: { value: 0.2 },
-                debug5: { value: 0.0 },
-                debug6: { value: 0.0 },
-                debug7: { value: 0.0 },
-                debug8: { value: 0.0 },
             },
             vertexShader: resolveShaderChunk("vsVeneer", shaderChunks),
             fragmentShader: resolveShaderChunk("fsVeneer", shaderChunks),
-            uniformsGroups: [solidRenderManager.globalUBO],
             depthWrite: true,
             depthTest: true,
             glslVersion: THREE.GLSL3,
         });
+        woodExtension.addToShaderMaterial(this.veneerMaterial);
+        noiseExtension.addToShaderMaterial(this.veneerMaterial);
+        debugExtension.addToShaderMaterial(this.veneerMaterial);
 
-        const m = Math.round(500 * this.veneerSize.x);
-        const veneerBox = new THREE.BoxGeometry(this.veneerSize.x, this.veneerSize.y, this.veneerSize.z, m, 1, 1);
-        veneerBox.translate(this.veneerSize.x / 2, this.veneerSize.y / 2, this.veneerSize.z / 2);
-        const veneerMesh = new THREE.Mesh(veneerBox, this.veneerMaterial);
+
+        const veneerCylinder = WoodScene.createVeneerCylinder(numSegments, true);
+        const veneerMesh = new THREE.Mesh(veneerCylinder, this.veneerMaterial);
         veneerMesh.frustumCulled = false;   // We modify vertex positions in shader
         this.add(veneerMesh);
+        veneerMesh.rotateX(Math.PI / 2);
+        veneerMesh.rotateY(Math.PI);
+        veneerMesh.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), -1);
 
 
         // Plywood
@@ -85,76 +80,96 @@ export class WoodScene extends THREE.Scene {
                 numLayers: { value: 21 },       // Number of plys, always odd number
 
                 // time: { value: null },
-
-                noiseTexture: { value: solidRenderManager.noise3d },
-                branchIndexTex: { value: solidRenderManager.setupRT.textures[0] },
-                profileTexture: { value: solidRenderManager.profileTexture },
-
-                knotColor: { value: new THREE.Vector3(0.2, 0.2, 0.15) },
-
-                debug1: { value: 0.2 },
-                debug2: { value: 0.2 },
-                debug3: { value: 0.5 },
-                debug4: { value: 0.2 },
-                debug5: { value: 0.0 },
-                debug6: { value: 0.0 },
-                debug7: { value: 0.0 },
-                debug8: { value: 0.0 },
             },
             vertexShader: resolveShaderChunk("vsPlywood", shaderChunks),
             fragmentShader: resolveShaderChunk("fsPlywood", shaderChunks),
-            uniformsGroups: [solidRenderManager.globalUBO],
             depthWrite: true,
             depthTest: true,
             glslVersion: THREE.GLSL3,
         });
+        woodExtension.addToShaderMaterial(this.plywoodMaterial);
+        noiseExtension.addToShaderMaterial(this.plywoodMaterial);
+        debugExtension.addToShaderMaterial(this.plywoodMaterial);
 
-        const plywoodBox = new THREE.BoxGeometry(this.plywoodSize.x, this.plywoodSize.y, this.plywoodSize.z, m, 1, 1);
+        const plywoodBox = new THREE.BoxGeometry(this.plywoodSize.x, this.plywoodSize.y, this.plywoodSize.z);
         plywoodBox.translate(this.plywoodSize.x / 2, this.plywoodSize.y / 2, this.plywoodSize.z / 2);
         const plywoodMesh = new THREE.Mesh(plywoodBox, this.plywoodMaterial);
         this.add(plywoodMesh);
+        plywoodMesh.position.set(2, 0, 1);
 
 
         // Herringbone parquet
 
-        this.parquetSize = new THREE.Vector2(4, 0.25);
+        this.parquetSize = new THREE.Vector2(4, 0.1);
 
         this.parquetMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 size: { value: this.parquetSize },
 
                 time: { value: 0 },
-
-                noiseTexture: { value: solidRenderManager.noise3d },
-                branchIndexTex: { value: solidRenderManager.setupRT.textures[0] },
-                profileTexture: { value: solidRenderManager.profileTexture },
-
-                knotColor: { value: new THREE.Vector3(0.2, 0.2, 0.15) },
-
-                debug1: { value: 0.2 },
-                debug2: { value: 0.2 },
-                debug3: { value: 0.5 },
-                debug4: { value: 0.2 },
-                debug5: { value: 0.0 },
-                debug6: { value: 0.0 },
-                debug7: { value: 0.0 },
-                debug8: { value: 0.0 },
             },
             vertexShader: resolveShaderChunk("vsParquet", shaderChunks),
             fragmentShader: resolveShaderChunk("fsParquet", shaderChunks),
-            uniformsGroups: [solidRenderManager.globalUBO],
             depthWrite: true,
             depthTest: true,
             glslVersion: THREE.GLSL3,
         });
+        woodExtension.addToShaderMaterial(this.parquetMaterial);
+        noiseExtension.addToShaderMaterial(this.parquetMaterial);
+        debugExtension.addToShaderMaterial(this.parquetMaterial);
 
         const parquetBox = new THREE.BoxGeometry(20, 20, 0.1);
         const parquetMesh = new THREE.Mesh(parquetBox, this.parquetMaterial);
         this.add(parquetMesh);
     }
 
+
+    /**
+     * Cylinder topology but with fans anchored at index 0 of each cap. Position encodes
+     * indexing of vertices with position.x being index around, position.y tells if triangle 
+     * belongs to spiral or flat part, and index.z coding bottom/top. 
+     * NOTE: Uses nonindexed geometry because of position.y. This is inefficient.
+     */
+    static createVeneerCylinder(numSegments: number, invert: boolean = false): THREE.BufferGeometry {
+        const geometry = new THREE.BufferGeometry();
+        const vertexData: number[] = [];
+
+        const addTriangle = (x1: number, z1: number, x2: number, z2: number, x3: number, z3: number) => {
+            const isTarget1 = x1 === numSegments - 1 || x1 === numSegments - 2;
+            const isTarget2 = x2 === numSegments - 1 || x2 === numSegments - 2;
+            const isTarget3 = x3 === numSegments - 1 || x3 === numSegments - 2;
+            const isTarget = isTarget1 || isTarget2 || isTarget3;   // Used for separating spiral, flat part triangles
+
+            const yVal = isTarget ? 1 : 0;
+
+            vertexData.push(
+                x1, yVal, z1,
+                invert ? x3 : x2, yVal, invert ? z3 : z2,
+                invert ? x2 : x3, yVal, invert ? z2 : z3,
+            );
+        };
+
+        for (let i = 0; i < numSegments; i++) {
+            const next = (i + 1) % numSegments;
+
+            // side walls (tube)
+            addTriangle(i, 0, next, 0, i, 1);
+            addTriangle(i, 1, next, 0, next, 1);
+
+            // caps: triangulate fans anchored at index 0 of each cap
+            if (i >= 1 && i < numSegments - 1) {
+                addTriangle(0, 0, i + 1, 0, i, 0);       // bottom cap
+                addTriangle(0, 1, i, 1, i + 1, 1);       // top cap
+            }
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertexData), 3));
+        return geometry;
+    }
+
+
     prepareRender(solidRenderManager: SolidRenderManager) {
-        this.veneerMaterial.uniforms.phase.value = (0.5 + 0.5 * Math.sin(solidRenderManager.lastTime)) * this.veneerSize.x;
+        this.veneerMaterial.uniforms.phase.value = (0.5 + 0.5 * Math.sin(2 * solidRenderManager.lastTime)) * this.veneerSize.x;
         this.parquetMaterial.uniforms.time.value = solidRenderManager.lastTime;
     }
 }

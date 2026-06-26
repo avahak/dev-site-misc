@@ -1,6 +1,5 @@
 #include <sCommon>
-
-const int MAX_BRANCHES = 1024;
+#include <sExtensions>
 
 uniform vec3 cameraPos;
 uniform vec2 cameraNearFar;
@@ -11,35 +10,14 @@ uniform mat4 pvMatInv;
 uniform vec2 resolution;
 uniform float time;
 
-uniform sampler3D noiseTexture;
-uniform sampler2D branchIndexTex;
-uniform sampler2D profileTexture;
-
-uniform vec3 knotColor;     // (0.2, 0.2, 0.15)
-
 uniform vec4 clipPlane; // (dirX,dirY,dirY,offset), dir is unit length, points in half-space are vec3 p with dot(p,clipPlane.xyz)>=clipPlane.w
-
-uniform float debug1;
-uniform float debug2;
-uniform float debug3;
-uniform float debug4;
-uniform float debug5;
-uniform float debug6;
-uniform float debug7;
-uniform float debug8;
-
-uniform globalUBO {
-    uniform float zRange;
-    uniform int numBranches;
-    vec4 branchesZASD[MAX_BRANCHES];
-    vec4 branchesR[MAX_BRANCHES];
-};
 
 in vec4 vPos;
 
 layout(location = 0) out vec4 outColor;
 
 #include <sWood>
+
 
 
 float worldToDepth(vec3 worldPos) {
@@ -235,8 +213,8 @@ void main() {
     outColor = vec4(wood(pStart).rgb, 1.0);
     // outColor = vec4(testSolid(pStart), 1.0);
 
-    // float x = 0.5 + 0.5*texture(noiseTexture, pStart).r;
-    // outColor = vec4(x, x, x, 1.0);
+    // vec3 c = 0.5 + 0.5*texture(noiseTexture, 0.5*pStart).rab;
+    // outColor = vec4(c, 1.0);
 
     // float r = length(pStart.xz);
     // vec2 v = vec2(r < 1.0 ? 0.5*r : 0.5 + mod(r-0.5, 0.5), 0.5);

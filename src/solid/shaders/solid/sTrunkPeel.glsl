@@ -1,5 +1,6 @@
 // Functions for peeling a cylinder into a long sheet. 
 
+
 float sheetThickness(float x, float g, float d) {
     // Thickness profile of the sheet. The sheet thickness is tapered for small x 
     // so that the spiral maps the sheet perfectly to the cylinder core without spill or gaps.
@@ -9,6 +10,7 @@ float sheetThickness(float x, float g, float d) {
         return d * sqrt(x / wedgeLength);
     return d;
 }
+
 
 float spiralAngle(float x, float g, float d) {
     // Winding angle for the Archimedean spiral.
@@ -24,11 +26,22 @@ float spiralAngle(float x, float g, float d) {
     return a + sqrt(a*a + b);
 }
 
+
+float spiralAngleInverse(float angle, float g, float d) {
+    // Inverse to spiralAngle
+
+    if (angle < TAU)
+        return (d + 2.0*g) / (4.0 * TAU) * angle*angle;
+    return (((d + g) / TAU)*angle*angle - d*angle + PI*d) / 2.0;
+}
+
+
 float spiralRadius(float x, float z, float g, float d) {
     // Distance from the cylinder center for the Archimedean spiral.
 
     return spiralAngle(x, g, d) * (d + g) / TAU - z;
 }
+
 
 vec3 spiralGeometry(vec3 p, float g, float d) {
     // Geometry for just a spiral inside the trunk
@@ -40,6 +53,7 @@ vec3 spiralGeometry(vec3 p, float g, float d) {
     float X = r*sin(theta);
     return vec3(X, -Z, p.y);
 }
+
 
 vec3 peelGeometry(vec3 p, float peelFront, float g, float d) {
     // Maps sheet coordinates into a partially peeled cylinder.
@@ -63,6 +77,7 @@ vec3 peelGeometry(vec3 p, float peelFront, float g, float d) {
         return vec3(p.x-peelFront, -p.z, p.y);       // flat part
 
     // Now x < peelFront: spiral
+    // TODO check if we should do clamping for peelFront as well?
     float theta = spiralAngle(p.x, g, d) - spiralAngle(peelFront, g, d);
     float r = spiralRadius(p.x, p.z, g, d);
     float zOffset = spiralRadius(peelFront, 0.0, g, d);

@@ -1,30 +1,47 @@
 #include <sCommon>
+#include <sExtensions>
 
 uniform float phase;
 uniform vec3 size;      // (w,h,d)
 uniform float gap;
+uniform int numSegments;
 
 uniform float time;
 
-uniform float debug1;
-uniform float debug2;
-uniform float debug3;
-uniform float debug4;
-uniform float debug5;
-uniform float debug6;
-uniform float debug7;
-uniform float debug8;
-
 out vec3 vPos;
+out float part;
 
 #include <sTrunkPeel>
 
+
 void main() {
-    vec3 p = peelGeometry(position, phase, gap, size.z);
-    vec3 pTrunk = peelGeometry(position, size.x, 0.0, size.z) - peelGeometry(vec3(0.0), size.x, 0.0, size.z);
+    float phase0 = max(PI * size.z / 2.0, phase);
 
-    // p = vec3(p.x, p.z, -p.y);   // TODO remove, adjust model matrix instead
+    vec2 p = vec2(0.0);
+    
+    int i = int(round(position.x));
+    if (i == numSegments-1) {
+        p = vec2(size.x - phase0, size.z);
+    }
+    if (i == numSegments-2) {
+        p = vec2(size.x - phase0, 0.0);
+    }
 
-    vPos = pTrunk;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+    if (i <= numSegments-3) {
+        // for i = 0 to i = numSegments-3 we wrap around the spiral
+
+        float theta = TAU * float(i) / float(numSegments - 3);        // in [0,TAU]
+        float angle0 = spiralAngle(phase0, 0.0, size.z);
+        float r0 = spiralRadius(phase0, 0.0, 0.0, size.z);
+
+        float angle = max(0.0, angle0 - TAU + theta);
+        float x = spiralAngleInverse(angle, 0.0, size.z);
+        float r = spiralRadius(x, 0.0, 0.0, size.z);
+        p = vec2(r*sin(theta), r0 - r*cos(theta));
+    }
+
+
+    vPos = vec3(p.x, position.z*size.y, p.y);
+    part = position.y;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(vPos, 1.0);
 }

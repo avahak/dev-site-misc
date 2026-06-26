@@ -116,7 +116,7 @@ vec4 wood(vec3 p) {
     vec2 v = p.xy - getPith(p.z);
     float phi = atan(v.y, v.x);
     float r = length(v);
-float rStem = (4.0 + 0.5*snoise(0.5*vec3((0.5+debug8*sin(r))*normalize(p.xy-pith), p.z))) / 3.0;
+float rStem = (4.0 + 0.5*snoise(0.5*vec3((0.5+debug2.w*sin(r))*normalize(p.xy-pith), p.z))) / 3.0;
     float ts = r / rStem;
 
     ivec4 branchIndices = ivec4(round(float(MAX_BRANCHES)*texture(branchIndexTex, vec2(phi/TAU, p.z/zRange))));
@@ -162,29 +162,29 @@ float rStem = (4.0 + 0.5*snoise(0.5*vec3((0.5+debug8*sin(r))*normalize(p.xy-pith
     vec3 texColor = texture(profileTexture, vProfile).rgb;
     float g0 = clamp(1.2*tbSmoothMin-ts, 0.001, 1.0) + 1.0;    // 1.2
     float g = 0.5 / pow(g0, 14.0);
-    texColor -= g * knotColor;      // darken knot (alive and dead)
-    texColor -= g * clamp(3.0*deadColorFactor, 0.0, 0.5) * knotColor;  //further darken dead knot
+    texColor -= g * knotColor.rgb;      // darken knot (alive and dead)
+    texColor -= g * clamp(3.0*deadColorFactor, 0.0, 0.5) * knotColor.rgb;  //further darken dead knot
     texColor = deadOutlineFactor * texColor;    //outline of dead knot
 
-    if (debug1 > 0.8) {
-        float x = (1.0+debug7)*tbSmoothMin - ts;
+    if (debug1.x > 0.8) {
+        float x = (1.0+debug2.z)*tbSmoothMin - ts;
         float s = bump(-0.02, -0.01, 0.01, 0.02, x) * 0.0 + 1.0;
         s = tb < death && ts > death ? s : 0.0;
         return vec4(s, s, s, 1.0);
     }
-    if (debug1 > 0.6) {
+    if (debug1.x > 0.6) {
         float s = abs(oldT - death);
-        float s1 = bump(-1.0, 0.0, 0.09*debug8, 0.11*debug8, s);
+        float s1 = bump(-1.0, 0.0, 0.09*debug2.w, 0.11*debug2.w, s);
         float s2 = tb < death ? 1.0 : 0.0;
         float s3 = ts > death ? 1.0 : 0.0;
         return vec4(s1, s2, s3, 1.0);
     }
-    if (debug1 > 0.4) {
+    if (debug1.x > 0.4) {
         float t2 = min(ts, tb) + delta;
         float s = abs(t2 - death);
         return vec4(tb < death ? 1.0 : 0.0, 0.0, 0.0, 1.0);
     }
-    if (debug1 > 0.2) {
+    if (debug1.x > 0.2) {
         if (deadOutlineFactor < 1.0)
             return vec4(1.0, 0.0, 0.0, 1.0);
         return vec4(texColor, 1.0);
