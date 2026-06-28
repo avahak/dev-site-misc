@@ -52,8 +52,8 @@ void main() {
 
     vec3 hp = herringtonParquet(p.xy, size.x, size.y);
 
-    float hw = zRange * hash(1.0 + hp.z);
-    float rw = 1.0 + 0.4 * hash(2.0 + hp.z);    // avoid heartwood
+    float hw = 5.0 * hash(1.0 + hp.z);
+    float rw = 1.2 + 0.4 * hash(2.0 + hp.z);    // avoid heartwood
     float aw = TAU * hash(3.0 + hp.z);
     vec3 pPlank = vec3(rw*cos(aw)+hp.y-0.5*size.y, rw*sin(aw)+p.z, hw+hp.x);
 

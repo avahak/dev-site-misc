@@ -1,30 +1,23 @@
 // See sWood.glsl
 
 #include <sCommon>
-
-const int MAX_BRANCHES = 1024;
-
-uniform sampler3D noiseTexture;
+#include <sExtensions>
 
 uniform vec2 resolution;
-uniform float debug1;
-uniform float debug2;
-uniform float debug3;
-uniform float debug4;
-uniform float debug5;
-uniform float debug6;
-uniform float debug7;
-uniform float debug8;
 
-uniform branchUBO {
-    uniform float zRange;
-    uniform float numBranches;
+const int MAX_WOOD_TYPES = 4;
+const int MAX_BRANCHES = 1024;
+
+layout(std140) uniform branchUBO {
+    vec4 zRanges[MAX_WOOD_TYPES];               // (start,end,length,-) for each wood type
+    vec4 branchIndices[MAX_WOOD_TYPES];         // (start,end,length,-) for each wood type
+    vec4 knotColors[MAX_WOOD_TYPES];
+    
     vec4 branchesZASD[MAX_BRANCHES];
     vec4 branchesR[MAX_BRANCHES];
-    uniform vec4 knotColor;
 };
 
-in vec4 vPos;
+in vec3 vPos;
 
 layout(location = 0) out vec4 outIndices;
 layout(location = 1) out vec4 outValues;
@@ -67,11 +60,11 @@ float sminPow(float a, float b, float k) {
 
 
 vec2 getPith(float z) {
-    return 0.1*vnoise33(5.0*vec3(0.0, 0.0, z)).xy;
+    return 0.05*vnoise33(3.0*vec3(0.0, 0.0, z)).xy;
 }
 
 // This should match between setup and lookup
-BranchState computeBranchState(vec3 p, float r, float phi, float z, float ts, int index) {
+BranchState computeBranchState(vec3 p, float r, float phi, float z, float ts, int index, int woodTypeIndex) {
     float z0 = branchesZASD[index].x;
     vec2 dir = branchesZASD[index].yz;
     float death = branchesZASD[index].w;
@@ -84,6 +77,7 @@ BranchState computeBranchState(vec3 p, float r, float phi, float z, float ts, in
     float branchZ = dir.y*(r < 1.0 ? r - 0.5*r*r : 0.5);
     vec3 branchP = start + vec3(r*dirXY, branchZ);
 
+    float zRange = zRanges[woodTypeIndex].z;
     vec3 diff = p - branchP;
     diff.z -= zRange * round(diff.z / zRange);        // for z-tiling
     float dBranch = length(diff);
@@ -118,7 +112,7 @@ BranchState computeBranchState(vec3 p, float r, float phi, float z, float ts, in
     return BranchState(tb, delta, death, beta, isAlive);
 }
 
-float computeRatio(float phi, float z, int index) {
+float computeRatio(float phi, float z, int index, int woodTypeIndex) {
     float bestRatio = 1e38;
 
     const int RN = 10;
@@ -129,7 +123,7 @@ float computeRatio(float phi, float z, int index) {
         float rStem = (4.0 + 0.5*snoise(1.0*vec3(normalize(p.xy-pith), p.z))) / 3.0;
         float ts = r / rStem;
 
-        BranchState bs = computeBranchState(p, r, phi, z, ts, index);
+        BranchState bs = computeBranchState(p, r, phi, z, ts, index, woodTypeIndex);
 
         float ratio = bs.tb / ts;
         bestRatio = min(ratio, bestRatio);
@@ -138,7 +132,7 @@ float computeRatio(float phi, float z, int index) {
 }
 
 
-MinInfo computeMinValues(float phi, float z) {
+MinInfo computeMinValues(float phi, float z, int woodTypeIndex) {
     const int M = 4;
     float minValues[M];
     int minIndices[M];
@@ -147,11 +141,13 @@ MinInfo computeMinValues(float phi, float z) {
         minIndices[i] = -1;
     }
 
-    for (int i = 0; i < MAX_BRANCHES; i++) {
-        if (i >= int(round(numBranches)))
+    ivec4 bIndices = ivec4(round(branchIndices[woodTypeIndex]));
+    for (int i0 = 0; i0 < MAX_BRANCHES; i0++) {
+        if (i0 >= bIndices.z)
             break;
+        int i = bIndices.x + i0;
 
-        float val = computeRatio(phi, z, i);
+        float val = computeRatio(phi, z, i, woodTypeIndex);
 
         for (int j = M - 1; j >= 0; j--) {
             if (val < minValues[j]) {
@@ -180,10 +176,19 @@ void main() {
     // - Write out color from index
 
     vec2 xy = gl_FragCoord.xy / resolution;
-    float phi = TAU * xy.x;
-    float z = xy.y * zRange;
 
-    MinInfo minInfo = computeMinValues(phi, z);
+    float zRangeTotal = zRanges[MAX_WOOD_TYPES-1].y;
+
+    // Determine which wood type section we are in:
+    int woodTypeIndex = 0;
+    for (int k = 0; k < MAX_WOOD_TYPES; k++)
+        if (zRanges[k].x / zRangeTotal < xy.y)
+            woodTypeIndex = k;
+
+    float phi = TAU * xy.x;
+    float z = xy.y*zRangeTotal - zRanges[woodTypeIndex].x;
+
+    MinInfo minInfo = computeMinValues(phi, z, woodTypeIndex);
 
     // vec3 h = hash33(vec3(float(index)));
     // outColor = vec4(h, 1.0);

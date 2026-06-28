@@ -29,7 +29,15 @@ import { FFT } from "./utils/fft";
 import { clamp, generateRandomWeights, lerp, Point3D, sample, scale, smoothstep } from "./utils/misc";
 
 
-interface WoodConfig {
+export interface Branch {
+    zStart: number;                         // z for branch start at stem
+    xyAngle: number;                        // angular direction around the stem
+    initialSlope: number;                   // slope at the stem
+    death: number;                          // time of death
+    radius: number;                         // radius of the branch
+}
+
+export interface WoodConfig {
     name: string;                           // wood name
     zRange: number;                         // range for z-tiling
 
@@ -39,20 +47,13 @@ interface WoodConfig {
     verticalSlopeRange: [number, number];   // range for vertical slope at stem
     radiusRange: [number, number],          // range for radii
     deathRange: [number, number];           // range for knot deaths
+    medullaryRayFrequency: number;          // frequency of medullary rays
     alternateAngle?: number;                // (only for whorlSize=1) angular offset between consecutive branches, should be (1/2, 1/3, 2/5, or 3/8) of full circle or just 1/\phi^2=(3-sqrt(5))*pi ~ 2.4 radians
 
     knotColor: [number, number, number];
-}
 
-export interface Branch {
-    zStart: number;                         // z for branch start at stem
-    xyAngle: number;                        // angular direction around the stem
-    initialSlope: number;                   // slope at the stem
-    death: number;                          // time of death
-    radius: number;                         // radius of the branch
-}
+    // Parameters for the profile:
 
-interface WoodProfileParams {
     heartwoodColor: Point3D;
     sapwoodColor: Point3D;
     heartwoodRadius: number;       // fraction of radius where transition centers, e.g. 0.4
@@ -63,64 +64,24 @@ interface WoodProfileParams {
     ringShapeExponent: number;     // >=1, higher = wider earlywood and sharper latewood boundary
     earlywoodLighten: number;      // >1 multiplier that lightens base colour for earlywood
     latewoodDarken: number;        // <1 multiplier that darkens base colour for latewood
-    noiseAmplitude: number;        // amplitude of per-channel colour noise
+    yearlyNoiseAmplitude: number;  // amplitude of yearly noise
+    grainNoiseAmplitude: number;   // amplitude of grain noise
 }
 
-const testWoodWhorl4: WoodConfig = {
-    name: "Test_tree_whorl4",
-    zRange: 10,
-    whorlSizes: [[4, 0.65], [3, 0.35]],
-    whorlNum: 8,
-    whorlOffsetDispersion: 0.1,       // TODO needs testing
-    verticalSlopeRange: [0.2, 0.5],
-    radiusRange: [0.2, 0.25],
-    deathRange: [0.2, 1.0],
-
-    knotColor: [0.2, 0.2, 0.15],
-};
-
-const testWoodAlternate: WoodConfig = {
-    name: "Test_tree_alternate",
-    zRange: 8,
-    whorlSizes: [[1, 1]],
-    whorlNum: 20,
-    whorlOffsetDispersion: 0.15,
-    verticalSlopeRange: [1.0, 1.5],
-    radiusRange: [0.2, 0.3],
-    deathRange: [0.2, 1.0],
-    alternateAngle: 2.4,
-
-    knotColor: [0.2, 0.2, 0.15],
-};
-
-const testProfileParams: WoodProfileParams = {
-    heartwoodColor: { x: 0.6, y: 0.4, z: 0.3 },
-    sapwoodColor: { x: 0.7, y: 0.5, z: 0.3 },
-    heartwoodRadius: 0.4,
-    transitionWidth: 0.1,
-    ageAtOne: 60,
-    ringWidthDispersion: 0.1,
-    ringWidthNoiseAlpha: 0.1,
-    ringShapeExponent: 0.1,
-    earlywoodLighten: 0.1,
-    latewoodDarken: 0.8,
-    noiseAmplitude: 0.02,
-};
 
 export class WoodSetup {
     woodConfig: WoodConfig;
     branches: Branch[];
     profile: Float32Array;
 
-    constructor() {
-        this.woodConfig = testWoodAlternate;
+    constructor(profileWidth: number, woodConfig: WoodConfig) {
+        this.woodConfig = woodConfig;
         this.branches = this.generateBranches();
-        this.profile = this.generateRadialProfile(testProfileParams, 1024);
+        this.profile = this.generateRadialProfile(profileWidth);
     }
 
     /**
-     * Generates branch configuration following woodConfig. Samples are generated until 
-     * there is no overlap.
+     * Generates branch configuration following woodConfig. 
      */
     generateBranches(): Branch[] {
         const config = this.woodConfig;
@@ -128,9 +89,9 @@ export class WoodSetup {
         const isAlternatePattern = (config.whorlSizes.length == 1) && (config.whorlSizes[0][0] == 1);
         const zOffsets = generateRandomWeights(config.whorlNum, config.whorlOffsetDispersion);
         let z = Math.random() * config.zRange;
-        let previousXYAngle = Math.random() * 2 * Math.PI;
+        let xyAngle = Math.random() * 2 * Math.PI;
         for (let whorl = 0; whorl < config.whorlNum; whorl++) {
-            const xyAngle = isAlternatePattern ? previousXYAngle + config.alternateAngle! : Math.random() * 2 * Math.PI;
+            xyAngle = isAlternatePattern ? xyAngle + config.alternateAngle! : Math.random() * 2 * Math.PI;
 
             const whorlSize = sample(config.whorlSizes);
             for (let k = 0; k < whorlSize; k++) {
@@ -150,7 +111,6 @@ export class WoodSetup {
                 branches.push(branch);
             }
 
-            previousXYAngle = xyAngle;
             z += config.zRange * zOffsets[whorl];
         }
 
@@ -158,13 +118,16 @@ export class WoodSetup {
     }
 
 
-    generateRadialProfile(params: WoodProfileParams, width: number): Float32Array {
+    /** 
+     * Returns `Float32Array` corresponding to RGBA texture of size `width*2`
+     */
+    generateRadialProfile(width: number): Float32Array {
+        const config = this.woodConfig;
+
         // 1. Ring boundaries for r in [0,1]
-        const N = Math.max(1, Math.round(params.ageAtOne));
-        const z = FFT.generateNoise1D(N, params.ringWidthNoiseAlpha);
-        const weights = Array.from({ length: N }, (_v, k) =>
-            Math.exp(params.ringWidthDispersion * (2 * z[k] - 1))
-        );
+        const N = Math.max(1, Math.round(config.ageAtOne));
+        const z = FFT.generateNoise1D(N, config.ringWidthNoiseAlpha);
+        const weights = z.map((v) => Math.exp(config.ringWidthDispersion * v));
         const wSum = weights.reduce((s, v) => s + v, 0);
         for (let k = 0; k < N; k++)
             weights[k] /= wSum;
@@ -177,48 +140,45 @@ export class WoodSetup {
         boundaries[N] = 1; // guard exact endpoint
 
         // 2. Heartwood transition limits
-        const hwStart = params.heartwoodRadius - params.transitionWidth / 2;
-        const hwEnd = params.heartwoodRadius + params.transitionWidth / 2;
+        const hwStart = config.heartwoodRadius - config.transitionWidth / 2;
+        const hwEnd = config.heartwoodRadius + config.transitionWidth / 2;
 
-        // 3. Generate 2*width colour samples
+        // 3. Generate 2*width color samples (two rows)
         const total = 2 * width;
         const profile: Float32Array = new Float32Array(4 * total);
 
-        const noise = FFT.generateNoise1D(N, 1.0);
-
+        const noiseYearly = FFT.generateNoise1D(N, 1.0);
+        const noiseGrain = FFT.generateNoise1D(width, 1.0);
+        let i = 1;
         for (let x = 0; x < total; x++) {
-            const r = (x < width) ? (x / (width - 1)) : (1 + (x - width) / (width - 1));
+            const r = x / width;
 
             // Base colour (heartwood/sapwood blend or pure sapwood)
-            let base: Point3D;
+            let base = config.sapwoodColor;
             if (r <= 1) {
                 const t = smoothstep(hwStart, hwEnd, r);
-                base = lerp(params.heartwoodColor, params.sapwoodColor, t);
-            } else {
-                base = params.sapwoodColor;
+                base = lerp(config.heartwoodColor, config.sapwoodColor, t);
             }
 
             // Ring modulation
-            let ringColor: Point3D;
             let age = 0;
-            if (r <= 1) {
-                let i = 1;
+            let u = 0;
+            if (x === width)
+                i = 1;
+            if (x < width) {
                 while (i < N && r >= boundaries[i]) i++;
                 age = i;
-                const u = (r - boundaries[i - 1]) / (boundaries[i] - boundaries[i - 1]);
-                const t = Math.pow(u, params.ringShapeExponent);
-                ringColor = lerp(scale(base, params.earlywoodLighten), scale(base, params.latewoodDarken), t);
+                u = (r - boundaries[i - 1]) / (boundaries[i] - boundaries[i - 1]);
             } else {
-                let i = 1;
                 while (i < N && r - 1 >= boundaries[i]) i++;
                 age = i + N;
-                const u = (r - 1 - boundaries[i - 1]) / (boundaries[i] - boundaries[i - 1]);
-                const t = Math.pow(u, params.ringShapeExponent);
-                ringColor = lerp(scale(base, params.earlywoodLighten), scale(base, params.latewoodDarken), t);
+                u = (r - 1 - boundaries[i - 1]) / (boundaries[i] - boundaries[i - 1]);
             }
+            const t = Math.pow(u, config.ringShapeExponent);
+            const ringColor = lerp(scale(base, config.earlywoodLighten), scale(base, config.latewoodDarken), t);
 
             // Fine grain noise
-            const grain = noise[age % N] * params.noiseAmplitude;
+            const grain = noiseYearly[age % N] * config.yearlyNoiseAmplitude + noiseGrain[x % width] * config.grainNoiseAmplitude;
             profile[4 * x + 0] = clamp(ringColor.x + grain);
             profile[4 * x + 1] = clamp(ringColor.y + grain);
             profile[4 * x + 2] = clamp(ringColor.z + grain);

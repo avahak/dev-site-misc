@@ -1,4 +1,4 @@
-in vec4 vPos;
+in vec3 vPos;
 
 layout(location = 0) out vec4 outDummy;
 

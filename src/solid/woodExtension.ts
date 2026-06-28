@@ -1,18 +1,21 @@
 import * as THREE from 'three';
-import { WoodSetup } from './woodSetup';
+import { WoodConfig, WoodSetup } from './woodSetup';
 import { computeStats, Stats } from './utils/misc';
 import { resolveShaderChunk } from './shaderImport';
 import { NoiseExtension } from './noiseExtension';
 
 /**
  * Global uniforms for the viewer scene.
+ * NOTE: We are using vec4 arrays instead of float/int/vec3/etc. arrays since three.js 
+ *       seems to mess packing up otherwise.
  */
-export interface SolidSceneuniforms {
-    zRange: THREE.Uniform<number>;
-    numBranches: THREE.Uniform<number>;
+export interface SolidSceneUniforms {
+    zRanges: THREE.Uniform<THREE.Vector4>[];        // (start,end,length,-) for each wood type
+    branchIndices: THREE.Uniform<THREE.Vector4>[];  // (start,end,length,-) for each wood type
+    knotColors: THREE.Uniform<THREE.Vector4>[];     // knot colors for each wood type
+
     branchesZASD: THREE.Uniform<THREE.Vector4>[];   // z, angle, slope, death
     branchesR: THREE.Uniform<THREE.Vector4>[];      // radius, -, -, -
-    knotColor: THREE.Uniform<THREE.Vector4>;
 }
 
 interface MRTTextureStats {
@@ -27,43 +30,68 @@ interface MRTTextureStats {
  * into a THREE.ShaderMaterial.
  */
 export class WoodExtension {
-    static setupResolution = new THREE.Vector2(256, 1024);
+    static MAX_WOOD_TYPES = 4;      // Has to match value in shaders
     static MAX_BRANCHES = 1024;     // Has to match value in shaders
+    static PROFILE_WIDTH = 2048;    // Width of the profile texture
+    static setupResolution = new THREE.Vector2(256, 1024 * WoodExtension.MAX_WOOD_TYPES);
 
-    woodSetup: WoodSetup;
-    uniforms: SolidSceneuniforms;
+    woodSetups: WoodSetup[];
+    uniforms: SolidSceneUniforms;
     ubo: THREE.UniformsGroup;
     profileTexture: THREE.DataTexture;
 
     setupRT: THREE.WebGLRenderTarget;
     setupMaterial: THREE.ShaderMaterial;
 
-    constructor(shaderChunks: Record<string, string>, noiseExtension: NoiseExtension) {
-        this.woodSetup = new WoodSetup();     // TODO how to combine multiple?
-
-        const n = this.woodSetup.branches.length;
+    constructor(shaderChunks: Record<string, string>, noiseExtension: NoiseExtension, woodConfigs: WoodConfig[]) {
         this.uniforms = {
-            zRange: new THREE.Uniform(this.woodSetup.woodConfig.zRange),
-            numBranches: new THREE.Uniform(n),
+            zRanges: Array.from({ length: WoodExtension.MAX_WOOD_TYPES }, () => new THREE.Uniform(new THREE.Vector4())),
+            branchIndices: Array.from({ length: WoodExtension.MAX_WOOD_TYPES }, () => new THREE.Uniform(new THREE.Vector4())),
+            knotColors: Array.from({ length: WoodExtension.MAX_WOOD_TYPES }, () => new THREE.Uniform(new THREE.Vector4())),
+
             branchesZASD: Array.from({ length: WoodExtension.MAX_BRANCHES }, () => new THREE.Uniform(new THREE.Vector4())),
             branchesR: Array.from({ length: WoodExtension.MAX_BRANCHES }, () => new THREE.Uniform(new THREE.Vector4())),
-            knotColor: new THREE.Uniform(new THREE.Vector4(0.2, 0.2, 0.15, 1)),
         };
-        for (let k = 0; k < n; k++) {
-            const branch = this.woodSetup.branches[k];
-            this.uniforms.branchesZASD[k].value.x = branch.zStart;
-            this.uniforms.branchesZASD[k].value.y = branch.xyAngle;
-            this.uniforms.branchesZASD[k].value.z = branch.initialSlope;
-            this.uniforms.branchesZASD[k].value.w = branch.death;
-            this.uniforms.branchesR[k].value.x = branch.radius;
+
+        this.woodSetups = [];
+        const profileData = new Float32Array(4 * 2 * WoodExtension.MAX_WOOD_TYPES * WoodExtension.PROFILE_WIDTH);
+        let branchStart = 0;
+        let zRangeStart = 0;
+        for (let i = 0; i < WoodExtension.MAX_WOOD_TYPES; i++) {
+            const woodSetup = new WoodSetup(WoodExtension.PROFILE_WIDTH, woodConfigs[i]);
+            this.woodSetups.push(woodSetup);
+            const n = woodSetup.branches.length;
+
+            const zRange = woodSetup.woodConfig.zRange;
+            this.uniforms.zRanges[i].value.set(zRangeStart, zRangeStart + zRange, zRange, 0);
+            this.uniforms.branchIndices[i].value.set(branchStart, branchStart + n, n, 0);
+            this.uniforms.knotColors[i].value.set(...woodSetup.woodConfig.knotColor, 1);
+
+            for (let j = 0; j < n; j++) {
+                const branch = woodSetup.branches[j];
+                const k = branchStart + j;
+                this.uniforms.branchesZASD[k].value.x = branch.zStart;
+                this.uniforms.branchesZASD[k].value.y = branch.xyAngle;
+                this.uniforms.branchesZASD[k].value.z = branch.initialSlope;
+                this.uniforms.branchesZASD[k].value.w = branch.death;
+                this.uniforms.branchesR[k].value.x = branch.radius;
+            }
+
+            branchStart += n;
+            zRangeStart += woodSetup.woodConfig.zRange;
+
+            // Copy from woodSetup.profile to profileData
+            const segmentLength = 4 * 2 * WoodExtension.PROFILE_WIDTH;
+            profileData.set(woodSetup.profile, i * segmentLength);
         }
+
         this.ubo = new THREE.UniformsGroup();
         this.ubo.setName("branchUBO");
-        this.ubo.add(this.uniforms.zRange);
-        this.ubo.add(this.uniforms.numBranches);
+        this.ubo.add(this.uniforms.zRanges);
+        this.ubo.add(this.uniforms.branchIndices);
+        this.ubo.add(this.uniforms.knotColors);
         this.ubo.add(this.uniforms.branchesZASD);
         this.ubo.add(this.uniforms.branchesR);
-        this.ubo.add(this.uniforms.knotColor);
 
         this.setupRT = new THREE.WebGLRenderTarget(WoodExtension.setupResolution.x, WoodExtension.setupResolution.y, {
             count: 2,
@@ -88,7 +116,7 @@ export class WoodExtension {
         });
         noiseExtension.addToShaderMaterial(this.setupMaterial);
 
-        this.profileTexture = new THREE.DataTexture(this.woodSetup.profile, this.woodSetup.profile.length / 4, 1);
+        this.profileTexture = new THREE.DataTexture(profileData, WoodExtension.PROFILE_WIDTH, 2 * WoodExtension.MAX_WOOD_TYPES);
         this.profileTexture.type = THREE.FloatType;
         this.profileTexture.format = THREE.RGBAFormat;
         this.profileTexture.wrapT = THREE.ClampToEdgeWrapping;
@@ -97,11 +125,12 @@ export class WoodExtension {
         this.profileTexture.needsUpdate = true;
     }
 
-    addToShaderMaterial(material: THREE.ShaderMaterial) {
+    addToShaderMaterial(material: THREE.ShaderMaterial, woodTypeIndex: number) {
         material.uniformsGroups.push(this.ubo);
 
         material.uniforms['branchIndexTex'] = { value: this.setupRT.textures[0] };
         material.uniforms['profileTexture'] = { value: this.profileTexture };
+        material.uniforms['woodTypeIndex'] = { value: woodTypeIndex };
 
         material.defines['USE_WOOD'] = true;
 

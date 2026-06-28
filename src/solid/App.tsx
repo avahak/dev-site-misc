@@ -25,7 +25,8 @@ const App: React.FC<{ solidTest: boolean }> = ({ solidTest }) => {
         <Container maxWidth="xl">
             <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                 <Typography variant="h2">
-                    Solid textures
+                    {solidTest && "Solid textures and wood"}
+                    {!solidTest && "Solid textures and clipping"}
                 </Typography>
             </Box>
             {/* <Box style={{ width: "100%", height: "600px" }}>
@@ -34,6 +35,13 @@ const App: React.FC<{ solidTest: boolean }> = ({ solidTest }) => {
             <Box style={{ width: "100%", height: "600px" }}>
                 <SceneComponent solidTest={solidTest} />
             </Box>
+            {solidTest && <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
+                <Typography variant="body1">
+                    Based and modified from:
+                    "Procedural texturing of solid wood with knots." Larsson, M., et al.
+                    <em>ACM Trans. Graph.</em>, vol. 41, no. 4, 2022.
+                </Typography>
+            </Box>}
             <MUILink component={RouterLink} to="/" variant="body1" color="primary">
                 Back
             </MUILink>

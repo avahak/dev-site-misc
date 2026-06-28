@@ -361,7 +361,7 @@ export class FFT {
     /* ================================================================== */
 
     /**
-     * Generates a 1D periodic noise signal with a 1/f^α power spectrum.
+     * Generates a 1D periodic noise signal with a 1/f^alpha power spectrum.
      * Output is real-valued and tileable. DC component is set to zero.
      *
      * @param N - Length of the output array (any positive integer).
@@ -415,7 +415,7 @@ export class FFT {
         FFT.fft1D(real, imag, true);
 
         const stdDev = Math.sqrt(sumVariance) / N;
-        for (let k = 1; k < N; k++)
+        for (let k = 0; k < N; k++)
             real[k] /= stdDev;
 
         // Extract real part only
@@ -423,7 +423,7 @@ export class FFT {
     }
 
     /**
-     * Generates a 2D periodic noise texture with a 1/f^α power spectrum.
+     * Generates a 2D periodic noise texture with a 1/f^alpha power spectrum.
      * Supports non‑square sizes and arbitrary lengths.
      * Output is real‑valued and tileable. DC component is set to zero.
      *
@@ -445,7 +445,7 @@ export class FFT {
 
         let sumVariance = 0;
 
-        // Apply spectral weight (PSD ∝ 1/f^α)
+        // Apply spectral weight (PSD ~ 1/f^alpha)
         const halfW = width >>> 1;
         const halfH = height >>> 1;
         for (let y = 0; y < height; y++) {
@@ -498,7 +498,7 @@ export class FFT {
     }
 
     /**
-     * Generates a 3D periodic noise volume with a 1/f^α power spectrum.
+     * Generates a 3D periodic noise volume with a 1/f^alpha power spectrum.
      * Supports non‑cubic sizes and arbitrary lengths.
      * Output is real‑valued and tileable. DC component is set to zero.
      *

@@ -17,6 +17,8 @@ import { RenderManager as SolidRenderManager } from './solidManager';
 import { WoodExtension } from './woodExtension';
 import { NoiseExtension } from './noiseExtension';
 import { DebugExtension } from './debugExtension';
+import { MCSDFFont } from '../primitives/font';
+import { TextGroup } from '../primitives/textRender';
 
 
 export class WoodScene extends THREE.Scene {
@@ -30,9 +32,11 @@ export class WoodScene extends THREE.Scene {
     parquetSize: THREE.Vector2;
     parquetMaterial: THREE.ShaderMaterial;
 
+    textGroup: TextGroup;
 
 
-    constructor(shaderChunks: Record<string, string>, woodExtension: WoodExtension, noiseExtension: NoiseExtension, debugExtension: DebugExtension) {
+
+    constructor(shaderChunks: Record<string, string>, woodExtension: WoodExtension, noiseExtension: NoiseExtension, debugExtension: DebugExtension, font: MCSDFFont) {
         super();
 
 
@@ -56,7 +60,7 @@ export class WoodScene extends THREE.Scene {
             depthTest: true,
             glslVersion: THREE.GLSL3,
         });
-        woodExtension.addToShaderMaterial(this.veneerMaterial);
+        woodExtension.addToShaderMaterial(this.veneerMaterial, 1);
         noiseExtension.addToShaderMaterial(this.veneerMaterial);
         debugExtension.addToShaderMaterial(this.veneerMaterial);
 
@@ -72,7 +76,7 @@ export class WoodScene extends THREE.Scene {
 
         // Plywood
 
-        this.plywoodSize = new THREE.Vector3(1, 1, 0.4);
+        this.plywoodSize = new THREE.Vector3(1, 1, 0.05);
 
         this.plywoodMaterial = new THREE.ShaderMaterial({
             uniforms: {
@@ -87,7 +91,7 @@ export class WoodScene extends THREE.Scene {
             depthTest: true,
             glslVersion: THREE.GLSL3,
         });
-        woodExtension.addToShaderMaterial(this.plywoodMaterial);
+        woodExtension.addToShaderMaterial(this.plywoodMaterial, 2);
         noiseExtension.addToShaderMaterial(this.plywoodMaterial);
         debugExtension.addToShaderMaterial(this.plywoodMaterial);
 
@@ -95,12 +99,12 @@ export class WoodScene extends THREE.Scene {
         plywoodBox.translate(this.plywoodSize.x / 2, this.plywoodSize.y / 2, this.plywoodSize.z / 2);
         const plywoodMesh = new THREE.Mesh(plywoodBox, this.plywoodMaterial);
         this.add(plywoodMesh);
-        plywoodMesh.position.set(2, 0, 1);
+        plywoodMesh.position.set(3, 0, 1);
 
 
         // Herringbone parquet
 
-        this.parquetSize = new THREE.Vector2(4, 0.1);
+        this.parquetSize = new THREE.Vector2(3, 0.3);
 
         this.parquetMaterial = new THREE.ShaderMaterial({
             uniforms: {
@@ -114,13 +118,19 @@ export class WoodScene extends THREE.Scene {
             depthTest: true,
             glslVersion: THREE.GLSL3,
         });
-        woodExtension.addToShaderMaterial(this.parquetMaterial);
+        woodExtension.addToShaderMaterial(this.parquetMaterial, 3);
         noiseExtension.addToShaderMaterial(this.parquetMaterial);
         debugExtension.addToShaderMaterial(this.parquetMaterial);
 
         const parquetBox = new THREE.BoxGeometry(20, 20, 0.1);
         const parquetMesh = new THREE.Mesh(parquetBox, this.parquetMaterial);
         this.add(parquetMesh);
+
+        this.textGroup = new TextGroup(font);
+        this.textGroup.addText("Parquet", [-5, -5, 1.0], [1, 0.5, 0.5], [0, -1], 1.5);
+        this.textGroup.addText("Veneer", [1, 0.5, 2.5], [0.5, 0.5, 1], [0, -1], 0.5);
+        this.textGroup.addText("Plywood", [3.5, 0.5, 1.25], [0.5, 1, 0.5], [0, -1], 0.25);
+        this.add(this.textGroup.getObject());
     }
 
 
@@ -171,5 +181,9 @@ export class WoodScene extends THREE.Scene {
     prepareRender(solidRenderManager: SolidRenderManager) {
         this.veneerMaterial.uniforms.phase.value = (0.5 + 0.5 * Math.sin(2 * solidRenderManager.lastTime)) * this.veneerSize.x;
         this.parquetMaterial.uniforms.time.value = solidRenderManager.lastTime;
+    }
+
+    dispose() {
+        this.textGroup.dispose();
     }
 }

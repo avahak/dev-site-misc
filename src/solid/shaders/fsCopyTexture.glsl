@@ -6,7 +6,7 @@ uniform sampler2D clipDepthTex;
 uniform sampler2D regularColorTex;
 uniform sampler2D regularDepthTex;
 
-in vec4 vPos;
+in vec3 vPos;
 in vec2 vUv;
 in vec3 vNormal;
 

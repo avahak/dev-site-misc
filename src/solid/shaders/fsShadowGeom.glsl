@@ -5,7 +5,7 @@
 uniform int objectId;
 uniform int lightIndex;
 
-in vec4 vPos;
+in vec3 vPos;
 in vec2 vUv;
 
 layout(location = 0) out vec4 outDepth;

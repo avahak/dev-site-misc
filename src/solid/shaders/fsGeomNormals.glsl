@@ -5,7 +5,7 @@
 uniform int phase; 
 uniform int objectId;
 
-in vec4 vPos;
+in vec3 vPos;
 in vec2 vUv;
 in vec3 vNormal;
 
@@ -16,7 +16,7 @@ layout(location = 1) out vec2 outNormal;
 
 
 void main() {
-    vec3 v = vPos.xyz;
+    vec3 v = vPos;
     float depth = gl_FragCoord.z;
 
     if (phase != 2) {

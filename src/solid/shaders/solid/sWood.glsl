@@ -4,6 +4,8 @@
 
 // See https://www.reddit.com/r/woodworking/comments/1u9m1d1/heard_yall_like_grain/
 
+const float INFLUENCE_LOW = 7.0;
+const float INFLUENCE_HIGH = 8.5;
 
 struct BranchState {
     float tb;
@@ -51,7 +53,7 @@ float sminPow4(vec4 A, float k) {
 }
 
 vec2 getPith(float z) {
-    return 0.1*vnoise33(5.0*vec3(0.0, 0.0, z)).xy;
+    return 0.05*vnoise33(3.0*vec3(0.0, 0.0, z)).xy;
 }
 
 // This should match between setup and lookup
@@ -68,6 +70,7 @@ BranchState computeBranchState(vec3 p, float r, float phi, float z, float ts, in
     float branchZ = dir.y*(r < 1.0 ? r - 0.5*r*r : 0.5);
     vec3 branchP = start + vec3(r*dirXY, branchZ);
 
+    float zRange = zRanges[woodTypeIndex].z;
     vec3 diff = p - branchP;
     diff.z -= zRange * round(diff.z / zRange);        // for z-tiling
     float dBranch = length(diff);
@@ -106,6 +109,7 @@ BranchState computeBranchState(vec3 p, float r, float phi, float z, float ts, in
 
 vec4 wood(vec3 p) {
     // p.z += time;
+    float zRange = zRanges[woodTypeIndex].z;
 
     vec2 pith = getPith(p.z);
 
@@ -119,7 +123,8 @@ vec4 wood(vec3 p) {
 float rStem = (4.0 + 0.5*snoise(0.5*vec3((0.5+debug2.w*sin(r))*normalize(p.xy-pith), p.z))) / 3.0;
     float ts = r / rStem;
 
-    ivec4 branchIndices = ivec4(round(float(MAX_BRANCHES)*texture(branchIndexTex, vec2(phi/TAU, p.z/zRange))));
+    vec2 bCoord = vec2(phi/TAU, (zRanges[woodTypeIndex].x+zRange*fract(p.z/zRange))/zRanges[MAX_WOOD_TYPES-1].y);
+    ivec4 branchIndices = ivec4(round(float(MAX_BRANCHES)*texture(branchIndexTex, bCoord)));
 
     float tb, delta, death, beta, isAlive, oldT;
     float deltaSum = 0.0;
@@ -134,7 +139,7 @@ float rStem = (4.0 + 0.5*snoise(0.5*vec3((0.5+debug2.w*sin(r))*normalize(p.xy-pi
         oldT = bs.oldT;
 
         // Localize branch influence
-        float branchInfluence = 1.0 - smoothstep(7.0, 8.5, tb/ts);    // 0 if tb > c*ts
+        float branchInfluence = 1.0 - smoothstep(INFLUENCE_LOW, INFLUENCE_HIGH, tb/ts);    // 0 if tb > c*ts
         delta = mix(0.0, delta, branchInfluence);
 
         deltaSum += delta;
@@ -158,7 +163,8 @@ float rStem = (4.0 + 0.5*snoise(0.5*vec3((0.5+debug2.w*sin(r))*normalize(p.xy-pi
     }
 
 
-    vec2 vProfile = vec2(t < 1.0 ? 0.5*t : 0.5 + 0.5*mod(t-1.0, 1.0), 0.5);
+    vec2 vProfile = vec2(fract(t), (2.0*float(woodTypeIndex)+step(1.0, t)+0.5)/(2.0 * float(MAX_WOOD_TYPES)));
+    vec4 knotColor = knotColors[woodTypeIndex];
     vec3 texColor = texture(profileTexture, vProfile).rgb;
     float g0 = clamp(1.2*tbSmoothMin-ts, 0.001, 1.0) + 1.0;    // 1.2
     float g = 0.5 / pow(g0, 14.0);

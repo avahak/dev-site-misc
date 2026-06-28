@@ -8,6 +8,8 @@ import { importShaders, resolveShaderChunk } from './shaderImport';
 import { WoodExtension } from './woodExtension';
 import { NoiseExtension } from './noiseExtension';
 import { DebugExtension } from './debugExtension';
+import { BlackWalnutParquetConfig, EnglishOakConfig, EuropeanBeechConfig, ScotsPineConfig, SugarMapleConfig } from './woodTypes';
+import { MCSDFFont } from '../primitives/font';
 const shaderChunks = importShaders(import.meta.glob(['./shaders/**/*.glsl'], {
     query: '?raw',
     import: 'default',
@@ -23,7 +25,7 @@ class RenderManager {
     animationRequestID: number | null = null;
     lastTime: number = 0;
     gui: any;
-    isStopped: boolean = true;
+    isStopped: boolean = false;
 
     mainCamera!: THREE.PerspectiveCamera;
     material!: THREE.ShaderMaterial;
@@ -32,7 +34,7 @@ class RenderManager {
     quadCamera!: THREE.OrthographicCamera;
 
     updateClip: boolean = false;
-    useHelperScene: boolean = false;
+    useHelperScene: boolean = true;
     helperScene!: THREE.Scene;
 
     woodScene!: WoodScene;
@@ -43,6 +45,8 @@ class RenderManager {
     noiseExtension!: NoiseExtension;
     debugExtension!: DebugExtension;
 
+    font!: MCSDFFont;
+
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -52,12 +56,20 @@ class RenderManager {
 
         THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
+        this.animate = this.animate.bind(this);
+
+        this.init();
+    }
+
+    async init() {
+        this.font = new MCSDFFont();
+        await this.font.load('times64');    // times64, gara64, consola64
+
         this.setupCamera();
         this.setupScene();
         this.setupResizeRenderer();
         this.createGUI();
 
-        this.animate = this.animate.bind(this);
         this.animate();
     }
 
@@ -73,7 +85,7 @@ class RenderManager {
         this.renderer.getDrawingBufferSize(res);
         this.material.uniforms.resolution.value = res;
 
-        this.splineGroup.setResolution(this.renderer);
+        this.splineGroup?.setResolution(this.renderer);
     }
 
     setupResizeRenderer() {
@@ -99,6 +111,7 @@ class RenderManager {
         };
         const debugInfo = () => {
             console.log("time", this.lastTime);
+            console.log("camera", this.mainCamera.position);
         };
         const myObject = {
             animateButton,
@@ -173,6 +186,7 @@ class RenderManager {
             .name("Use helper scene")
             .onChange((val: boolean) => {
                 this.useHelperScene = val;
+                this.resetCamera();
             });
         this.gui.close();
     }
@@ -183,7 +197,8 @@ class RenderManager {
         this.container.removeChild(this.renderer.domElement);
         for (const task of this.cleanUpTasks)
             task();
-        this.splineGroup.dispose();
+        this.woodScene.dispose();
+        this.splineGroup?.dispose();
         this.material.dispose();
         this.woodExtension.dispose();
         this.noiseExtension.dispose();
@@ -198,18 +213,28 @@ class RenderManager {
         this.mainCamera = new THREE.PerspectiveCamera();
         this.controls = new OrbitControls(this.mainCamera, this.renderer.domElement);
 
-        const scale = 0.5;
-        this.mainCamera.position.set(3.5 * scale, 2.5 * scale, 3 * scale);
+        this.resetCamera();
         this.mainCamera.lookAt(new THREE.Vector3(0, 0, 0));
 
         this.quadCamera = new THREE.OrthographicCamera();
         this.quadCamera.position.set(0, 0, 1);
+
+    }
+
+    resetCamera() {
+        if (this.useHelperScene) {
+            this.mainCamera.position.set(6, 0.5, 4);
+        } else {
+            const scale = 0.5;
+            this.mainCamera.position.set(3.5 * scale, 2.5 * scale, 3 * scale);
+        }
     }
 
     setupScene() {
+        const woodConfigs = [ScotsPineConfig, EuropeanBeechConfig, SugarMapleConfig, BlackWalnutParquetConfig, EnglishOakConfig];
         this.noiseExtension = new NoiseExtension();
         this.debugExtension = new DebugExtension();
-        this.woodExtension = new WoodExtension(shaderChunks, this.noiseExtension);
+        this.woodExtension = new WoodExtension(shaderChunks, this.noiseExtension, woodConfigs);
 
 
         this.material = new THREE.ShaderMaterial({
@@ -231,7 +256,7 @@ class RenderManager {
             depthTest: true,
             glslVersion: THREE.GLSL3,
         });
-        this.woodExtension.addToShaderMaterial(this.material);
+        this.woodExtension.addToShaderMaterial(this.material, 0);
         this.noiseExtension.addToShaderMaterial(this.material);
         this.debugExtension.addToShaderMaterial(this.material);
 
@@ -246,31 +271,31 @@ class RenderManager {
         const cube = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ map: this.woodExtension.setupRT.textures[0] }));
         this.helperScene.add(cube);
 
-        this.splineGroup = new FatUCBSplineGroup(16, 8, 0.5);
-        const branchCurve = (branch: Branch, r: number) => {
-            const p = new THREE.Vector3();
-            p.x = r * Math.cos(branch.xyAngle);
-            p.z = -r * Math.sin(branch.xyAngle);
-            p.y = branch.zStart + branch.initialSlope * (r < 1 ? r - 0.5 * r * r : 0.5);
-            return p;
-        };
-        for (const branch of this.woodExtension.woodSetup.branches) {
-            const p1 = branchCurve(branch, 0);
-            const p2 = branchCurve(branch, 1);
-            const curve = [p1, p1];
-            const num = 10;
-            for (let k = 0; k <= num; k++) {
-                const r = k / num;
-                curve.push(branchCurve(branch, r));
-            }
-            curve.push(p2, p2);
+        // this.splineGroup = new FatUCBSplineGroup(16, 8, 0.5);
+        // const branchCurve = (branch: Branch, r: number) => {
+        //     const p = new THREE.Vector3();
+        //     p.x = r * Math.cos(branch.xyAngle);
+        //     p.z = -r * Math.sin(branch.xyAngle);
+        //     p.y = branch.zStart + branch.initialSlope * (r < 1 ? r - 0.5 * r * r : 0.5);
+        //     return p;
+        // };
+        // for (const branch of this.woodExtension.woodSetup.branches) {
+        //     const p1 = branchCurve(branch, 0);
+        //     const p2 = branchCurve(branch, 1);
+        //     const curve = [p1, p1];
+        //     const num = 10;
+        //     for (let k = 0; k <= num; k++) {
+        //         const r = k / num;
+        //         curve.push(branchCurve(branch, r));
+        //     }
+        //     curve.push(p2, p2);
 
-            this.splineGroup.addSpline(curve, () => [1, 1, 1], () => [0.01, 10], false, true, true);
-            this.helperScene.add(this.splineGroup.getObject());
-        }
-        const p1 = new THREE.Vector3(0, 0, 0);
-        const p2 = new THREE.Vector3(0, this.woodExtension.woodSetup.woodConfig.zRange, 0);
-        this.splineGroup.addSpline([p1, p1, p1, p2, p2, p2], () => [0.5, 0.5, 1], () => [0.1, 20], false, true, true);
+        //     this.splineGroup.addSpline(curve, () => [1, 1, 1], () => [0.01, 10], false, true, true);
+        //     this.helperScene.add(this.splineGroup.getObject());
+        // }
+        // const p1 = new THREE.Vector3(0, 0, 0);
+        // const p2 = new THREE.Vector3(0, this.woodExtension.woodSetup.woodConfig.zRange, 0);
+        // this.splineGroup.addSpline([p1, p1, p1, p2, p2, p2], () => [0.5, 0.5, 1], () => [0.1, 20], false, true, true);
 
         this.renderer.setRenderTarget(this.woodExtension.setupRT);
         this.quadScene.overrideMaterial = this.woodExtension.setupMaterial;
@@ -279,7 +304,7 @@ class RenderManager {
         console.table(this.woodExtension.computeSetupRTTextureStats(this.renderer));
 
         // woodScene
-        this.woodScene = new WoodScene(shaderChunks, this.woodExtension, this.noiseExtension, this.debugExtension);
+        this.woodScene = new WoodScene(shaderChunks, this.woodExtension, this.noiseExtension, this.debugExtension, this.font);
     }
 
     getResolution() {
