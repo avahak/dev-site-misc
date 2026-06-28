@@ -30,6 +30,8 @@ class SplineScene {
         this.renderer.setClearColor(0x000000, 0);
         container.appendChild(this.renderer.domElement);
 
+        THREE.Object3D.DEFAULT_UP.set(0, 1, 0);
+
         this.renderer.getContext().getExtension('EXT_float_blend');
 
         this.setupCamera();

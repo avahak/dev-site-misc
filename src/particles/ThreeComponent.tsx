@@ -8,7 +8,7 @@ const SceneComponent: React.FC = () => {
         console.log("useEffect: ", containerRef.current);
         const scene = new BaseScene(containerRef.current!);
         return () => {
-            scene.cleanUp();
+            scene.dispose();
         };
     }, []);
 

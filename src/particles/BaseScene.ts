@@ -11,38 +11,35 @@ class BaseScene {
     scene: THREE.Scene;
     camera: THREE.Camera;
     renderer: THREE.WebGLRenderer;
-    cleanUpTasks: (() => void)[];
-    animationRequestID: number|null = null;
-    lastTime: number|null = null;
+    cleanUpTasks: (() => void)[] = [];
+    animationRequestID: number | null = null;
+    lastTime: number | null = null;
     gui: any;
     isStopped: boolean = false;
 
     objects: THREE.Mesh[] = [];
     objectRotationVectors: THREE.Vector3[] = [];
     particleScene: ParticleScene;
-    shaderMaterial: THREE.ShaderMaterial|null = null;
+    shaderMaterial!: THREE.ShaderMaterial;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
-        this.cleanUpTasks = [];
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         this.renderer.setClearColor(0x000000, 0);
         container.appendChild(this.renderer.domElement);
 
+        THREE.Object3D.DEFAULT_UP.set(0, 1, 0);
+
         this.scene = this.setupScene();
         this.camera = this.setupCamera();
-        
+
         this.setupResizeRenderer();
         this.resizeRenderer();
 
         this.particleScene = new ParticleScene(this);
 
         this.createGUI();
-        
-        this.cleanUpTasks.push(() => { 
-            if (this.animationRequestID)
-                cancelAnimationFrame(this.animationRequestID);
-        });
+
         this.animate = this.animate.bind(this);
         this.animate();
     }
@@ -71,7 +68,7 @@ class BaseScene {
         this.gui = new GUI();
         const debugDialogButton = () => alert(this.particleScene.debugArray());
         const animateButton = () => this.animateStep(false);
-        const toggleStop = () => { 
+        const toggleStop = () => {
             this.isStopped = !this.isStopped;
         };
         const myObject = {
@@ -85,13 +82,17 @@ class BaseScene {
         this.gui.close();
     }
 
-    cleanUp() {
-        this.container.removeChild(this.renderer.domElement);
+    dispose() {
+        if (this.animationRequestID)
+            cancelAnimationFrame(this.animationRequestID);
         for (const task of this.cleanUpTasks)
             task();
+        this.particleScene.dispose();
+        this.shaderMaterial.dispose();
         this.renderer.dispose();
 
         this.gui.destroy();
+        this.container.removeChild(this.renderer.domElement);
         // this.cleanUpTasks.push(() => {
         //     this.scene.traverse((object) => {
         //         if (object instanceof THREE.Mesh) {
@@ -131,13 +132,13 @@ class BaseScene {
         scene.add(light);
 
         const geom = new THREE.BufferGeometry();
-        const posData = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*3);
+        const posData = new Float32Array(PARTICLE_TEXTURE_SIZE * PARTICLE_TEXTURE_SIZE * 3);
         for (let j = 0; j < PARTICLE_TEXTURE_SIZE; j++) {
             for (let k = 0; k < PARTICLE_TEXTURE_SIZE; k++) {
-                let index = j*PARTICLE_TEXTURE_SIZE + k;
-                posData[index*3 + 0] = j / PARTICLE_TEXTURE_SIZE;
-                posData[index*3 + 1] = k / PARTICLE_TEXTURE_SIZE;
-                posData[index*3 + 2] = 0;
+                let index = j * PARTICLE_TEXTURE_SIZE + k;
+                posData[index * 3 + 0] = j / PARTICLE_TEXTURE_SIZE;
+                posData[index * 3 + 1] = k / PARTICLE_TEXTURE_SIZE;
+                posData[index * 3 + 2] = 0;
             }
         }
         geom.setAttribute("position", new THREE.BufferAttribute(posData, 3));
@@ -156,7 +157,7 @@ class BaseScene {
         scene.add(points);
 
         this.moveObjects(0.0);
-        scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI/2.0);   // just for camera angles
+        scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 2.0);   // just for camera angles
 
         return scene;
     }
@@ -187,7 +188,7 @@ class BaseScene {
             this.particleScene.setObjectPositions();
             this.particleScene.step(this.renderer);
         }
-        
+
         this.shaderMaterial!.uniforms.particleMap.value = this.particleScene.fbos[this.particleScene.currentFboIndex].texture;
         this.renderer.render(this.scene, this.camera);
     }
@@ -195,7 +196,7 @@ class BaseScene {
     moveObjects(time: number) {
         this.objects.forEach((object, k) => {
             object.rotateOnAxis(this.objectRotationVectors[k], 0.2);
-            object.position.set(1.0*Math.cos(k+0.1*time), 1.0*Math.sin(2*k+0.2*time), 0.2);
+            object.position.set(1.0 * Math.cos(k + 0.1 * time), 1.0 * Math.sin(2 * k + 0.2 * time), 0.2);
         });
     }
 }

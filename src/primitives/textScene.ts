@@ -10,7 +10,7 @@ class TextScene {
     scene!: THREE.Scene;
     renderer: THREE.WebGLRenderer;
     cleanUpTasks: (() => void)[];
-    animationRequestID: number|null = null;
+    animationRequestID: number | null = null;
     lastTime: number = 0;
     gui: any;
     isStopped: boolean = false;
@@ -31,6 +31,8 @@ class TextScene {
         this.renderer.setClearColor(0x000000, 0);
         container.appendChild(this.renderer.domElement);
 
+        THREE.Object3D.DEFAULT_UP.set(0, 1, 0);
+
         this.renderer.getContext().getExtension('EXT_float_blend');
 
         this.setupCamera();
@@ -39,7 +41,7 @@ class TextScene {
         this.resizeRenderer();
         this.createGUI();
 
-        this.cleanUpTasks.push(() => { 
+        this.cleanUpTasks.push(() => {
             if (this.animationRequestID)
                 cancelAnimationFrame(this.animationRequestID);
         });
@@ -82,7 +84,7 @@ class TextScene {
             this.animateStep();
             this.isStopped = temp;
         }
-        const toggleStop = () => { 
+        const toggleStop = () => {
             this.isStopped = !this.isStopped;
         };
         const myObject = {
@@ -129,7 +131,7 @@ class TextScene {
         this.camera = new THREE.PerspectiveCamera();
 
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-        
+
         this.camera.position.set(0, 0.5, 0.7);
         this.controls.target.set(0, 0, 0);
         // this.camera.lookAt(new THREE.Vector3(5, 0, 0));
@@ -155,9 +157,9 @@ class TextScene {
         });
         this.spiralText(this.textGroups[1], 600, 50000, 0);
 
-        this.textGroups[2].addText(this.sampleText, (x, y) => [0.1*x, 0, 0.1*y], [1, 1, 1], [-0.05, 1]);
+        this.textGroups[2].addText(this.sampleText, (x, y) => [0.1 * x, 0, 0.1 * y], [1, 1, 1], [-0.05, 1]);
 
-        this.scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI/2);
+        this.scene.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
     }
 
     getResolution() {
@@ -172,33 +174,33 @@ class TextScene {
 
     spiralText(tg: TextGroup, start: number, end: number, t: number) {
         tg.reset();
-        let count = 11*start;
+        let count = 11 * start;
         const col1 = [0.8, 0.7, 0.5];
         const col2 = [1.0, 0.2, 0.1];
         for (let k = start; k < end; k++) {
             const c1 = 16;
-            const dx = count + 15*t;
+            const dx = count + 15 * t;
             const posFn = (x: number, y: number) => {
-                const p1 = 0.01*(Math.sqrt(c1*(x+dx))+c1*y/2)*Math.cos(Math.sqrt(c1*(x+dx)));
-                const p2 = -0.01*(Math.sqrt(c1*(x+dx))+c1*y/2)*Math.sin(Math.sqrt(c1*(x+dx)));
+                const p1 = 0.01 * (Math.sqrt(c1 * (x + dx)) + c1 * y / 2) * Math.cos(Math.sqrt(c1 * (x + dx)));
+                const p2 = -0.01 * (Math.sqrt(c1 * (x + dx)) + c1 * y / 2) * Math.sin(Math.sqrt(c1 * (x + dx)));
                 // const r = Math.sqrt(p1*p1 + p2*p2);
                 // const z = k > 1000 ? (1*Math.atan(0.001*(k-1000)))*(Math.sin(r/2) + Math.sin(5*p1/r) + Math.sin(7*p2/r)) : 0;
                 return [p1, p2, 0];
             };
-            const a = count/100 + t;
+            const a = count / 100 + t;
             let rand = count + Math.round(a) * 1666196;
             rand = (rand * 1664525 + 1013904223) % 4294967296;
             const x = (rand >>> 0) / 4294967296
             let s = `$${x.toFixed(16)}#`; //\n<${(1-x).toFixed(16)}>`;
             if (k % 50 == 0)
                 s = `Font: ${tg.font.name}`
-            let d = Math.max(Math.min(10*(Math.abs(a-Math.round(a)) - 0.35), 1), 0) ** 2;
-            let color = [d*col2[0]+(1-d)*col1[0], d*col2[1]+(1-d)*col1[1], d*col2[2]+(1-d)*col1[2]];
-            const faceCameraNot = Math.round(1.629622*k+0.01*t) % 10;
+            let d = Math.max(Math.min(10 * (Math.abs(a - Math.round(a)) - 0.35), 1), 0) ** 2;
+            let color = [d * col2[0] + (1 - d) * col1[0], d * col2[1] + (1 - d) * col1[1], d * col2[2] + (1 - d) * col1[2]];
+            const faceCameraNot = Math.round(1.629622 * k + 0.01 * t) % 10;
             if (faceCameraNot !== 0) {
                 tg.addText(s, posFn, color, [0, 0]);
             } else {
-                tg.addText(s, posFn(0, 0), color, [0, 0], c1/200);
+                tg.addText(s, posFn(0, 0), color, [0, 0], c1 / 200);
             }
             count += (tg.font == this.font1) ? 11 : 12;
         }
@@ -211,8 +213,8 @@ class TextScene {
             this.lastTime = currentTime;
         }
 
-        const t = this.lastTime*0.001;
-        this.bg.setRotationFromEuler(new THREE.Euler(Math.PI/2, 0.3*t, 0.5*t));
+        const t = this.lastTime * 0.001;
+        this.bg.setRotationFromEuler(new THREE.Euler(Math.PI / 2, 0.3 * t, 0.5 * t));
 
         this.spiralText(this.textGroups[0], 0, 500, t);
         this.textGroups[2].mesh.position.set(0, 0, t);

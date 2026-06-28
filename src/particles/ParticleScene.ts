@@ -23,16 +23,16 @@ class ParticleScene {
         this.camera.lookAt(0, 0, 0);
 
         // just initial values!
-        const initialPositions = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*4);
+        const initialPositions = new Float32Array(PARTICLE_TEXTURE_SIZE * PARTICLE_TEXTURE_SIZE * 4);
         for (let j = 0; j < PARTICLE_TEXTURE_SIZE; j++) {
             for (let k = 0; k < PARTICLE_TEXTURE_SIZE; k++) {
-                let index = j*PARTICLE_TEXTURE_SIZE + k;
-                let theta = Math.random()*Math.PI*2;
-                let r = 0.3 + 0.7*Math.random();
-                initialPositions[index*4 + 0] = r*Math.cos(theta);
-                initialPositions[index*4 + 1] = r*Math.sin(theta);
-                initialPositions[index*4 + 2] = Math.random()*0.1-0.05;
-                initialPositions[index*4 + 3] = -0.5;
+                let index = j * PARTICLE_TEXTURE_SIZE + k;
+                let theta = Math.random() * Math.PI * 2;
+                let r = 0.3 + 0.7 * Math.random();
+                initialPositions[index * 4 + 0] = r * Math.cos(theta);
+                initialPositions[index * 4 + 1] = r * Math.sin(theta);
+                initialPositions[index * 4 + 2] = Math.random() * 0.1 - 0.05;
+                initialPositions[index * 4 + 3] = -0.5;
                 // initialPositions[index*4 + 3] = 0.0;
             }
         }
@@ -89,15 +89,15 @@ class ParticleScene {
         this.baseScene.renderer.readRenderTargetPixels(
             this.fbos[0], 0, 0, PARTICLE_TEXTURE_SIZE, PARTICLE_TEXTURE_SIZE, pixelBuffer);
         // Pick some random alpha values
-        return [...pixelBuffer.filter((_, index) => index%4 == 3)]
-            .sort(() => Math.random()-0.5)
+        return [...pixelBuffer.filter((_, index) => index % 4 == 3)]
+            .sort(() => Math.random() - 0.5)
             .slice(0, 20)
-            .sort((a, b) => a-b);
+            .sort((a, b) => a - b);
     }
 
     step(renderer: THREE.WebGLRenderer) {
         // Take texture from fbo2 and write into fbo.
-        const [ i0, i1, i2 ] = [this.currentFboIndex, (this.currentFboIndex+1)%3, (this.currentFboIndex+2)%3];
+        const [i0, i1, i2] = [this.currentFboIndex, (this.currentFboIndex + 1) % 3, (this.currentFboIndex + 2) % 3];
         // Now this.fbos index i0 is latest computed positions, i2 is last positions,
         // and we want to fill up positions at i1:
 
@@ -107,13 +107,20 @@ class ParticleScene {
         renderer.setRenderTarget(this.fbos[i1]);
         renderer.render(this.scene, this.camera);
         renderer.setRenderTarget(null);
-        
+
         this.currentFboIndex = i1;
     }
 
     setObjectPositions() {
         for (let k = 0; k < NUM_OBJECTS; k++)
             this.shaderMaterial.uniforms.uPositionObjects.value[k] = this.baseScene.objects[k].position;
+    }
+
+    dispose() {
+        this.initialPositionsTexture.dispose();
+        for (let k = 0; k < 3; k++)
+            this.fbos[k].dispose();
+        this.shaderMaterial.dispose();
     }
 }
 

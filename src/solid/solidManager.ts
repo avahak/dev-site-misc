@@ -197,9 +197,10 @@ class RenderManager {
         this.container.removeChild(this.renderer.domElement);
         for (const task of this.cleanUpTasks)
             task();
-        this.woodScene.dispose();
+        this.font?.dispose();
+        this.woodScene?.dispose();
         this.splineGroup?.dispose();
-        this.material.dispose();
+        this.material?.dispose();
         this.woodExtension.dispose();
         this.noiseExtension.dispose();
         this.debugExtension.dispose();

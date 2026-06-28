@@ -21,7 +21,7 @@ uniform vec3 uPositionObjects[NUM_OBJECTS];
 uniform sampler2D uPosition0;   // initial positions for particles
 uniform sampler2D uPosition1;   // particles previous positions
 uniform sampler2D uPosition2;   // current particle positions
-varying vec2 vUv;
+in vec2 vUv;
 
 #define PI 3.14159265359
 
@@ -154,9 +154,9 @@ vec3 computeForce(vec3 p0, vec3 p1, vec3 p2, float state) {
 // }
 
 void main() {
-    vec4 p = texture2D(uPosition2, vUv);
-    vec3 p0 = texture2D(uPosition0, vUv).xyz;
-    vec3 p1 = texture2D(uPosition1, vUv).xyz;
+    vec4 p = texture(uPosition2, vUv);
+    vec3 p0 = texture(uPosition0, vUv).xyz;
+    vec3 p1 = texture(uPosition1, vUv).xyz;
     vec3 p2 = p.xyz;
 
     float state = computeState(p0, p1, p2, p.w);
