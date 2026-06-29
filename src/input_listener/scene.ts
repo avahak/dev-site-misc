@@ -3,10 +3,10 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { PlaneView } from '../graph/planeView';
 // import { Complex } from './complex';
 
-function randomGaussian(stdev: number=1) {
-    const phi = 2*Math.PI*Math.random();
-    const r = stdev * Math.sqrt(-2*Math.log(1-Math.random()));
-    return { x: r*Math.cos(phi), y: r*Math.sin(phi) };
+function randomGaussian(stdev: number = 1) {
+    const phi = 2 * Math.PI * Math.random();
+    const r = stdev * Math.sqrt(-2 * Math.log(1 - Math.random()));
+    return { x: r * Math.cos(phi), y: r * Math.sin(phi) };
 }
 
 class Scene {
@@ -15,8 +15,8 @@ class Scene {
     scene!: THREE.Scene;
     renderer: THREE.WebGLRenderer;
     cleanUpTasks: (() => void)[];
-    animationRequestID: number|null = null;
-    lastTime: number|null = null;
+    animationRequestID: number | null = null;
+    lastTime: number | null = null;
     gui: any;
     isStopped: boolean = false;
 
@@ -50,7 +50,7 @@ class Scene {
             true
         );
 
-        this.cleanUpTasks.push(() => { 
+        this.cleanUpTasks.push(() => {
             if (this.animationRequestID)
                 cancelAnimationFrame(this.animationRequestID);
         });
@@ -78,13 +78,12 @@ class Scene {
         });
         resizeObserver.observe(this.container);
         this.cleanUpTasks.push(() => resizeObserver.unobserve(this.container));
-        this.resizeRenderer();
     }
 
     createGUI() {
         this.gui = new GUI();
         const animateButton = () => this.animateStep();
-        const toggleStop = () => { 
+        const toggleStop = () => {
             this.isStopped = !this.isStopped;
         };
         const myObject = {
@@ -171,14 +170,14 @@ class Scene {
         const currentTime = (this.lastTime ?? 0.0) + 1.0;
         this.lastTime = currentTime;
 
-        const t = this.lastTime*0.002;
+        const t = this.lastTime * 0.002;
 
         const phi = this.loc.angle;
-        this.scene.scale.set(1/this.loc.scaleX, 1/this.loc.scaleY, 1);
+        this.scene.scale.set(1 / this.loc.scaleX, 1 / this.loc.scaleY, 1);
         this.scene.setRotationFromAxisAngle(new THREE.Vector3(0, 0, 1), -phi);
         const [cos, sin] = [Math.cos(-this.loc.angle), Math.sin(-this.loc.angle)];
-        const [x, y] = [-this.loc.x/this.loc.scaleX, -this.loc.y/this.loc.scaleY];
-        const [x2, y2] = [cos*x - sin*y, sin*x + cos*y];
+        const [x, y] = [-this.loc.x / this.loc.scaleX, -this.loc.y / this.loc.scaleY];
+        const [x2, y2] = [cos * x - sin * y, sin * x + cos * y];
         this.scene.position.set(x2, y2, 0);
         // this.e1 = new Complex(Math.log(r), phi+0.001).exp();
         // this.e1 = new Complex(Math.log(r)-0.01, phi).exp();

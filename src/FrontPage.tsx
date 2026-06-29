@@ -3,75 +3,120 @@ import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
 import { BUILD_TIMESTAMP } from "./buildInfo";
 
+
 const FrontPage = () => {
     return (<>
         <Container maxWidth="xl">
-            <Typography variant="h2" textAlign="center" sx={{ py: 2 }}>
-                In progress...
+            <Typography variant="h1" textAlign="center" sx={{ py: "3rem" }}>
+                Learning Three.js
             </Typography>
-            <Typography variant="h6">
-                Pages
-            </Typography>
-            <Box sx={{ p: 2 }}>
-                <MUILink component={RouterLink} to="/dzhanibekov" variant="body1" color="primary">
-                    Dzhanibekov effect
-                </MUILink>
-                <br />
-                <MUILink component={RouterLink} to="/particles" variant="body1" color="primary">
-                    Particles
-                </MUILink>
-                <br />
-                <MUILink component={RouterLink} to="/slime_mold" variant="body1" color="primary">
-                    Slime mold
-                </MUILink>
-                <br />
-                <MUILink component={RouterLink} to="/geo" variant="body1" color="primary">
-                    Geo
-                </MUILink>
-                <br />
-                <MUILink component={RouterLink} to="/geo_particles" variant="body1" color="primary">
-                    Geo particles
-                </MUILink>
-                <br />
-                <MUILink component={RouterLink} to="/fractals" variant="body1" color="primary">
-                    Fractals
-                </MUILink>
-            </Box>
-            <Typography variant="h6">
-                Helpers (ignore these)
-            </Typography>
-            <Box sx={{ p: 2 }}>
-                <MUILink component={RouterLink} to="/region_json" variant="body1" color="primary">
-                    Region JSON
-                </MUILink>
-                <br />
-                <MUILink component={RouterLink} to="/template_class" variant="body1" color="primary">
-                    Template for Three.js (separate class)
-                </MUILink>
-                <br />
-                <Typography>Rendering tools</Typography>
-                <ul style={{ margin: 0 }}>
-                    <li><MUILink component={RouterLink} to="/webgl_tools_text" variant="body1" color="primary">Text</MUILink></li>
-                    <li><MUILink component={RouterLink} to="/webgl_tools_splines" variant="body1" color="primary">Uniform cubic b-splines</MUILink></li>
-                    <li><MUILink component={RouterLink} to="/webgl_tools_fat_splines" variant="body1" color="primary">Fat uniform cubic b-splines</MUILink></li>
-                    <li><MUILink component={RouterLink} to="/webgl_tools_fat_splines2" variant="body1" color="primary">Fat uniform cubic b-splines 2</MUILink></li>
-                </ul>
-                <br />
-                <MUILink component={RouterLink} to="/input_listener" variant="body1" color="primary">
-                    Input listener
-                </MUILink>
-                <br />
-                <MUILink component={RouterLink} to="/graph" variant="body1" color="primary">
-                    Graph
-                </MUILink>
-                <br />
-                <MUILink component={RouterLink} to="/solid_test" variant="body1" color="primary">
-                    Solid textures
-                </MUILink>
-                <br />
-                <MUILink component={RouterLink} to="/solid_viewer" variant="body1" color="primary">
-                    Solid textures viewer
-                </MUILink>
+            <Box display="flex" justifyContent="space-evenly">
+                <Box sx={{ p: 2 }}>
+                    <Typography variant="h2" align="center" sx={{ pb: "0.5rem" }}>
+                        WebGL
+                    </Typography>
+                    <ul>
+                        <li>
+                            <MUILink component={RouterLink} to="/dzhanibekov" variant="body1" color="primary">
+                                Dzhanibekov effect
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/particles" variant="body1" color="primary">
+                                Particles
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/slime_mold" variant="body1" color="primary">
+                                Slime mold
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/geo" variant="body1" color="primary">
+                                Geo test
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/geo_particles" variant="body1" color="primary">
+                                Geo particles
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/fractals" variant="body1" color="primary">
+                                Fractals
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/solid_test" variant="body1" color="primary">
+                                Solid textures (wood)
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/solid_viewer" variant="body1" color="primary">
+                                Solid textures (clipping)
+                            </MUILink>
+                        </li>
+                    </ul>
+                </Box>
+                <Box sx={{ p: 2 }}>
+                    <Typography variant="h2" align="center" sx={{ pb: "0.5rem" }}>
+                        WebGPU
+                    </Typography>
+                    <ul>
+                        <li>
+                            <MUILink component={RouterLink} to="/webgpu_particles" variant="body1" color="primary">
+                                WebGPU particles
+                            </MUILink>
+                        </li>
+                    </ul>
+                </Box>
+                <Box sx={{ p: 2 }}>
+                    <Typography variant="h2" align="center" sx={{ pb: "0.5rem" }}>
+                        Tools
+                    </Typography>
+                    <ul>
+                        <li>
+                            <MUILink component={RouterLink} to="/template_class" variant="body1" color="primary">
+                                Class based template for Three.js
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/webgl_tools_text" variant="body1" color="primary">
+                                Text
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/webgl_tools_splines" variant="body1" color="primary">
+                                Uniform cubic b-splines
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/webgl_tools_fat_splines" variant="body1" color="primary">
+                                Fat uniform cubic b-splines
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/webgl_tools_fat_splines2" variant="body1" color="primary">
+                                Fat uniform cubic b-splines 2
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/graph" variant="body1" color="primary">
+                                Graph
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/input_listener" variant="body1" color="primary">
+                                Input listener
+                            </MUILink>
+                        </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/region_json" variant="body1" color="primary">
+                                Region JSON
+                            </MUILink>
+                        </li>
+                    </ul>
+                </Box>
             </Box>
             <Typography variant="body2" color="textSecondary" sx={{ mt: 10 }}>{`Build: ${BUILD_TIMESTAMP}`}</Typography>
         </Container>

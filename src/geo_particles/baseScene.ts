@@ -84,7 +84,6 @@ class BaseScene {
         });
         resizeObserver.observe(this.container);
         this.cleanUpTasks.push(() => resizeObserver.unobserve(this.container));
-        this.resizeRenderer();
     }
 
     createGUI() {

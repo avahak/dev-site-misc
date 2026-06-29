@@ -35,6 +35,8 @@ class GraphRenderer {
 
 
     constructor(container: HTMLDivElement, fonts: MCSDFFont[], props: GraphProps) {
+        THREE.Object3D.DEFAULT_UP.set(0, 1, 0);
+
         this.container = container;
         this.props = props;
         this.cleanupTasks = [];

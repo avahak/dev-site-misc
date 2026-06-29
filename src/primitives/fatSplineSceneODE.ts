@@ -100,7 +100,6 @@ class FatSplineSceneODE {
         const resizeObserver = new ResizeObserver(() => this.resizeRenderer());
         resizeObserver.observe(this.container);
         this.cleanUpTasks.push(() => resizeObserver.unobserve(this.container));
-        this.resizeRenderer();
     }
 
     createGUI() {

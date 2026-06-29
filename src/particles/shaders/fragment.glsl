@@ -8,9 +8,6 @@ float decodeFloat(float encoded) {
 }
 
 void main() {
-    gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
-    return;
-    
     vec2 offset = gl_PointCoord - vec2(0.5, 0.5);
     float dist = length(offset);
     // float t = 1.-smoothstep(0.4, 0.5, dist);

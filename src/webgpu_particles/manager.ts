@@ -1,15 +1,14 @@
 /**
  * Basic template for a three.js scene.
  */
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import vs from './shaders/vs.glsl?raw';
-import fs from './shaders/fs.glsl?raw';
+
 
 export class RenderManager {
     container: HTMLDivElement;
-    renderer!: THREE.WebGLRenderer;
+    renderer!: THREE.WebGPURenderer;
     cleanUpTasks: (() => void)[] = [];
     animationRequestID: number | null = null;
     gui: any;
@@ -19,7 +18,6 @@ export class RenderManager {
 
     scene!: THREE.Scene;
     camera!: THREE.Camera;
-    shaderMaterial!: THREE.ShaderMaterial;
     cube!: THREE.Mesh;
 
     constructor(container: HTMLDivElement) {
@@ -29,7 +27,7 @@ export class RenderManager {
     }
 
     async init(abortSignal: AbortSignal) {
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer = new THREE.WebGPURenderer({ antialias: true, alpha: true });
         this.renderer.setClearColor(0x111111, 1);
         this.container.appendChild(this.renderer.domElement);
 
@@ -37,6 +35,8 @@ export class RenderManager {
         this.setupScene();
         this.setupResizeRenderer();
         this.createGUI();
+
+        await this.renderer.init();
 
         this.isInitialized = true;
         if (abortSignal.aborted) {
@@ -57,7 +57,6 @@ export class RenderManager {
             task();
         this.controls.dispose();
         this.renderer.dispose();
-        this.shaderMaterial?.dispose();
         this.timer.dispose();
         this.gui.destroy();
     }
@@ -78,8 +77,6 @@ export class RenderManager {
         const res = new THREE.Vector2();
         this.renderer.getDrawingBufferSize(res);
         console.log(`Resize! (${res.x}, ${res.y})`);
-
-        this.shaderMaterial.uniforms.resolution.value = res;
     }
 
     setupResizeRenderer() {
@@ -119,20 +116,6 @@ export class RenderManager {
         this.scene.add(this.cube);
         this.cleanUpTasks.push(() => cubeGeometry.dispose());
         this.cleanUpTasks.push(() => cubeMaterial.dispose());
-
-        this.shaderMaterial = new THREE.ShaderMaterial({
-            uniforms: {
-                resolution: { value: null },
-                time: { value: null },
-            },
-            vertexShader: vs,
-            fragmentShader: fs,
-            side: THREE.DoubleSide,
-        });
-
-        const geometry = new THREE.PlaneGeometry(2, 2);
-        this.scene.add(new THREE.Mesh(geometry, this.shaderMaterial));
-        this.cleanUpTasks.push(() => geometry.dispose());
     }
 
     animate() {
@@ -148,7 +131,6 @@ export class RenderManager {
 
     render() {
         const t = this.timer.getElapsed();
-        this.shaderMaterial.uniforms.time.value = t;
         this.cube.setRotationFromEuler(new THREE.Euler(0.2 * t, 0.25 * t, 0.3 * t));
         this.renderer.render(this.scene, this.camera);
     }

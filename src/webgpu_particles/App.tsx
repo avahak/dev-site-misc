@@ -26,10 +26,10 @@ export const App: React.FC = () => {
         <Container maxWidth="xl">
             <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                 <Typography variant="h2">
-                    Three.js class template
+                    WebGPU particles
                 </Typography>
             </Box>
-            <Box sx={{ position: "relative", width: "100%", height: "600px" }}>
+            <Box style={{ width: "100%", height: "600px" }}>
                 <SceneComponent />
             </Box>
             <MUILink component={RouterLink} to="/" variant="body1" color="primary">

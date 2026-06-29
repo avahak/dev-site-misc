@@ -12,8 +12,8 @@ class BaseScene {
     camera: THREE.Camera;
     renderer: THREE.WebGLRenderer;
     cleanUpTasks: (() => void)[];
-    animationRequestID: number|null = null;
-    lastTime: number|null = null;
+    animationRequestID: number | null = null;
+    lastTime: number | null = null;
     isStopped: boolean = false;
 
     fbos: THREE.WebGLRenderTarget[] = [];
@@ -21,8 +21,8 @@ class BaseScene {
     disposeFbos: () => void;
 
     particleScene: ParticleScene;
-    shaderMaterialPoints: THREE.ShaderMaterial|null = null;
-    shaderMaterialTrail: THREE.ShaderMaterial|null = null;
+    shaderMaterialPoints: THREE.ShaderMaterial | null = null;
+    shaderMaterialTrail: THREE.ShaderMaterial | null = null;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -37,7 +37,7 @@ class BaseScene {
 
         this.scene = this.setupScene();
         this.camera = this.setupCamera();
-        
+
         this.disposeFbos = () => this.fbos.forEach((fbo) => fbo.dispose());
 
         this.setupResizeRenderer();
@@ -45,7 +45,7 @@ class BaseScene {
 
         this.particleScene = new ParticleScene(this);
 
-        this.cleanUpTasks.push(() => { 
+        this.cleanUpTasks.push(() => {
             if (this.animationRequestID)
                 cancelAnimationFrame(this.animationRequestID);
             this.disposeFbos();
@@ -80,7 +80,6 @@ class BaseScene {
         });
         resizeObserver.observe(this.container);
         this.cleanUpTasks.push(() => resizeObserver.unobserve(this.container));
-        this.resizeRenderer();
     }
 
     setupFbos() {
@@ -115,13 +114,13 @@ class BaseScene {
         const scene = new THREE.Scene();
 
         const geom = new THREE.BufferGeometry();
-        const posData = new Float32Array(PARTICLE_TEXTURE_SIZE*PARTICLE_TEXTURE_SIZE*3);
+        const posData = new Float32Array(PARTICLE_TEXTURE_SIZE * PARTICLE_TEXTURE_SIZE * 3);
         for (let j = 0; j < PARTICLE_TEXTURE_SIZE; j++) {
             for (let k = 0; k < PARTICLE_TEXTURE_SIZE; k++) {
-                let index = j*PARTICLE_TEXTURE_SIZE + k;
-                posData[index*3 + 0] = j / PARTICLE_TEXTURE_SIZE;
-                posData[index*3 + 1] = k / PARTICLE_TEXTURE_SIZE;
-                posData[index*3 + 2] = 0.0;
+                let index = j * PARTICLE_TEXTURE_SIZE + k;
+                posData[index * 3 + 0] = j / PARTICLE_TEXTURE_SIZE;
+                posData[index * 3 + 1] = k / PARTICLE_TEXTURE_SIZE;
+                posData[index * 3 + 2] = 0.0;
             }
         }
         geom.setAttribute("position", new THREE.BufferAttribute(posData, 3));
@@ -142,7 +141,7 @@ class BaseScene {
 
         const kernelOffsets = [[-1.0, 1.0], [0.0, 1.0], [1.0, 1.0], [-1.0, 0.0], [0.0, 0.0], [1.0, 0.0], [-1.0, -1.0], [0.0, -1.0], [1.0, -1.0]];
         // const gaussianWeights = [1.0/16.0, 2.0/16.0, 1.0/16.0, 2.0/16.0, 4.0/16.0, 2.0/16.0, 1.0/16.0, 2.0/16.0, 1.0/16.0];
-        const meanWeights = new Array(9).fill(1.0/9.0);
+        const meanWeights = new Array(9).fill(1.0 / 9.0);
 
         this.shaderMaterialTrail = new THREE.ShaderMaterial({
             uniforms: {
@@ -185,20 +184,20 @@ class BaseScene {
         const currentTime = (this.lastTime ?? 0.0) + (isStopped ? 0.0 : 0.01);
         this.lastTime = currentTime;
 
-        const [i0, i1] = [this.currentFboIndex, (this.currentFboIndex+1)%2];
+        const [i0, i1] = [this.currentFboIndex, (this.currentFboIndex + 1) % 2];
 
         this.particleScene.shaderMaterial.uniforms.time.value = currentTime;
         this.particleScene.shaderMaterial.uniforms.trailMap.value = this.fbos[i0].texture;
         if (!isStopped)
             this.particleScene.step(this.renderer);
-        
+
         this.shaderMaterialPoints!.uniforms.particleMap.value = this.particleScene.fbos[this.particleScene.currentFboIndex].texture;
         this.shaderMaterialTrail!.uniforms.trailMap.value = this.fbos[i0].texture;
         this.renderer.setRenderTarget(this.fbos[i1]);
         this.renderer.render(this.scene, this.camera);
         this.renderer.setRenderTarget(null);
         this.currentFboIndex = i1;
-        
+
         // Render to screen as well
         this.renderer.render(this.scene, this.camera);
     }

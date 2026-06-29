@@ -11,9 +11,12 @@ const SceneComponent: React.FC<{ solidTest: boolean }> = ({ solidTest }) => {
 
     useEffect(() => {
         console.log("useEffect: ", containerRef.current);
-        const scene = solidTest ? new SolidRenderManager(containerRef.current!) : new ViewerRenderManager(containerRef.current!);
+        const abortController = new AbortController();
+        const manager = solidTest ? new SolidRenderManager(containerRef.current!) : new ViewerRenderManager(containerRef.current!);
+        manager.init(abortController.signal);
         return () => {
-            scene.dispose();
+            abortController.abort();
+            manager.dispose();
         };
     }, []);
 

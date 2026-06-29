@@ -81,13 +81,14 @@ interface ViewerSceneGlobalUniforms {
 
 class RenderManager {
     container: HTMLDivElement;
-    renderer: THREE.WebGLRenderer;
+    renderer!: THREE.WebGLRenderer;
     controls!: OrbitControls;
-    cleanUpTasks: (() => void)[];
+    cleanUpTasks: (() => void)[] = [];
     animationRequestID: number | null = null;
     lastTime: number = 0;
     gui: any;
     isStopped: boolean = false;
+    isInitialized: boolean;
 
     quadScene!: THREE.Scene;
     quadCamera!: THREE.OrthographicCamera;      // fixed camera, looking at a quad
@@ -127,16 +128,16 @@ class RenderManager {
 
     constructor(container: HTMLDivElement) {
         this.container = container;
-        this.cleanUpTasks = [];
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        this.renderer.setClearColor(0x000000, 0);
-        this.renderer.autoClear = false;
-        container.appendChild(this.renderer.domElement);
-
-        this.init();
+        this.isInitialized = false;
+        THREE.Object3D.DEFAULT_UP.set(0, 1, 0);
     }
 
-    async init() {
+    async init(abortSignal: AbortSignal) {
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setClearColor(0x000000, 1);
+        this.renderer.autoClear = false;
+        this.container.appendChild(this.renderer.domElement);
+
         this.font = new MCSDFFont();
         await this.font.load('times64');
 
@@ -146,8 +147,34 @@ class RenderManager {
         this.setupResizeRenderer();
         this.createGUI();
 
+        this.isInitialized = true;
+        if (abortSignal.aborted) {
+            this.dispose();
+            return;
+        }
         this.animate = this.animate.bind(this);
         this.animate();
+    }
+
+    dispose() {
+        if (!this.isInitialized)
+            return;
+        if (this.animationRequestID)
+            cancelAnimationFrame(this.animationRequestID);
+
+        this.container.removeChild(this.renderer.domElement);
+        for (const task of this.cleanUpTasks)
+            task();
+
+        this.font?.dispose();
+        this.disposeRenderTargets();
+        this.disposeShaders();
+        this.globalUBO.dispose();
+
+        this.renderer.dispose();
+        this.controls.dispose();
+
+        this.gui.destroy();
     }
 
     resizeRenderer() {
@@ -180,7 +207,6 @@ class RenderManager {
         });
         resizeObserver.observe(this.container);
         this.cleanUpTasks.push(() => resizeObserver.unobserve(this.container));
-        this.resizeRenderer();
     }
 
     createRenderTargets() {
@@ -351,24 +377,6 @@ class RenderManager {
         for (const shader of shaderList) {
             shader?.dispose();
         }
-    }
-
-    dispose() {
-        if (this.animationRequestID)
-            cancelAnimationFrame(this.animationRequestID);
-
-        this.container.removeChild(this.renderer.domElement);
-        for (const task of this.cleanUpTasks)
-            task();
-
-        this.disposeRenderTargets();
-        this.disposeShaders();
-        this.globalUBO.dispose();
-
-        this.renderer.dispose();
-        this.controls.dispose();
-
-        this.gui.destroy();
     }
 
     setupCamera() {

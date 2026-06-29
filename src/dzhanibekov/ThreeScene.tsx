@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/examples/jsm/loaders/MTLLoader.js';
 import step from './freeRotation';
@@ -19,8 +19,8 @@ const ThreeScene: React.FC = () => {
         const controls = new OrbitControls(camera, containerRef.current!);
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setClearColor(0x000000, 0);
-        let requestID: number|null = null;
-        let lastTime: number|null = null;
+        let requestID: number | null = null;
+        let lastTime: number | null = null;
 
         const q = new THREE.Quaternion(1.0, 0.0, 0.0, 1).normalize();
 
@@ -56,8 +56,6 @@ const ThreeScene: React.FC = () => {
             camera.aspect = clientWidth / clientHeight;
             camera.updateProjectionMatrix();
         };
-        // Initial resize
-        resizeRenderer();
 
         // Create a ResizeObserver to monitor the container's size
         const resizeObserver = new ResizeObserver(() => {
@@ -66,7 +64,7 @@ const ThreeScene: React.FC = () => {
         resizeObserver.observe(containerRef.current!);
 
         // Load .mtl and .obj files
-        let loadedObj: THREE.Object3D|null = null;
+        let loadedObj: THREE.Object3D | null = null;
         const mtlLoader = new MTLLoader();
         mtlLoader.load('/dev-site-misc/dzhanibekov/dz.mtl', (materials: any) => {
             materials.preload();
@@ -89,7 +87,7 @@ const ThreeScene: React.FC = () => {
             requestID = requestAnimationFrame(animate);
 
             const currentTime = performance.now();
-            const dt = lastTime ? Math.max(Math.min((currentTime-lastTime)/1000, 0.1), 0.0) : 0;
+            const dt = lastTime ? Math.max(Math.min((currentTime - lastTime) / 1000, 0.1), 0.0) : 0;
             lastTime = currentTime;
 
             if (loadedObj)
@@ -97,7 +95,7 @@ const ThreeScene: React.FC = () => {
 
             const STEPS = 1;
             for (let k = 0; k < STEPS; k++)
-                q.copy(step(q, dt/STEPS));
+                q.copy(step(q, dt / STEPS));
 
             renderer.render(scene, camera);
         };

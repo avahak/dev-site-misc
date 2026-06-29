@@ -11,6 +11,7 @@ import { App as WebGLApp } from './primitives/App.tsx';
 import { App as InputListenerApp } from './input_listener/App.tsx';
 import { App as GraphApp } from './graph/App.tsx';
 import { App as SolidApp } from './solid/App.tsx';
+import { App as WebGPUParticlesApp } from './webgpu_particles/App.tsx';
 import { FrontPage } from './FrontPage.tsx';
 
 const AppRouter = () => {
@@ -33,6 +34,7 @@ const AppRouter = () => {
                 <Route path="/graph" element={<GraphApp />} />
                 <Route path="/solid_test" element={<SolidApp solidTest={true} />} />
                 <Route path="/solid_viewer" element={<SolidApp solidTest={false} />} />
+                <Route path="/webgpu_particles" element={<WebGPUParticlesApp />} />
                 <Route path="/" element={<FrontPage />} />
             </Routes>
         </HashRouter>

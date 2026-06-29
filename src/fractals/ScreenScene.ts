@@ -17,8 +17,8 @@ class ScreenScene {
     camera: THREE.Camera;
     renderer: THREE.WebGLRenderer;
     cleanUpTasks: (() => void)[];
-    animationRequestID: number|null = null;
-    lastTime: number|null = null;
+    animationRequestID: number | null = null;
+    lastTime: number | null = null;
     isStopped: boolean = false;
 
     mandelbrotScene: MandelbrotScene;
@@ -30,7 +30,7 @@ class ScreenScene {
     showJulia: boolean = true;
     mandelbrotMode: MandelbrotMode = "basic";
 
-    shader: THREE.ShaderMaterial|null = null;
+    shader: THREE.ShaderMaterial | null = null;
 
     z0: [number, number] = [-0.74993, 0.02667];
     zoomCenter: [number, number] = [-0.5, 0.0];
@@ -61,7 +61,7 @@ class ScreenScene {
 
         this.scene = this.setupScene();
         this.camera = this.setupCamera();
-        
+
         this.mandelbrotScene = new MandelbrotScene(container);
         this.resetMandelbrotStage();
 
@@ -71,7 +71,7 @@ class ScreenScene {
         this.setupResizeRenderer();
         this.resizeRenderer();
 
-        this.cleanUpTasks.push(() => { 
+        this.cleanUpTasks.push(() => {
             if (this.animationRequestID)
                 cancelAnimationFrame(this.animationRequestID);
         });
@@ -87,7 +87,7 @@ class ScreenScene {
         this.renderer.setSize(clientWidth, clientHeight);
         console.log(`Resize! (${clientWidth}, ${clientHeight})`);
         const aspect = clientWidth / clientHeight;
-        const [dx, dy] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5/aspect];
+        const [dx, dy] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5 / aspect];
         if (this.camera instanceof THREE.OrthographicCamera) {
             this.camera.top = dy;
             this.camera.bottom = -dy;
@@ -109,7 +109,6 @@ class ScreenScene {
         });
         resizeObserver.observe(this.container);
         this.cleanUpTasks.push(() => resizeObserver.unobserve(this.container));
-        this.resizeRenderer();
     }
 
     cleanUp() {
@@ -181,11 +180,11 @@ class ScreenScene {
     progressMandelbrotStage() {
         if (this.mandelbrotStage >= 3)
             return;
-        const workOrder: MandelbrotWorkOrder = { 
-            zoomCenter: this.zoomCenter, 
-            zoomScale: this.zoomScale, 
-            iterations: [1, 16, 64][this.mandelbrotStage], 
-            samplesPerAxis: [1, 1, 7][this.mandelbrotStage], 
+        const workOrder: MandelbrotWorkOrder = {
+            zoomCenter: this.zoomCenter,
+            zoomScale: this.zoomScale,
+            iterations: [1, 16, 64][this.mandelbrotStage],
+            samplesPerAxis: [1, 1, 7][this.mandelbrotStage],
         };
         this.mandelbrotScene.assignWork(workOrder);
         this.mandelbrotStage++;
@@ -194,11 +193,11 @@ class ScreenScene {
     progressJuliaStage() {
         if (this.juliaStage >= 3)
             return;
-        const workOrder: JuliaWorkOrder = { 
+        const workOrder: JuliaWorkOrder = {
             c: this.z0,
-            zoomScale: this.zoomScale, 
-            iterations: [1, 16, 64][this.juliaStage], 
-            samplesPerAxis: [1, 1, 7][this.juliaStage], 
+            zoomScale: this.zoomScale,
+            iterations: [1, 16, 64][this.juliaStage],
+            samplesPerAxis: [1, 1, 7][this.juliaStage],
         };
         this.juliaScene.assignWork(workOrder);
         this.juliaStage++;
@@ -208,18 +207,18 @@ class ScreenScene {
         // console.log(dx, dy, scale, angle);
         const res = this.getResolution();
         const aspect = res.x / res.y;
-        const [adx, ady] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5/aspect];
-        this.zoomCenter = [this.zoomCenter[0]-this.zoomScale*2.0*adx*dx/res.x, this.zoomCenter[1]+this.zoomScale*2.0*ady*dy/res.y];
-        this.zoomScale = Math.max(this.zoomScale*scale, MIN_SCALE);
+        const [adx, ady] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5 / aspect];
+        this.zoomCenter = [this.zoomCenter[0] - this.zoomScale * 2.0 * adx * dx / res.x, this.zoomCenter[1] + this.zoomScale * 2.0 * ady * dy / res.y];
+        this.zoomScale = Math.max(this.zoomScale * scale, MIN_SCALE);
         this.resetMandelbrotStage();
     }
 
     pointerMove(x: number, y: number) {
         const res = this.getResolution();
         const aspect = res.x / res.y;
-        const [adx, ady] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5/aspect];
-        const w = [adx*(x/res.x-0.5), ady*(y/res.y-0.5)];
-        this.z0 = [this.zoomCenter[0]+2.0*this.zoomScale*w[0], this.zoomCenter[1]-2.0*this.zoomScale*w[1]];
+        const [adx, ady] = [aspect > 1.5 ? aspect : 1.5, aspect > 1.5 ? 1.0 : 1.5 / aspect];
+        const w = [adx * (x / res.x - 0.5), ady * (y / res.y - 0.5)];
+        this.z0 = [this.zoomCenter[0] + 2.0 * this.zoomScale * w[0], this.zoomCenter[1] - 2.0 * this.zoomScale * w[1]];
         this.resetJuliaStage();
     }
 
@@ -255,19 +254,19 @@ class ScreenScene {
             const res = this.getResolution();
             context.clearRect(0, 0, res.x, res.y);
             if (this.mandelbrotMode !== "off") {
-                drawAxis({ 
-                    context, 
-                    width: res.x, 
-                    height: res.y, 
+                drawAxis({
+                    context,
+                    width: res.x,
+                    height: res.y,
                     tMin: this.mandelbrotScene.box[0],
                     tMax: this.mandelbrotScene.box[2],
                     orientation: "horizontal",
                     color: this.showJulia ? "rgba(100, 100, 100, 1.0)" : "white",
                 });
-                drawAxis({ 
-                    context, 
-                    width: res.x, 
-                    height: res.y, 
+                drawAxis({
+                    context,
+                    width: res.x,
+                    height: res.y,
                     tMin: this.mandelbrotScene.box[1],
                     tMax: this.mandelbrotScene.box[3],
                     orientation: "vertical",
@@ -280,7 +279,7 @@ class ScreenScene {
                 context.font = '12px Arial';
                 context.textAlign = 'right';
                 context.textBaseline = 'top';
-                context.fillText(`Julia z0 = (${roundNumber(this.z0[0])}, ${roundNumber(this.z0[1])})`, res.x-50, 10);
+                context.fillText(`Julia z0 = (${roundNumber(this.z0[0])}, ${roundNumber(this.z0[1])})`, res.x - 50, 10);
             }
         }
     }
