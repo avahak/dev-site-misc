@@ -15,9 +15,10 @@ export class RenderManager {
     controls!: OrbitControls;
     timer: THREE.Timer = new THREE.Timer();
     isInitialized: boolean;
+    containerSize: THREE.Vector2 = new THREE.Vector2(0, 0);     // Used to check for resize
 
     scene!: THREE.Scene;
-    camera!: THREE.Camera;
+    camera!: THREE.PerspectiveCamera;
     cube!: THREE.Mesh;
 
     constructor(container: HTMLDivElement) {
@@ -30,10 +31,14 @@ export class RenderManager {
         this.renderer = new THREE.WebGPURenderer({ antialias: true, alpha: true });
         this.renderer.setClearColor(0x111111, 1);
         this.container.appendChild(this.renderer.domElement);
+        this.renderer.domElement.style.position = "absolute";
+        this.renderer.domElement.style.left = "0";
+        this.renderer.domElement.style.top = "0";
+        this.renderer.domElement.style.width = "100%";
+        this.renderer.domElement.style.height = "100%";
 
         this.setupCamera();
         this.setupScene();
-        this.setupResizeRenderer();
         this.createGUI();
 
         await this.renderer.init();
@@ -61,31 +66,21 @@ export class RenderManager {
         this.gui.destroy();
     }
 
-    resizeRenderer() {
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        const { clientWidth, clientHeight } = this.container;
-        this.renderer.setSize(clientWidth, clientHeight);
-        const aspect = clientWidth / clientHeight;
-        if (this.camera instanceof THREE.OrthographicCamera) {
-            this.camera.left = -aspect;
-            this.camera.right = aspect;
-            this.camera.updateProjectionMatrix();
-        } else if (this.camera instanceof THREE.PerspectiveCamera) {
-            this.camera.aspect = aspect;
-            this.camera.updateProjectionMatrix();
-        }
-        const res = new THREE.Vector2();
-        this.renderer.getDrawingBufferSize(res);
-        console.log(`Resize! (${res.x}, ${res.y})`);
-    }
+    handleResize() {
+        const width = this.container.clientWidth;
+        const height = this.container.clientHeight;
+        if (width <= 0 || height <= 0 || (this.containerSize.x === width && this.containerSize.y === height))
+            return;
 
-    setupResizeRenderer() {
-        // Create a ResizeObserver to monitor the container's size
-        const resizeObserver = new ResizeObserver(() => {
-            this.resizeRenderer();
-        });
-        resizeObserver.observe(this.container);
-        this.cleanUpTasks.push(() => resizeObserver.unobserve(this.container));
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.containerSize.set(width, height);
+        this.renderer.setSize(width, height);
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
+
+        const resolution = new THREE.Vector2();
+        this.renderer.getDrawingBufferSize(resolution);
+        console.log(`Resize to (${resolution.x}, ${resolution.y})`);
     }
 
     createGUI() {
@@ -126,6 +121,7 @@ export class RenderManager {
     animateStep() {
         this.timer.update();
         this.controls.update();
+        this.handleResize();
         this.render();
     }
 

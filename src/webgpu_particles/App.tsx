@@ -29,7 +29,7 @@ export const App: React.FC = () => {
                     WebGPU particles
                 </Typography>
             </Box>
-            <Box style={{ width: "100%", height: "600px" }}>
+            <Box style={{ width: "100%", height: "600px", position: "relative" }}>
                 <SceneComponent />
             </Box>
             <MUILink component={RouterLink} to="/" variant="body1" color="primary">
