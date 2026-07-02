@@ -1,4 +1,4 @@
-import{i as e,n as t,t as n}from"./jsx-runtime-BnxRlLMJ.js";import{t as r}from"./Box-CFEfsCq7.js";import{a as i,i as a,r as o,t as s}from"./index-BliNcVvM.js";import{B as c,E as l,Ht as u,It as d,J as f,Jt as p,Kt as m,Lr as h,Qt as g,Vr as _,Xt as v,Zt as y,a as b,d as x,f as S,ir as C,jt as w,ln as T,qt as E,r as D,rr as O}from"./three.module-CJlFrUo8.js";import{t as k}from"./OrbitControls-Bf7J8zlj.js";import{t as A}from"./lil-gui.module.min--1wMio4V.js";var j=e(t(),1),M=`// From three.js: position, uv, normal, time, etc.\r
+import{i as e,n as t,t as n}from"./jsx-runtime-BnxRlLMJ.js";import{t as r}from"./Box-CFEfsCq7.js";import{a as i,i as a,r as o,t as s}from"./index-BLKmYqNP.js";import{B as c,E as l,Ht as u,It as d,J as f,Jt as p,Kt as m,Lr as h,Qt as g,Vr as _,Xt as v,Zt as y,a as b,d as x,f as S,ir as C,jt as w,ln as T,qt as E,r as D,rr as O}from"./three.module-CJlFrUo8.js";import{t as k}from"./OrbitControls-Bf7J8zlj.js";import{t as A}from"./lil-gui.module.min--1wMio4V.js";var j=e(t(),1),M=`// From three.js: position, uv, normal, time, etc.\r
 \r
 out vec2 vUv;\r
 \r
