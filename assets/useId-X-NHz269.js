@@ -1,0 +1,1 @@
+import{i as e,n as t}from"./jsx-runtime-BnxRlLMJ.js";var n=e(t()),r=typeof window<`u`?n.useLayoutEffect:n.useEffect,i=0;function a(e){let[t,r]=n.useState(e),a=e||t;return n.useEffect(()=>{t??(i+=1,r(`mui-${i}`))},[t]),a}var o={...n}.useId;function s(e){if(o!==void 0){let t=o();return e??t}return a(e)}export{r as n,s as t};
