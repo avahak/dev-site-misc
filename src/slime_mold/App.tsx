@@ -7,15 +7,15 @@ const SceneComponent = React.lazy(() => import('./ThreeComponent'));
 const App: React.FC = () => {
     return (
         <Container maxWidth="xl">
-            <Box display="flex" justifyContent="center" sx={{py: 2}}>
+            <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                 <Typography variant="h2">
                     Slime mold particles
                 </Typography>
             </Box>
             <Box style={{ width: "100%", height: "80vh" }}>
-            <Suspense fallback={<Box display="flex" justifyContent="center"><Typography>Loading..</Typography></Box>}>
-                <SceneComponent />
-            </Suspense>
+                <Suspense fallback={<Box display="flex" justifyContent="center"><Typography>Loading..</Typography></Box>}>
+                    <SceneComponent />
+                </Suspense>
             </Box>
             <Box display="flex" justifyContent="space-between">
                 <MUILink component={RouterLink} to="/" variant="body1" color="primary">
@@ -29,4 +29,4 @@ const App: React.FC = () => {
     );
 };
 
-export { App };
+export default App;

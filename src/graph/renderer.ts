@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GraphController, GraphProps } from "./types";
 import { PlaneView } from './planeView';
 import { createGroup } from './graphGroup';
-import { LineMaterial } from 'three/examples/jsm/Addons.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { GraphDecorator } from './graphDecorator';
 import { TextGroup } from '../primitives/textRender';
 import { MCSDFFont } from '../primitives/font';

@@ -11,7 +11,6 @@ export class RenderManager {
     container: HTMLDivElement;
     renderer!: THREE.WebGLRenderer;
     cleanUpTasks: (() => void)[] = [];
-    animationRequestID: number | null = null;
     gui: any;
     controls!: OrbitControls;
     timer: THREE.Timer = new THREE.Timer();
@@ -44,22 +43,21 @@ export class RenderManager {
             return;
         }
         this.animate = this.animate.bind(this);
-        this.animate();
+        this.renderer.setAnimationLoop(this.animate);
     }
 
     dispose() {
         if (!this.isInitialized)
             return;
-        if (this.animationRequestID)
-            cancelAnimationFrame(this.animationRequestID);
+        this.renderer.setAnimationLoop(null);
         this.container.removeChild(this.renderer.domElement);
         for (const task of this.cleanUpTasks)
             task();
         this.controls.dispose();
-        this.renderer.dispose();
         this.shaderMaterial?.dispose();
         this.timer.dispose();
         this.gui.destroy();
+        this.renderer.dispose();
     }
 
     handleResize() {
@@ -133,11 +131,6 @@ export class RenderManager {
     }
 
     animate() {
-        this.animateStep();
-        this.animationRequestID = requestAnimationFrame(this.animate);
-    }
-
-    animateStep() {
         this.timer.update();
         this.controls.update();
         this.handleResize();

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-import { OrbitControls } from 'three/examples/jsm/Addons.js';
 import { TextGroup } from './textRender';
 import { MCSDFFont } from './font';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 class TextScene {
     container: HTMLDivElement;

@@ -52,4 +52,4 @@ const App: React.FC<{ solidTest: boolean }> = ({ solidTest }) => {
     );
 };
 
-export { App };
+export default App;

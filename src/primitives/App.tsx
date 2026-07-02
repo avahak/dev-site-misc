@@ -137,4 +137,4 @@ const App: React.FC<{ mode: "text" | "splines" | "fat_splines" | "fat_splines2" 
     );
 };
 
-export { App };
+export default App;

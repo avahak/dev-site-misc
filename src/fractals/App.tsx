@@ -12,7 +12,7 @@ const App: React.FC = () => {
 
     return (
         <Container maxWidth="lg">
-            <Box display="flex" justifyContent="center" sx={{py: 2}}>
+            <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                 <Typography variant="h2">
                     Mandelbrot, Julia
                 </Typography>
@@ -25,12 +25,12 @@ const App: React.FC = () => {
                     <Box>
                         <CircularButton Icon={"M"} onClick={() => { setMandelbrotMode(mode => mode === "off" ? "basic" : (mode === "basic" ? "DEM/M" : "off")) }} />
                     </Box>
-                    <Box sx={{mt: 3}}>
+                    <Box sx={{ mt: 3 }}>
                         <CircularButton Icon={"J"} onClick={() => { setShowJulia(v => !v) }} />
                     </Box>
                 </Box>
             </Box>
-            <Typography sx={{my: 2}}>
+            <Typography sx={{ my: 2 }}>
                 Julia set move: Left mouse button or single touch<br />
                 Mandelbrot set move: Right or middle mouse button, or two-finger touch drag<br />
                 Mandelbrot set zoom: Scroll wheel, + or - keys, or pinch-to-zoom
@@ -46,4 +46,4 @@ const App: React.FC = () => {
     );
 };
 
-export { App };
+export default App;

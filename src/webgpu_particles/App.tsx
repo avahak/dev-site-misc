@@ -21,7 +21,7 @@ const SceneComponent: React.FC = () => {
     return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
 };
 
-export const App: React.FC = () => {
+const App: React.FC = () => {
     return (
         <Container maxWidth="xl">
             <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
@@ -38,3 +38,5 @@ export const App: React.FC = () => {
         </Container>
     );
 };
+
+export default App;

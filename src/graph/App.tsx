@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { Box, Button, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
@@ -204,4 +204,4 @@ const App: React.FC = () => {
     );
 };
 
-export { App };
+export default App;

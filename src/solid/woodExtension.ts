@@ -33,7 +33,7 @@ export class WoodExtension {
     static MAX_WOOD_TYPES = 4;      // Has to match value in shaders
     static MAX_BRANCHES = 1024;     // Has to match value in shaders
     static PROFILE_WIDTH = 2048;    // Width of the profile texture
-    static setupResolution = new THREE.Vector2(256, 1024 * WoodExtension.MAX_WOOD_TYPES);
+    static setupResolution = new THREE.Vector2(256, 512 * WoodExtension.MAX_WOOD_TYPES);
 
     woodSetups: WoodSetup[];
     uniforms: SolidSceneUniforms;

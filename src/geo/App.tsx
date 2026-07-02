@@ -18,7 +18,7 @@ const App: React.FC = () => {
     const isWide = useMediaQuery('(min-width: 768px)');
     const [settings, setSettings] = useState<Settings>(defaultSettings);
     const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-    const [countryInfo, setCountryInfo] = useState<CountryInfo|null>(null);
+    const [countryInfo, setCountryInfo] = useState<CountryInfo | null>(null);
 
     const toggle = () => {
         console.log("toggle");
@@ -27,7 +27,7 @@ const App: React.FC = () => {
 
     const renderMobile = () => (
         <Container maxWidth="xl">
-            <Box display="flex" justifyContent="center" sx={{py: 2}}>
+            <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                 <Typography variant="h2">
                     d3.js
                 </Typography>
@@ -46,10 +46,10 @@ const App: React.FC = () => {
                         <CountryCard countryInfo={countryInfo} />
                     </Box>
                 </Box>
-                { isSettingsOpen &&
-                <Box sx={{ position: "absolute", top: "0.5em", left: "0.5em", background: "#444" }}>
-                    <SettingsComponent settings={settings} setSettings={setSettings} onDismiss={toggle} />
-                </Box>}
+                {isSettingsOpen &&
+                    <Box sx={{ position: "absolute", top: "0.5em", left: "0.5em", background: "#444" }}>
+                        <SettingsComponent settings={settings} setSettings={setSettings} onDismiss={toggle} />
+                    </Box>}
             </Box>
             <MUILink component={RouterLink} to="/" variant="body1" color="primary">
                 Back
@@ -59,7 +59,7 @@ const App: React.FC = () => {
 
     const renderWide = () => (
         <Container maxWidth="xl">
-            <Box display="flex" justifyContent="center" sx={{py: 2}}>
+            <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                 <Typography variant="h2">
                     d3.js wide
                 </Typography>
@@ -86,4 +86,4 @@ const App: React.FC = () => {
     return isWide ? renderWide() : renderMobile();
 };
 
-export { App };
+export default App;

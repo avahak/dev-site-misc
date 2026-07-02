@@ -10,7 +10,7 @@ const FrontPage = () => {
             <Typography variant="h1" textAlign="center" sx={{ py: "3rem" }}>
                 Learning Three.js
             </Typography>
-            <Box display="flex" justifyContent="space-evenly">
+            <Box display="flex" flexWrap="wrap" justifyContent="space-evenly">
                 <Box sx={{ p: 2 }}>
                     <Typography variant="h2" align="center" sx={{ pb: "0.5rem" }}>
                         WebGL

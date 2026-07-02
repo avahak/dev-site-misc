@@ -8,7 +8,7 @@ const App: React.FC = () => {
 
     return (
         <Container maxWidth="xl">
-            <Box display="flex" justifyContent="center" sx={{py: 2}}>
+            <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                 <Typography variant="h2">
                     Scandinavia JSON
                 </Typography>
@@ -27,4 +27,4 @@ const App: React.FC = () => {
     );
 };
 
-export { App };
+export default App;

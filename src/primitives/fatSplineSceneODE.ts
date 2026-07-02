@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-import { OrbitControls } from 'three/examples/jsm/Addons.js';
 import { FatUCBSplineGroup } from './FatUCBSpline';
 import { ODESolver, ButcherTableau } from '../ODESolver';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 
 function thomasAttractor(t: number, y: number[]): number[] {

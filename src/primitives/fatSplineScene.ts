@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-import { OrbitControls } from 'three/examples/jsm/Addons.js';
 import { FatUCBSplineGroup } from './FatUCBSpline';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 function randomColor(k: number) {
     const f = (j: number) => 1 - Math.sin(Math.PI * 2 * j) ** 2;
