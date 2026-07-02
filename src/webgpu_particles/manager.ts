@@ -142,7 +142,7 @@ export class RenderManager {
         const baseNormal = basePass.getTextureNode('normal');
         const baseDepth = basePass.getTextureNode('depth');
 
-        const n = 1000;
+        const n = 50000;
 
         const ParticleStruct = struct({
             pos: 'vec4',        // (x, y, z, life)
@@ -164,7 +164,7 @@ export class RenderManager {
             const i = instanceIndex.toFloat().mul(10);
             const phi = hash(i.add(1)).mul(Math.PI * 2);
             const r = hash(i.add(2)).sqrt();
-            const z = hash(i.add(3)).add(-0.5);
+            const z = hash(i.add(3)).mul(0.5);
             const pos = vec3(
                 phi.cos().mul(r),
                 phi.sin().mul(r),
@@ -175,7 +175,7 @@ export class RenderManager {
                 gaussian2(i.add(4)),
                 gaussian2(i.add(6)).x,
             ).mul(40.0);
-            const dLife = hash(i.add(8)).mul(-2.0).add(-2.0);
+            const dLife = hash(i.add(8)).mul(-1.0).add(-0.5);
             particlePos.assign(vec4(pos, 1));
             particleVel.assign(vec4(vel, dLife));
         })().compute(n);
@@ -203,7 +203,7 @@ export class RenderManager {
         });
         const pos = particleBuffer.element(instanceIndex).get('pos') as THREE.Node<"vec4">;
         material.positionNode = pos;
-        material.scaleNode = select(pos.w.lessThan(0), 0.0, 0.1);
+        material.scaleNode = select(pos.w.lessThan(0), 0.0, 0.05);
         material.colorNode = vec3(1, pos.w.mul(0.5), 0);
         material.opacityNode = smoothstep(float(0.5), float(0.4), uv().distance(vec2(0.5)));
         const particles = new THREE.Sprite(material);
@@ -213,7 +213,7 @@ export class RenderManager {
         const particlePass = pass(this.particleScene, this.camera);
         const particleColor = particlePass.getTextureNode('output');
 
-        const bloomPass = bloom(particleColor, 1.0, 0.5, 0.1);
+        const bloomPass = bloom(particleColor, 0.5, 0.5, 0.1);
         this.pipeline = new THREE.RenderPipeline(this.renderer);
         this.pipeline.outputNode = baseColor.add(particleColor).add(bloomPass);
     }
