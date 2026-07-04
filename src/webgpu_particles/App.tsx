@@ -7,17 +7,23 @@ import { InputListener } from '../inputListener';
 
 const createHandler = (containerRef: React.RefObject<HTMLDivElement | null>, manager: RenderManager) => {
     let [x, y] = [0, 0];
+    const start = (args: any) => {
+        [x, y] = [args.x, args.y];
+    };
+    const end = (args: any) => {
+        const dist = Math.hypot(args.x - x, args.y - y);
+        if (dist < 5)
+            manager.interact(args.x, args.y);
+    };
     return new InputListener(containerRef.current!, {
         mouse: {
-            down: (args) => {
-                [x, y] = [args.x, args.y];
-            },
-            up: (args) => {
-                const dist = Math.hypot(args.x - x, args.y - y);
-                if (dist < 5)
-                    manager.interact(args.x, args.y);
-            },
+            down: (args) => start(args),
+            up: (args) => end(args),
         },
+        touch: {
+            start: (args) => start(args),
+            end: (args) => end(args),
+        }
     }, true);
 }
 
