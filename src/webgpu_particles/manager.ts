@@ -59,11 +59,14 @@ export class RenderManager {
     scene!: THREE.Scene;
     particleScene!: THREE.Scene;
     camera!: THREE.PerspectiveCamera;
+    gbufferPipeline!: THREE.RenderPipeline;
     pipeline!: THREE.RenderPipeline;
     updateFn!: THREE.ComputeNode;
 
     static shootSpeed = 10;
-    shootVel: THREE.Vector3 = new THREE.Vector3(0, 0, RenderManager.shootSpeed);
+    shootVel: THREE.Vector3 = new THREE.Vector3(-8, -0.7, 6).setLength(RenderManager.shootSpeed);
+
+    torus!: THREE.Mesh;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -95,6 +98,8 @@ export class RenderManager {
     }
 
     async dispose() {
+        // TODO this is very incomplete..
+
         if (!this.isInitialized)
             return;
         this.renderer.setAnimationLoop(null);
@@ -128,6 +133,7 @@ export class RenderManager {
             debugLog: () => {
                 console.log("pos", this.camera.position);
                 console.log("dir", this.camera.getWorldDirection(new THREE.Vector3()));
+                console.log("shootVel", this.shootVel);
 
                 const pClip = new THREE.Vector4(0, 0, 0, 1).applyMatrix4(this.camera.projectionMatrix.clone().multiply(this.camera.matrixWorldInverse));
                 const pNDC = new THREE.Vector3(pClip.x / pClip.w, pClip.y / pClip.w, pClip.z / pClip.w);
@@ -149,7 +155,7 @@ export class RenderManager {
         this.camera = new THREE.PerspectiveCamera();
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
-        this.camera.position.set(-4, -0.4, 3.3);
+        this.camera.position.set(5.5, -2.9, 4.3);
         this.controls.target.set(0.5, 0.5, 0.0);
     }
 
@@ -166,6 +172,10 @@ export class RenderManager {
         this.scene.add(light, gltf.scene);
         // TODO cleanup
 
+        this.torus = new THREE.Mesh(new THREE.TorusGeometry(1.3, 1.1), new THREE.MeshNormalMaterial());
+        this.torus.position.set(-3.5, -2, 1.2);
+        this.scene.add(this.torus);
+
         this.particleScene = new THREE.Scene();
     }
 
@@ -179,14 +189,15 @@ export class RenderManager {
         const shootVel = uniform(new THREE.Vector3());
         shootVel.onFrameUpdate(() => this.shootVel);
 
-        const basePass = pass(this.scene, this.camera);
-        basePass.setMRT(mrt({
-            output: output,
-            normal: normalWorld,
-        }));
-        const baseColor = basePass.getTextureNode('output');
-        const baseNormal = basePass.getTextureNode('normal');
-        const baseDepth = basePass.getTextureNode('depth');
+        // Pipeline for depth and normals needed by compute:
+        const normalMaterial = new THREE.MeshBasicNodeMaterial();
+        normalMaterial.outputNode = normalWorld;
+        const depthNormalPass = pass(this.scene, this.camera);
+        depthNormalPass.overrideMaterial = normalMaterial;
+        const baseNormal = depthNormalPass.getTextureNode("output");
+        const baseDepth = depthNormalPass.getTextureNode("depth");
+        this.gbufferPipeline = new THREE.RenderPipeline(this.renderer);
+        this.gbufferPipeline.outputNode = baseNormal;
 
         const n = 100000;
         const ParticleStruct = struct({
@@ -215,7 +226,7 @@ export class RenderManager {
             const vel = vec3(
                 gaussian2(i.add(8)),
                 gaussian2(i.add(10)).x,
-            ).mul(1.0).add(shootVel);
+            ).mul(0.5).add(shootVel);
             const dLife = hash(i.add(12)).mul(-1.0).add(-0.5);
             particlePos.assign(vec4(pos, 1));
             particleVel.assign(vec4(vel, dLife));
@@ -230,7 +241,7 @@ export class RenderManager {
             const newVel = particleVel.add(vec4(0, 0, -9.81, 0).mul(time.y)).toVar();
             const newPos = particlePos.add(newVel.mul(time.y)).toVar();
 
-            const pClip = cameraMat.mul(vec4(newPos.xyz, 1));
+            const pClip = cameraMat.mul(vec4(newPos.xyz, 1)).toVar();
             const pNDC = pClip.xyz.div(pClip.w);
             const pScreen0 = pNDC.mul(0.5).add(vec3(0.5));
             const pScreen = vec2(pScreen0.x, pScreen0.y.oneMinus()).toVar();
@@ -254,13 +265,16 @@ export class RenderManager {
                 // const reflected = particleVel.xyz.sub(normal.mul(particleVel.xyz.dot(normal).mul(1.8)));
                 particleVel.xyz = reflected;
 
-                particlePos.w.assign(newPos.w.sub(0.1));
+                particlePos.w.assign(newPos.w.sub(0.05));   // needed to prevent repeated collisions in place
             });
 
             If(particlePos.w.lessThan(0), () => {
                 reset();
             });
         })().compute(n);
+
+        const basePass = pass(this.scene, this.camera);
+        const baseColor = basePass.getTextureNode('output');
 
         const material = new THREE.SpriteNodeMaterial({
             transparent: true,
@@ -269,7 +283,8 @@ export class RenderManager {
             depthWrite: false,
         });
         material.positionNode = particlePos.xyz;
-        material.scaleNode = select(particleState.x.lessThan(0.5), 0.0, particlePos.w.mul(0.05));
+        const size = smoothstep(0, 0.2, particlePos.w).mul(0.05);
+        material.scaleNode = select(particleState.x.lessThan(0.5), 0.0, size);
         material.colorNode = vec3(1, particlePos.w.mul(0.5), 0);
         material.opacityNode = smoothstep(float(0.5), float(0.4), uv().distance(vec2(0.5)));
         const particleSprite = new THREE.Sprite(material);
@@ -279,8 +294,8 @@ export class RenderManager {
 
         const particlePass = pass(this.particleScene, this.camera);
         const particleColor = particlePass.getTextureNode('output');
-
         const bloomPass = bloom(particleColor, 0.2, 0.5, 0.1);
+
         this.pipeline = new THREE.RenderPipeline(this.renderer);
         this.pipeline.outputNode = baseColor.add(particleColor).add(bloomPass);
     }
@@ -293,6 +308,10 @@ export class RenderManager {
     }
 
     render() {
+        const t = this.timer.getElapsed();
+        this.torus.rotation.set(t, 0.3 * t, 0.7 * t);
+
+        this.gbufferPipeline.render();
         this.renderer.compute(this.updateFn);
         this.pipeline.render();
     }
