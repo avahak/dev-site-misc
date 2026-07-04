@@ -17,8 +17,33 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
 import StorageInstancedBufferAttribute from 'three/src/renderers/common/StorageInstancedBufferAttribute.js';
-import { float, Fn, hash, instanceIndex, mrt, normalWorld, output, pass, select, smoothstep, storage, struct, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { float, Fn, hash, If, instanceIndex, mat4, mrt, normalWorld, output, pass, perspectiveDepthToViewZ, positionWorld, reflect, Return, saturate, screenCoordinate, screenUV, select, smoothstep, storage, struct, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
 
+/** 
+ * Computes the velocity vector of magnitude r to hit p1 from p0 under gravity (0,0,-9.81). 
+ */
+function findLaunchVelocity(p0: THREE.Vector3, r: number, p1: THREE.Vector3): THREE.Vector3 | null {
+    const delta = new THREE.Vector3().subVectors(p1, p0);
+    const c = delta.lengthSq();
+    if (c === 0)
+        return new THREE.Vector3(0, 0, r);
+
+    const g = 9.81;
+    const a = 0.25 * g * g;
+    const b = g * delta.z - r * r;
+    const disc = b * b - 4 * a * c;
+    if (disc < 0)
+        return null;
+
+    const tSq1 = (-b - Math.sqrt(disc)) / (2 * a);
+    const tSq2 = (-b + Math.sqrt(disc)) / (2 * a);
+    const tSq = tSq1 > 0 ? tSq1 : tSq2;
+    if (tSq <= 0)
+        return null;
+
+    const t = Math.sqrt(tSq);
+    return new THREE.Vector3(delta.x / t, delta.y / t, delta.z / t + 0.5 * g * t);
+}
 
 export class RenderManager {
     container: HTMLDivElement;
@@ -28,13 +53,17 @@ export class RenderManager {
     timer: THREE.Timer = new THREE.Timer();
     isInitialized: boolean;
     containerSize: THREE.Vector2 = new THREE.Vector2(0, 0);     // Used to check for resize
-    timeScale: THREE.Uniform<number> = new THREE.Uniform(0);
+    timeScale: THREE.Uniform<number> = new THREE.Uniform(1);
+    raycaster = new THREE.Raycaster();
 
     scene!: THREE.Scene;
     particleScene!: THREE.Scene;
     camera!: THREE.PerspectiveCamera;
     pipeline!: THREE.RenderPipeline;
     updateFn!: THREE.ComputeNode;
+
+    static shootSpeed = 10;
+    shootVel: THREE.Vector3 = new THREE.Vector3(0, 0, RenderManager.shootSpeed);
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -99,14 +128,19 @@ export class RenderManager {
             debugLog: () => {
                 console.log("pos", this.camera.position);
                 console.log("dir", this.camera.getWorldDirection(new THREE.Vector3()));
+
+                const pClip = new THREE.Vector4(0, 0, 0, 1).applyMatrix4(this.camera.projectionMatrix.clone().multiply(this.camera.matrixWorldInverse));
+                const pNDC = new THREE.Vector3(pClip.x / pClip.w, pClip.y / pClip.w, pClip.z / pClip.w);
+                console.log("debug_NDC(0)", pNDC);
             }
         };
 
         const gui = (this.renderer.inspector as Inspector).createParameters('Settings');
-        gui.add(this.timeScale, 'value', -6, 2, 1)
-            .name('Log time scale')
+        const numSteps = 6;     // \in 3\N 
+        gui.add(this.timeScale, 'value', 0, 1.5, 1.5 / numSteps)
+            .name('Log time scale factor')
             .onChange((value: number) => {
-                this.timer.setTimescale(Math.exp(value));
+                this.timer.setTimescale(value == 0 ? 0 : Math.exp(numSteps * (value - 1)));
             });
         gui.add(actions, 'debugLog').name('Debug log');
     }
@@ -116,15 +150,18 @@ export class RenderManager {
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
         this.camera.position.set(-4, -0.4, 3.3);
-        this.controls.target.set(1.7, 1.8, 0.3);
+        this.controls.target.set(0.5, 0.5, 0.0);
     }
 
     async setupScene() {
         this.scene = new THREE.Scene();
+        // this.scene.add(new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshNormalMaterial()));
+        // this.scene.add(new THREE.AxesHelper(1));
 
         const light = new THREE.AmbientLight("#ffffff", 1);
         const loader = new GLTFLoader();
         const gltf = await loader.loadAsync('/dev-site-misc/models/room.glb');
+        gltf.scene.translateZ(-0.5);
         gltf.scene.rotateX(-Math.PI / 2);
         this.scene.add(light, gltf.scene);
         // TODO cleanup
@@ -133,87 +170,117 @@ export class RenderManager {
     }
 
     setupPipeline() {
+        const time = uniform(new THREE.Vector2());
+        time.onFrameUpdate(() => time.value.set(this.timer.getElapsed(), this.timer.getDelta()));
+        const cameraMat = uniform(new THREE.Matrix4());
+        cameraMat.onFrameUpdate(() => this.camera.projectionMatrix.clone().multiply(this.camera.matrixWorldInverse));
+        const ts = uniform(this.timeScale.value);
+        ts.onFrameUpdate(() => this.timeScale.value);
+        const shootVel = uniform(new THREE.Vector3());
+        shootVel.onFrameUpdate(() => this.shootVel);
+
         const basePass = pass(this.scene, this.camera);
         basePass.setMRT(mrt({
             output: output,
-            normal: normalWorld
+            normal: normalWorld,
         }));
         const baseColor = basePass.getTextureNode('output');
         const baseNormal = basePass.getTextureNode('normal');
         const baseDepth = basePass.getTextureNode('depth');
 
-        const n = 50000;
-
+        const n = 100000;
         const ParticleStruct = struct({
             pos: 'vec4',        // (x, y, z, life)
-            vel: 'vec4'         // (dx, dy, dz, dLife)
+            vel: 'vec4',        // (dx, dy, dz, dLife)
+            state: 'vec4',      // (isVisible,-,-,-)
         });
-        const bufferAttribute = new StorageInstancedBufferAttribute(n, 8);
+        const bufferAttribute = new StorageInstancedBufferAttribute(n, 12);
         const particleBuffer = storage(bufferAttribute, ParticleStruct, n);
+        const particle = particleBuffer.element(instanceIndex);
+        const particlePos = particle.get('pos') as THREE.Node<"vec4">;
+        const particleVel = particle.get('vel') as THREE.Node<"vec4">;
+        const particleState = particle.get('state') as THREE.Node<"vec4">;
 
         const gaussian2 = Fn(([seed]: [THREE.Node<"float">]) => {
-            const theta = hash(seed.add(1)).mul(Math.PI * 2);
-            const r = hash(seed.add(2).log().mul(-2)).sqrt();
+            const theta = hash(seed.add(1)).mul(Math.PI * 2).toVar();
+            const r = hash(seed.add(2)).log().mul(-2).sqrt();
             return vec2(theta.cos(), theta.sin()).mul(r);
         });
-        const init = Fn(() => {
-            const particle = particleBuffer.element(instanceIndex);
-            const particlePos = particle.get('pos') as THREE.Node<"vec4">;
-            const particleVel = particle.get('vel') as THREE.Node<"vec4">;
-
-            const i = instanceIndex.toFloat().mul(10);
-            const phi = hash(i.add(1)).mul(Math.PI * 2);
-            const r = hash(i.add(2)).sqrt();
-            const z = hash(i.add(3)).mul(0.5);
+        const reset = () => {
+            const i = instanceIndex.toFloat().mul(20).toVar();
             const pos = vec3(
-                phi.cos().mul(r),
-                phi.sin().mul(r),
-                z,
-            ).mul(10.0);
-            // const phiVel = hash(i.add(4)).mul(Math.PI * 2);
-            const vel = vec3(
                 gaussian2(i.add(4)),
                 gaussian2(i.add(6)).x,
-            ).mul(40.0);
-            const dLife = hash(i.add(8)).mul(-1.0).add(-0.5);
+            ).mul(0.05);
+            const vel = vec3(
+                gaussian2(i.add(8)),
+                gaussian2(i.add(10)).x,
+            ).mul(1.0).add(shootVel);
+            const dLife = hash(i.add(12)).mul(-1.0).add(-0.5);
             particlePos.assign(vec4(pos, 1));
             particleVel.assign(vec4(vel, dLife));
+            particleState.assign(vec4(0, 0, 0, 0));
+        };
+        const init = Fn(() => {
+            reset();
         })().compute(n);
         this.renderer.compute(init);
 
-        const time = uniform(new THREE.Vector2());
-        time.onFrameUpdate(() => time.value.set(this.timer.getElapsed(), this.timer.getDelta()));
-
         this.updateFn = Fn(() => {
-            const particle = particleBuffer.element(instanceIndex);
-            const particlePos = particle.get('pos') as THREE.Node<"vec4">;
-            const particleVel = particle.get('vel') as THREE.Node<"vec4">;
+            const newVel = particleVel.add(vec4(0, 0, -9.81, 0).mul(time.y)).toVar();
+            const newPos = particlePos.add(newVel.mul(time.y)).toVar();
 
-            const dt = time.y.mul(0.1);
-            const newVel = particleVel.add(vec4(0, 0, -9.81, 0).mul(dt));
-            const newPos = particlePos.add(newVel.mul(dt));
-            particlePos.assign(newPos);
-            particleVel.assign(newVel);
+            const pClip = cameraMat.mul(vec4(newPos.xyz, 1));
+            const pNDC = pClip.xyz.div(pClip.w);
+            const pScreen0 = pNDC.mul(0.5).add(vec3(0.5));
+            const pScreen = vec2(pScreen0.x, pScreen0.y.oneMinus()).toVar();
+
+            const depth = texture(baseDepth, pScreen.xy).r;
+
+            const inFront = pNDC.z.lessThan(1).and(pNDC.z.greaterThan(-1));
+            const behindOccluder = depth.greaterThan(pNDC.z);
+            const isVisible = inFront.and(behindOccluder);
+            particleState.assign(vec4(select(isVisible, 1, 0), 0, 0, 0));
+            If(ts.equal(0), () => {
+                // Time is stopped
+                Return();
+            });
+            If(isVisible, () => {
+                particlePos.assign(newPos);
+                particleVel.assign(newVel);
+            }).Else(() => {
+                const normal = texture(baseNormal, pScreen.xy).xyz;
+                const reflected = reflect(particleVel.xyz, normal);
+                // const reflected = particleVel.xyz.sub(normal.mul(particleVel.xyz.dot(normal).mul(1.8)));
+                particleVel.xyz = reflected;
+
+                particlePos.w.assign(newPos.w.sub(0.1));
+            });
+
+            If(particlePos.w.lessThan(0), () => {
+                reset();
+            });
         })().compute(n);
 
         const material = new THREE.SpriteNodeMaterial({
             transparent: true,
-            depthWrite: false,
             blending: THREE.AdditiveBlending,
+            depthTest: false,
+            depthWrite: false,
         });
-        const pos = particleBuffer.element(instanceIndex).get('pos') as THREE.Node<"vec4">;
-        material.positionNode = pos;
-        material.scaleNode = select(pos.w.lessThan(0), 0.0, 0.05);
-        material.colorNode = vec3(1, pos.w.mul(0.5), 0);
+        material.positionNode = particlePos.xyz;
+        material.scaleNode = select(particleState.x.lessThan(0.5), 0.0, particlePos.w.mul(0.05));
+        material.colorNode = vec3(1, particlePos.w.mul(0.5), 0);
         material.opacityNode = smoothstep(float(0.5), float(0.4), uv().distance(vec2(0.5)));
-        const particles = new THREE.Sprite(material);
-        particles.count = n;
-        this.particleScene.add(particles);
+        const particleSprite = new THREE.Sprite(material);
+        particleSprite.count = n;
+        particleSprite.frustumCulled = false;
+        this.particleScene.add(particleSprite);
 
         const particlePass = pass(this.particleScene, this.camera);
         const particleColor = particlePass.getTextureNode('output');
 
-        const bloomPass = bloom(particleColor, 0.5, 0.5, 0.1);
+        const bloomPass = bloom(particleColor, 0.2, 0.5, 0.1);
         this.pipeline = new THREE.RenderPipeline(this.renderer);
         this.pipeline.outputNode = baseColor.add(particleColor).add(bloomPass);
     }
@@ -228,5 +295,16 @@ export class RenderManager {
     render() {
         this.renderer.compute(this.updateFn);
         this.pipeline.render();
+    }
+
+    interact(x: number, y: number) {
+        const p = new THREE.Vector2(2 * x / this.container.clientWidth - 1, -2 * y / this.container.clientHeight + 1);
+        this.raycaster.setFromCamera(p, this.camera);
+        const intersects = this.raycaster.intersectObject(this.scene);
+        if (intersects.length > 0) {
+            const vel = findLaunchVelocity(new THREE.Vector3(), RenderManager.shootSpeed, intersects[0].point);
+            if (vel)
+                this.shootVel.copy(vel);
+        }
     }
 }

@@ -62,13 +62,18 @@ class InputListener {
     private lastGestureScale: number | null = null;
     private lastGestureRotation: number | null = null;
 
-    constructor(container: HTMLElement, mapper: InputMapper) {
+    private allowPropagate: boolean;
+
+    constructor(container: HTMLElement, mapper: InputMapper, allowPropagate = false) {
         this.container = container;
         this.mapper = mapper;
+        this.allowPropagate = allowPropagate;
 
         // Needed to prevent default touch behaviors such as scrolling and zooming
-        this.container.style.touchAction = 'none';
-        this.container.style.userSelect = 'none';
+        if (!this.allowPropagate) {
+            this.container.style.touchAction = 'none';
+            this.container.style.userSelect = 'none';
+        }
 
         this.container.addEventListener('pointerdown', this.onPointerDown, { passive: false });
         this.container.addEventListener('pointermove', this.onPointerMove, { passive: false });
@@ -87,11 +92,13 @@ class InputListener {
     }
 
     private onContextmenu = (event: MouseEvent) => {
-        event.preventDefault();
+        if (!this.allowPropagate)
+            event.preventDefault();
     };
 
     private onPointerDown = (event: PointerEvent) => {
-        event.preventDefault();
+        if (!this.allowPropagate)
+            event.preventDefault();
 
         (event.target as HTMLElement).setPointerCapture(event.pointerId);
 
@@ -128,7 +135,8 @@ class InputListener {
     };
 
     private onPointerMove = (event: PointerEvent) => {
-        event.preventDefault();
+        if (!this.allowPropagate)
+            event.preventDefault();
 
         const modifiers = getModifiers(event);
         const rect = this.container.getBoundingClientRect();
@@ -210,7 +218,8 @@ class InputListener {
     };
 
     private onPointerUp = (event: PointerEvent) => {
-        event.preventDefault();
+        if (!this.allowPropagate)
+            event.preventDefault();
 
         const modifiers = getModifiers(event);
         const rect = this.container.getBoundingClientRect();
@@ -240,8 +249,10 @@ class InputListener {
     };
 
     private onWheel = (event: WheelEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
+        if (!this.allowPropagate) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
 
         const modifiers = getModifiers(event);
         const rect = this.container.getBoundingClientRect();
@@ -274,7 +285,8 @@ class InputListener {
 
     private onSafariGestureStart = (event: any) => {
         if (typeof event.scale !== 'number' || typeof event.rotation !== 'number') return;
-        event.preventDefault();
+        if (!this.allowPropagate)
+            event.preventDefault();
 
         this.lastGestureScale = event.scale;
         this.lastGestureRotation = event.rotation;
@@ -283,7 +295,8 @@ class InputListener {
     private onSafariGestureChange = (event: any) => {
         if (typeof event.scale !== 'number' || typeof event.rotation !== 'number') return;
 
-        event.preventDefault();
+        if (!this.allowPropagate)
+            event.preventDefault();
 
         const modifiers = getModifiers(event);
 
