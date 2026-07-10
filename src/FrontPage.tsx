@@ -68,6 +68,11 @@ const FrontPage = () => {
                                 WebGPU particles
                             </MUILink>
                         </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/webgpu_mesh_particle" variant="body1" color="primary">
+                                WebGPU mesh-particle interaction
+                            </MUILink>
+                        </li>
                     </ul>
                 </Box>
                 <Box sx={{ p: 2 }}>

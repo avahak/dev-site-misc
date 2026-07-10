@@ -13,6 +13,7 @@ const InputListenerApp = React.lazy(() => import('./input_listener/App.tsx'));
 const GraphApp = React.lazy(() => import('./graph/App.tsx'));
 const SolidApp = React.lazy(() => import('./solid/App.tsx'));
 const WebGPUParticlesApp = React.lazy(() => import('./webgpu_particles/App.tsx'));
+const WebGPUMeshParticleApp = React.lazy(() => import('./webgpu_mesh_particle/App.tsx'));
 import { FrontPage } from './FrontPage.tsx';
 
 
@@ -50,6 +51,7 @@ const AppRouter = () => {
                     <Route path="/solid_test" element={<SolidApp solidTest={true} />} />
                     <Route path="/solid_viewer" element={<SolidApp solidTest={false} />} />
                     <Route path="/webgpu_particles" element={<WebGPUParticlesApp />} />
+                    <Route path="/webgpu_mesh_particle" element={<WebGPUMeshParticleApp />} />
                     <Route path="/" element={<FrontPage />} />
                 </Routes>
             </Suspense>

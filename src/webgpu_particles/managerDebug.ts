@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import { Inspector } from 'three/addons/inspector/Inspector.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { cameraProjectionMatrix, cameraViewMatrix, float, Fn, hash, If, instanceIndex, mat4, modelWorldMatrix, mrt, normalWorld, output, pass, perspectiveDepthToViewZ, positionGeometry, positionLocal, positionWorld, reference, reflect, screenCoordinate, screenSize, screenUV, select, smoothstep, storage, struct, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { cameraProjectionMatrix, cameraViewMatrix, float, Fn, frameGroup, hash, If, instanceIndex, mat4, modelWorldMatrix, mrt, normalWorld, objectGroup, output, pass, perspectiveDepthToViewZ, positionGeometry, positionLocal, positionWorld, reference, reflect, renderGroup, screenCoordinate, screenSize, screenUV, select, smoothstep, storage, struct, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
 
 
 export class RenderManager {
@@ -125,25 +125,33 @@ export class RenderManager {
 
     setupPipeline() {
         const cameraMat = uniform(new THREE.Matrix4());
+        (cameraMat as any).setGroup(frameGroup);
         cameraMat.onFrameUpdate(() => this.camera.projectionMatrix.clone().multiply(this.camera.matrixWorldInverse));
 
         const pClip = cameraMat.mul(vec4(positionWorld, 1));
         const pNDC = pClip.xyz.div(pClip.w);
-        // const pScreen = pNDC.add(vec3(1)).mul(0.5);
+        const pScreen = pNDC.add(vec3(1)).mul(0.5);
 
-        const debugMaterial = new THREE.MeshBasicNodeMaterial();
-        debugMaterial.colorNode = vec4(vec3(pNDC.z.oneMinus().mul(20)), 1);
-        debugMaterial.side = THREE.DoubleSide;
-
+        // Incorrect results with MRT, uniform is not up to date for all meshes in scene:
         const basePass = pass(this.scene, this.camera);
-        basePass.overrideMaterial = debugMaterial;
+        basePass.setMRT(mrt({
+            output: output,
+            myDebug: vec4(pScreen.xxx, 1),
+        }));
         const baseColor = basePass.getTextureNode('output');
-        const baseDepth = basePass.getTextureNode('depth');     // depth = pNDC.z
+        const myDebug = basePass.getTextureNode('myDebug');
 
-        const depth = texture(baseDepth, screenUV).r.oneMinus().mul(20);
+        // Correct results with two passes:
+        // const basePass = pass(this.scene, this.camera);
+        // const baseColor = basePass.getTextureNode('output');
+        // const debugMaterial = new THREE.MeshBasicNodeMaterial();
+        // debugMaterial.colorNode = vec4(pScreen.xxx, 1);
+        // const debugPass = pass(this.scene, this.camera);
+        // debugPass.overrideMaterial = debugMaterial;
+        // const myDebug = debugPass.getTextureNode('output');
 
         this.pipeline = new THREE.RenderPipeline(this.renderer);
-        this.pipeline.outputNode = select(screenUV.x.lessThan(0.5), vec4(vec3(depth), 1), baseColor);
+        this.pipeline.outputNode = vec3(myDebug.r).add(baseColor.mul(0.15));
     }
 
     animate() {

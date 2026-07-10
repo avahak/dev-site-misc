@@ -17,7 +17,25 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
 import StorageInstancedBufferAttribute from 'three/src/renderers/common/StorageInstancedBufferAttribute.js';
-import { float, Fn, hash, If, instanceIndex, mat4, mrt, normalWorld, output, pass, perspectiveDepthToViewZ, positionWorld, reflect, Return, saturate, screenCoordinate, screenUV, select, smoothstep, storage, struct, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { float, Fn, frameGroup, hash, If, instanceIndex, mat4, mrt, normalWorld, output, pass, perspectiveDepthToViewZ, positionWorld, reference, reflect, renderGroup, Return, saturate, screenCoordinate, screenUV, select, smoothstep, storage, struct, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+
+/**
+ * Console logs a table from contents of an attribute on GPU
+ */
+async function dumpBuffer<T>(
+    renderer: THREE.WebGPURenderer,
+    attribute: THREE.BufferAttribute,
+    bytesPerStruct: number,
+    count: number,
+    decode: (data: DataView<ArrayBuffer>, base: number, index: number) => T
+): Promise<void> {
+    const buffer = await renderer.getArrayBufferAsync(attribute, null, 0, count * bytesPerStruct);
+    const view = new DataView(buffer);
+    const rows = [];
+    for (let i = 0; i < count; i++)
+        rows.push(decode(view, i * bytesPerStruct, i));
+    console.table(rows);
+}
 
 /** 
  * Computes the velocity vector of magnitude r to hit p1 from p0 under gravity (0,0,-9.81). 
@@ -62,6 +80,9 @@ export class RenderManager {
     gbufferPipeline!: THREE.RenderPipeline;
     pipeline!: THREE.RenderPipeline;
     updateFn!: THREE.ComputeNode;
+
+    // Just for debug
+    bufferAttribute!: THREE.StorageInstancedBufferAttribute;
 
     static shootSpeed = 10;
     shootVel: THREE.Vector3 = new THREE.Vector3(-8, -0.7, 6).setLength(RenderManager.shootSpeed);
@@ -130,6 +151,29 @@ export class RenderManager {
 
     createGUI() {
         const actions = {
+            debugDump: async () => {
+                const bytesPerStruct = 12 * Float32Array.BYTES_PER_ELEMENT;
+                await dumpBuffer(this.renderer, this.bufferAttribute, bytesPerStruct, 20, (view, base, i) => {
+                    const f32 = (offset: number) => view.getFloat32(base + offset, true);
+                    return {
+                        pos: {
+                            x: f32(0),
+                            y: f32(4),
+                            z: f32(8),
+                            life: f32(12),
+                        },
+                        vel: {
+                            x: f32(16),
+                            y: f32(20),
+                            z: f32(24),
+                            dLife: f32(28),
+                        },
+                        state: {
+                            visible: f32(32),
+                        },
+                    };
+                });
+            },
             debugLog: () => {
                 console.log("pos", this.camera.position);
                 console.log("dir", this.camera.getWorldDirection(new THREE.Vector3()));
@@ -149,6 +193,7 @@ export class RenderManager {
                 this.timer.setTimescale(value == 0 ? 0 : Math.exp(numSteps * (value - 1)));
             });
         gui.add(actions, 'debugLog').name('Debug log');
+        gui.add(actions, 'debugDump').name('Debug dump');
     }
 
     setupCamera() {
@@ -184,10 +229,9 @@ export class RenderManager {
         time.onFrameUpdate(() => time.value.set(this.timer.getElapsed(), this.timer.getDelta()));
         const cameraMat = uniform(new THREE.Matrix4());
         cameraMat.onFrameUpdate(() => this.camera.projectionMatrix.clone().multiply(this.camera.matrixWorldInverse));
-        const ts = uniform(this.timeScale.value);
-        ts.onFrameUpdate(() => this.timeScale.value);
-        const shootVel = uniform(new THREE.Vector3());
-        shootVel.onFrameUpdate(() => this.shootVel);
+        const ts = uniform(this.timeScale.value).onFrameUpdate(() => this.timeScale.value);
+        // const shootVel = uniform(new THREE.Vector3()).onFrameUpdate(() => this.shootVel);
+        const shootVel = (reference('shootVel', 'vec3', this) as any).setGroup(frameGroup);
 
         // Pipeline for depth and normals needed by compute:
         const normalMaterial = new THREE.MeshBasicNodeMaterial();
@@ -205,8 +249,8 @@ export class RenderManager {
             vel: 'vec4',        // (dx, dy, dz, dLife)
             state: 'vec4',      // (isVisible,-,-,-)
         });
-        const bufferAttribute = new StorageInstancedBufferAttribute(n, 12);
-        const particleBuffer = storage(bufferAttribute, ParticleStruct, n);
+        this.bufferAttribute = new StorageInstancedBufferAttribute(n, 12);
+        const particleBuffer = storage(this.bufferAttribute, ParticleStruct, n);
         const particle = particleBuffer.element(instanceIndex);
         const particlePos = particle.get('pos') as THREE.Node<"vec4">;
         const particleVel = particle.get('vel') as THREE.Node<"vec4">;
@@ -222,7 +266,7 @@ export class RenderManager {
             const pos = vec3(
                 gaussian2(i.add(4)),
                 gaussian2(i.add(6)).x,
-            ).mul(0.05);
+            ).mul(0.15);
             const vel = vec3(
                 gaussian2(i.add(8)),
                 gaussian2(i.add(10)).x,
