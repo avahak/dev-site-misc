@@ -10,6 +10,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import StorageInstancedBufferAttribute from 'three/src/renderers/common/StorageInstancedBufferAttribute.js';
 import { float, Fn, hash, If, instanceIndex, mat4, mrt, normalWorld, output, pass, perspectiveDepthToViewZ, positionWorld, reflect, Return, saturate, screenCoordinate, screenUV, select, smoothstep, storage, struct, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { BufferGeometryUtils } from 'three/examples/jsm/Addons.js';
+import { SkinnedGeometryGPU } from './skinnedGeometryGPU';
 
 
 export class RenderManager {
@@ -99,9 +101,34 @@ export class RenderManager {
         const actions = {
             debugDump: async () => {
                 console.log("debugDump");
+                new SkinnedGeometryGPU(this.model.scene);
             },
             debugLog: () => {
                 console.log("debugLog");
+                // console.log(this.model.scene);
+                let skeleton: THREE.Skeleton | null = null;
+                this.model.scene.traverse((obj) => {
+                    if (obj instanceof THREE.SkinnedMesh) {
+                        if (skeleton && (skeleton !== obj.skeleton))
+                            console.log("Skeleton is not unique.")
+                        skeleton = obj.skeleton;
+
+                        console.log("bindMatrix", obj.bindMatrix.elements);
+                        const geometry = obj.geometry;
+                        console.log("skinIndex", geometry.attributes.skinIndex);
+                        console.log("skinWeight", geometry.attributes.skinWeight);
+                        console.log("position", geometry.attributes.position);
+                        console.log("index", geometry.index);
+                    }
+                });
+                skeleton = skeleton as (THREE.Skeleton | null);     // TS BS
+                if (skeleton) {
+                    // console.log("a", skeleton);
+                    // console.log("b", skeleton.bones.length);
+                    // console.log("c", skeleton.boneInverses);
+                    // console.log("d", skeleton.boneMatrices);
+                    console.log("sum(boneMatrices)", skeleton.boneMatrices?.reduce((s, v) => s + v, 0));
+                }
             }
         };
 
@@ -151,8 +178,8 @@ export class RenderManager {
         const light = new THREE.AmbientLight("#ffffff", 1);
         const loader = new GLTFLoader();
         this.model = await loader.loadAsync('/dev-site-misc/models/human.glb');
-        // this.model.scene.translateZ(-1);
         this.model.scene.rotateX(Math.PI / 2);
+        // this.model.scene.translateZ(-1);
         if (this.model.animations?.length > 0) {
             const clip = THREE.AnimationClip.findByName(this.model.animations, "Sword_Heavy_Combo") ?? this.model.animations[0];
             this.animationName = clip.name;

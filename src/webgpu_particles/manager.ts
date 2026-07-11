@@ -16,8 +16,8 @@ import { Inspector } from 'three/addons/inspector/Inspector.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
-import StorageInstancedBufferAttribute from 'three/src/renderers/common/StorageInstancedBufferAttribute.js';
 import { float, Fn, frameGroup, hash, If, instanceIndex, mat4, mrt, normalWorld, output, pass, perspectiveDepthToViewZ, positionWorld, reference, reflect, renderGroup, Return, saturate, screenCoordinate, screenUV, select, smoothstep, storage, struct, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { StorageBufferAttribute } from 'three/webgpu';
 
 /**
  * Console logs a table from contents of an attribute on GPU
@@ -70,7 +70,7 @@ export class RenderManager {
     controls!: OrbitControls;
     timer: THREE.Timer = new THREE.Timer();
     isInitialized: boolean;
-    containerSize: THREE.Vector2 = new THREE.Vector2(0, 0);     // Used to check for resize
+    containerSize: THREE.Vector2 = new THREE.Vector2();     // Used to check for resize
     timeScale: THREE.Uniform<number> = new THREE.Uniform(1);
     raycaster = new THREE.Raycaster();
 
@@ -81,8 +81,8 @@ export class RenderManager {
     pipeline!: THREE.RenderPipeline;
     updateFn!: THREE.ComputeNode;
 
-    // Just for debug
-    bufferAttribute!: THREE.StorageInstancedBufferAttribute;
+    // Here for debug
+    bufferAttribute!: THREE.StorageBufferAttribute;
 
     static shootSpeed = 10;
     shootVel: THREE.Vector3 = new THREE.Vector3(-8, -0.7, 6).setLength(RenderManager.shootSpeed);
@@ -249,7 +249,7 @@ export class RenderManager {
             vel: 'vec4',        // (dx, dy, dz, dLife)
             state: 'vec4',      // (isVisible,-,-,-)
         });
-        this.bufferAttribute = new StorageInstancedBufferAttribute(n, 12);
+        this.bufferAttribute = new StorageBufferAttribute(n, 12);
         const particleBuffer = storage(this.bufferAttribute, ParticleStruct, n);
         const particle = particleBuffer.element(instanceIndex);
         const particlePos = particle.get('pos') as THREE.Node<"vec4">;
