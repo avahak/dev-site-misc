@@ -8,10 +8,9 @@ import * as THREE from 'three/webgpu';
 import { Inspector } from 'three/addons/inspector/Inspector.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import StorageInstancedBufferAttribute from 'three/src/renderers/common/StorageInstancedBufferAttribute.js';
 import { float, Fn, hash, If, instanceIndex, mat4, mrt, normalWorld, output, pass, perspectiveDepthToViewZ, positionWorld, reflect, Return, saturate, screenCoordinate, screenUV, select, smoothstep, storage, struct, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
-import { BufferGeometryUtils } from 'three/examples/jsm/Addons.js';
 import { SkinnedGeometryGPU } from './skinnedGeometryGPU';
+import { DebugGPU } from './debug';
 
 
 export class RenderManager {
@@ -33,6 +32,10 @@ export class RenderManager {
     animationName!: string;
     animationAction!: THREE.AnimationAction;
     animationMixer!: THREE.AnimationMixer;
+
+    gpuGeometry!: SkinnedGeometryGPU;
+    gpuDebug!: DebugGPU;
+
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -101,7 +104,23 @@ export class RenderManager {
         const actions = {
             debugDump: async () => {
                 console.log("debugDump");
-                new SkinnedGeometryGPU(this.model.scene);
+
+                const n = 10;
+                const gpuResult = await this.gpuDebug.debug(this.renderer, n);
+                console.log("GPU result:");
+                console.table(gpuResult);
+                const cpuResult = [];
+                for (let k = 0; k < n; k++) {
+                    const gpuIndex = gpuResult[k].index;
+                    const mi = this.gpuGeometry.decodeIndex(gpuIndex);
+                    const vIndex = mi.mesh.geometry.index!.array[mi.index];
+
+                    const v = mi.mesh.getVertexPosition(vIndex, new THREE.Vector3());
+
+                    cpuResult.push({ index: gpuIndex, v: v });
+                }
+                console.log("CPU result:");
+                console.table(cpuResult);
             },
             debugLog: () => {
                 console.log("debugLog");
@@ -194,7 +213,9 @@ export class RenderManager {
         }
 
         this.scene.add(light, this.model.scene);
-        // TODO cleanup
+
+        this.gpuGeometry = new SkinnedGeometryGPU(this.model.scene);
+        this.gpuDebug = new DebugGPU(this.gpuGeometry);
     }
 
     setupPipeline() {
@@ -208,6 +229,7 @@ export class RenderManager {
         this.timer.update();
         this.animationMixer.update(this.timer.getDelta());
         this.controls.update();
+        this.gpuGeometry.updateBones();
         this.handleResize();
         this.render();
     }
