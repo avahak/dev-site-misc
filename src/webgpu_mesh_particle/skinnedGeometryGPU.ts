@@ -169,7 +169,7 @@ export class SkinnedGeometryGPU {
      * Should be called once every frame to update `matrixBuffer` on GPU.
      */
     updateBones() {
-        // this.skeleton.update();
+        this.skeleton.update();
         this.matrixBufferView.set(this.skeleton.boneMatrices!);
         for (let i = 0; i < this.meshes.length; i++) {
             const offset = (this.boneCount + 2 * i) * 16;

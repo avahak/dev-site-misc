@@ -7,33 +7,33 @@ import { StorageBufferAttribute } from 'three/webgpu';
 import { SkinnedGeometryGPU } from './skinnedGeometryGPU';
 
 // Just for reference
-// export function getSkinnedVertexPosition(
-//     mesh: THREE.SkinnedMesh,
-//     vertexIndex: number,
-// ): THREE.Vector3 {
-//     const position = mesh.geometry.attributes.position;
-//     const skinIndex = mesh.geometry.attributes.skinIndex;
-//     const skinWeight = mesh.geometry.attributes.skinWeight;
-//     const bindPosition = new THREE.Vector3(
-//         position.getComponent(vertexIndex, 0),
-//         position.getComponent(vertexIndex, 1),
-//         position.getComponent(vertexIndex, 2),
-//     );
-//     bindPosition.applyMatrix4(mesh.bindMatrix);
-//     const result = new THREE.Vector3();
-//     for (let i = 0; i < 4; i++) {
-//         const weight = skinWeight.getComponent(vertexIndex, i);
-//         const bone = skinIndex.getComponent(vertexIndex, i);
-//         const boneMatrix = new THREE.Matrix4().multiplyMatrices(
-//             mesh.skeleton.bones[bone].matrixWorld,
-//             mesh.skeleton.boneInverses[bone],
-//         );
-//         const transformed = bindPosition.clone().applyMatrix4(boneMatrix);
-//         result.addScaledVector(transformed, weight);
-//     }
-//     result.applyMatrix4(mesh.bindMatrixInverse);
-//     return result;
-// }
+export function getSkinnedVertexPosition(
+    mesh: THREE.SkinnedMesh,
+    vertexIndex: number,
+): THREE.Vector3 {
+    const position = mesh.geometry.attributes.position;
+    const skinIndex = mesh.geometry.attributes.skinIndex;
+    const skinWeight = mesh.geometry.attributes.skinWeight;
+    const bindPosition = new THREE.Vector3(
+        position.getComponent(vertexIndex, 0),
+        position.getComponent(vertexIndex, 1),
+        position.getComponent(vertexIndex, 2),
+    );
+    bindPosition.applyMatrix4(mesh.bindMatrix);
+    const result = new THREE.Vector3();
+    for (let i = 0; i < 4; i++) {
+        const weight = skinWeight.getComponent(vertexIndex, i);
+        const bone = skinIndex.getComponent(vertexIndex, i);
+        const boneMatrix = new THREE.Matrix4().multiplyMatrices(
+            mesh.skeleton.bones[bone].matrixWorld,
+            mesh.skeleton.boneInverses[bone],
+        );
+        const transformed = bindPosition.clone().applyMatrix4(boneMatrix);
+        result.addScaledVector(transformed, weight);
+    }
+    result.applyMatrix4(mesh.bindMatrixInverse);
+    return result;
+}
 
 export function getSkinnedVertexNormal(
     mesh: THREE.SkinnedMesh,
@@ -118,6 +118,10 @@ export class DebugGPU {
     debugBuffer: THREE.StorageBufferNode<"vec4">;
     gpuMesh: SkinnedGeometryGPU;
 
+    oldPos: THREE.Vector3[] = [];
+    newPos: THREE.Vector3[] = [];
+    vel: THREE.Vector3[] = [];
+
 
     constructor(gpuMesh: SkinnedGeometryGPU) {
         this.gpuMesh = gpuMesh;
@@ -166,5 +170,21 @@ export class DebugGPU {
 
         // return { indices: indices, dump: dump };
         return indices.map((vv, i, _a) => ({ index: vv, v: dump[i] }));
+    }
+
+    computePos(dt: number) {
+        this.oldPos = this.newPos;
+        const vs: THREE.Vector3[] = [];
+        const vels: THREE.Vector3[] = [];
+        const n = this.gpuMesh.vertexCount;
+        for (let i = 0; i < n; i++) {
+            const mi = this.gpuMesh.decodeVertexIndex(i);
+            const v = mi.mesh.getVertexPosition(mi.index, new THREE.Vector3());
+            vs.push(v);
+            if (this.oldPos.length == n)
+                vels.push(v.clone().sub(this.oldPos[i]).multiplyScalar(1 / dt));
+        }
+        this.newPos = vs;
+        this.vel = vels;
     }
 }

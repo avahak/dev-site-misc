@@ -1,16 +1,8 @@
-// See:
-// https://github.com/mrdoob/three.js/blob/master/examples/webgl_animation_skinning_blending.html
-// https://github.com/gkjohnson/three-mesh-bvh/blob/master/example/skinnedMesh.js
-// https://www.youtube.com/watch?v=hXjNC8pNOTE&t=3162s
-
-
 import * as THREE from 'three/webgpu';
 import { Inspector } from 'three/addons/inspector/Inspector.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { float, Fn, hash, If, instanceIndex, mat4, mrt, normalWorld, output, pass, perspectiveDepthToViewZ, positionWorld, reflect, Return, saturate, screenCoordinate, screenUV, select, smoothstep, storage, struct, texture, uniform, uniformArray, uv, vec2, vec3, vec4, vertexIndex } from 'three/tsl';
-import { SkinnedGeometryGPU } from './skinnedGeometryGPU';
-import { DebugGPU, getSkinnedVertexNormal } from './debug';
+import { pass, uniformArray } from 'three/tsl';
 
 
 export class RenderManager {
@@ -30,14 +22,16 @@ export class RenderManager {
     pipeline!: THREE.RenderPipeline;
 
     model!: GLTF;
+    mesh!: THREE.SkinnedMesh;
     animationName!: string;
     animationAction!: THREE.AnimationAction;
     animationMixer!: THREE.AnimationMixer;
 
-    gpuGeometry!: SkinnedGeometryGPU;
-    gpuDebug!: DebugGPU;
-
+    // For the velocity lines:
     debugPositionAttribute!: THREE.BufferAttribute;
+    oldPos: THREE.Vector3[] = [];
+    newPos: THREE.Vector3[] = [];
+    vel: THREE.Vector3[] = [];
 
 
     constructor(container: HTMLDivElement) {
@@ -109,57 +103,14 @@ export class RenderManager {
         const actions = {
             debugDump: async () => {
                 console.log("debugDump");
-
-                const n = 100;
-                const gpuResult = await this.gpuDebug.debug(this.renderer, n);
-                // console.log("GPU result:");
-                // console.table(gpuResult);
-                const result = [];
-                for (let k = 0; k < n; k++) {
-                    const gpuIndex = gpuResult[k].index;
-                    const mi = this.gpuGeometry.decodeVertexIndex(gpuIndex);
-
-                    // const v = mi.mesh.getVertexPosition(mi.index, new THREE.Vector3());
-                    const v = getSkinnedVertexNormal(mi.mesh, mi.index, true);
-                    const v2 = gpuResult[k].v;
-
-                    const error = Math.hypot(v.x - v2.x, v.y - v2.y, v.z - v2.z);
-                    result.push({ index: gpuIndex, error: error, cpu: v, gpu: gpuResult[k].v });
-                }
-                console.log("result:");
-                console.table(result);
             },
             debugLog: () => {
                 console.log("debugLog");
-                // console.log(this.model.scene);
-                let skeleton: THREE.Skeleton | null = null;
-                this.model.scene.traverse((obj) => {
-                    if (obj instanceof THREE.SkinnedMesh) {
-                        if (skeleton && (skeleton !== obj.skeleton))
-                            console.log("Skeleton is not unique.")
-                        skeleton = obj.skeleton;
-
-                        console.log("bindMatrix", obj.bindMatrix.elements);
-                        const geometry = obj.geometry;
-                        console.log("skinIndex", geometry.attributes.skinIndex);
-                        console.log("skinWeight", geometry.attributes.skinWeight);
-                        console.log("position", geometry.attributes.position);
-                        console.log("index", geometry.index);
-                    }
-                });
-                skeleton = skeleton as (THREE.Skeleton | null);     // TS BS
-                if (skeleton) {
-                    // console.log("a", skeleton);
-                    // console.log("b", skeleton.bones.length);
-                    // console.log("c", skeleton.boneInverses);
-                    // console.log("d", skeleton.boneMatrices);
-                    console.log("sum(boneMatrices)", skeleton.boneMatrices?.reduce((s, v) => s + v, 0));
-                }
             }
         };
 
         const gui = (this.renderer.inspector as Inspector).createParameters('Settings');
-        const numSteps = 6;     // \in 3\N 
+        const numSteps = 12;     // \in 3\N 
         gui.add(this.timeScale, 'value', 0, 1.5, 1.5 / numSteps)
             .name('Log time scale factor')
             .onChange((value: number) => {
@@ -198,7 +149,6 @@ export class RenderManager {
 
     async setupScene() {
         this.scene = new THREE.Scene();
-        // this.scene.add(new THREE.Mesh(new THREE.SphereGeometry(0.1), new THREE.MeshNormalMaterial()));
         this.scene.add(new THREE.AxesHelper(2));
 
         const light = new THREE.AmbientLight("#ffffff", 1);
@@ -221,33 +171,13 @@ export class RenderManager {
 
         this.scene.add(light, this.model.scene);
 
-        this.gpuGeometry = new SkinnedGeometryGPU(this.model.scene, this.time);
-        this.gpuDebug = new DebugGPU(this.gpuGeometry);
+        this.mesh = this.model.scene.getObjectByName("Mannequin_1") as THREE.SkinnedMesh;
+        console.log("mesh", this.mesh);
     }
 
     setupPipeline() {
-        const lineCount = this.gpuGeometry.vertexCount;
-        const lineGeometry = new THREE.BufferGeometry();
-        lineGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(lineCount * 2 * 3), 3));
-        const lineMaterial = new THREE.LineBasicNodeMaterial({ color: 0x00ffaa });
-        lineMaterial.positionNode = Fn(() => {
-            const isTarget = vertexIndex.bitAnd(1).equal(1); // start: 0, end: 1
-            const lineIndex = vertexIndex.shiftRight(1);
-            const vertex = this.gpuGeometry.dynamicVertices.element(lineIndex);
-            const pos = vertex.get("position") as THREE.Node<"vec3">;
-            const vel = vertex.get("velocity") as THREE.Node<"vec3">;
-            const normal = vertex.get("normal") as THREE.Node<"vec3">;
-            return isTarget.select(pos.add(vel.mul(-0.05)), pos.add(vel.mul(0)));
-            // return isTarget.select(pos, pos.add(vel.mul(0.02)));
-            // return isTarget.select(pos, pos.add(normal.mul(0.1)));
-        })();
-        const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
-        lines.frustumCulled = false;
-        lines.rotateX(Math.PI / 2);
-        this.scene.add(lines);
-
         const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(this.gpuGeometry.vertexCount * 6);
+        const positions = new Float32Array(this.mesh.geometry.attributes.position.count * 6);
         this.debugPositionAttribute = new THREE.BufferAttribute(positions, 3);
         this.debugPositionAttribute.setUsage(THREE.DynamicDrawUsage);
         geometry.setAttribute('position', this.debugPositionAttribute);
@@ -257,19 +187,35 @@ export class RenderManager {
         lineSegments.rotateX(Math.PI / 2);
         this.scene.add(lineSegments);
 
-
         const basePass = pass(this.scene, this.camera);
         const baseColor = basePass.getTextureNode('output');
         this.pipeline = new THREE.RenderPipeline(this.renderer);
         this.pipeline.outputNode = baseColor;
     }
 
-    debugUpdate(pos: THREE.Vector3[], vel: THREE.Vector3[]): void {
-        const positions = this.debugPositionAttribute.array as Float32Array;
-        const n = pos.length;
+    updateLines(dt: number): void {
+        const firstUpdate = this.newPos.length == 0;
+
+        this.oldPos = this.newPos;
+        const vs: THREE.Vector3[] = [];
+        const vels: THREE.Vector3[] = [];
+        const n = this.mesh.geometry.attributes.position.count;
         for (let i = 0; i < n; i++) {
-            const start = pos[i];
-            const end = pos[i].clone().addScaledVector(vel[i], 0.05);
+            const v = this.mesh.getVertexPosition(i, new THREE.Vector3());
+            vs.push(v);
+            if (!firstUpdate)
+                vels.push(v.clone().sub(this.oldPos[i]).multiplyScalar(1 / dt));
+        }
+        this.newPos = vs;
+        this.vel = vels;
+
+        if (firstUpdate)
+            return;
+
+        const positions = this.debugPositionAttribute.array as Float32Array;
+        for (let i = 0; i < n; i++) {
+            const start = this.newPos[i];
+            const end = this.newPos[i].clone().addScaledVector(this.vel[i], 0.05);
             const stride = i * 6;
             positions[stride] = start.x;
             positions[stride + 1] = start.y;
@@ -283,23 +229,19 @@ export class RenderManager {
 
     animate() {
         this.timer.update();
-        this.time.array = [this.timer.getElapsed(), this.timer.getDelta()];
+        const dt = this.timer.getDelta();
 
-        this.animationMixer.update(this.timer.getDelta());
+        this.time.array = [this.timer.getElapsed(), dt];
+
+        this.animationMixer.update(dt);
         this.model.scene.updateMatrixWorld(true);       // updates bones' matrixWorld
-        this.gpuGeometry.updateBones();
+        // this.mesh.skeleton.update();
 
-        this.gpuDebug.computePos(this.timer.getDelta());
-        if (this.gpuDebug.vel.length == this.gpuDebug.newPos.length)
-            this.debugUpdate(this.gpuDebug.newPos, this.gpuDebug.vel);
+        this.updateLines(dt);
 
         this.controls.update();
         this.handleResize();
-        this.render();
-    }
 
-    render() {
-        this.renderer.compute(this.gpuGeometry.updateDynamicVertices);
         this.pipeline.render();
     }
 }
