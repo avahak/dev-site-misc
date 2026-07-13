@@ -6,7 +6,7 @@ import * as THREE from 'three/webgpu';
 import { StorageBufferAttribute } from 'three/webgpu';
 import { SkinnedGeometryGPU } from './skinnedGeometryGPU';
 
-// Just for reference, TODO remove
+// Just for reference
 // export function getSkinnedVertexPosition(
 //     mesh: THREE.SkinnedMesh,
 //     vertexIndex: number,
@@ -23,9 +23,6 @@ import { SkinnedGeometryGPU } from './skinnedGeometryGPU';
 //     const result = new THREE.Vector3();
 //     for (let i = 0; i < 4; i++) {
 //         const weight = skinWeight.getComponent(vertexIndex, i);
-//         if (weight === 0) {
-//             continue;
-//         }
 //         const bone = skinIndex.getComponent(vertexIndex, i);
 //         const boneMatrix = new THREE.Matrix4().multiplyMatrices(
 //             mesh.skeleton.bones[bone].matrixWorld,
@@ -37,6 +34,63 @@ import { SkinnedGeometryGPU } from './skinnedGeometryGPU';
 //     result.applyMatrix4(mesh.bindMatrixInverse);
 //     return result;
 // }
+
+export function getSkinnedVertexNormal(
+    mesh: THREE.SkinnedMesh,
+    vertexIndex: number,
+    useAdjugateTranspose: boolean,
+): THREE.Vector3 {
+    const normal = mesh.geometry.attributes.normal;
+    const skinIndex = mesh.geometry.attributes.skinIndex;
+    const skinWeight = mesh.geometry.attributes.skinWeight;
+    const bindNormal = new THREE.Vector3(
+        normal.getComponent(vertexIndex, 0),
+        normal.getComponent(vertexIndex, 1),
+        normal.getComponent(vertexIndex, 2),
+    );
+    if (useAdjugateTranspose) {
+        const blendedMatrix = new THREE.Matrix4();
+        blendedMatrix.elements.fill(0);
+        for (let i = 0; i < 4; i++) {
+            const weight = skinWeight.getComponent(vertexIndex, i);
+            const bone = skinIndex.getComponent(vertexIndex, i);
+            const boneMatrix = new THREE.Matrix4().multiplyMatrices(
+                mesh.skeleton.bones[bone].matrixWorld,
+                mesh.skeleton.boneInverses[bone],
+            );
+            for (let j = 0; j < 16; j++)
+                blendedMatrix.elements[j] += boneMatrix.elements[j] * weight;
+        }
+        const m = new THREE.Matrix4().multiplyMatrices(mesh.bindMatrixInverse, blendedMatrix).multiply(mesh.bindMatrix);
+        const m3 = new THREE.Matrix3().setFromMatrix4(m);
+        const det = m3.determinant();
+        m3.invert();
+        m3.multiplyScalar(det);
+        m3.transpose();
+        const result = bindNormal.applyMatrix3(m3);
+        result.normalize();
+        return result;
+    } else {
+        const bm3 = new THREE.Matrix3().setFromMatrix4(mesh.bindMatrix);
+        bindNormal.applyMatrix3(bm3);
+        const result = new THREE.Vector3();
+        for (let i = 0; i < 4; i++) {
+            const weight = skinWeight.getComponent(vertexIndex, i);
+            const bone = skinIndex.getComponent(vertexIndex, i);
+            const boneMatrix = new THREE.Matrix4().multiplyMatrices(
+                mesh.skeleton.bones[bone].matrixWorld,
+                mesh.skeleton.boneInverses[bone],
+            );
+            const boneMatrix3 = new THREE.Matrix3().setFromMatrix4(boneMatrix);
+            const transformed = bindNormal.clone().applyMatrix3(boneMatrix3);
+            result.addScaledVector(transformed, weight);
+        }
+        const bmi3 = new THREE.Matrix3().setFromMatrix4(mesh.bindMatrixInverse);
+        result.applyMatrix3(bmi3);
+        result.normalize();
+        return result;
+    }
+}
 
 
 /**
@@ -78,44 +132,22 @@ export class DebugGPU {
         // compute skinned vertex positions for a sample of points
         const indices = [];
         for (let k = 0; k < num; k++)
-            indices.push(Math.round(Math.random() * this.gpuMesh.triangleCount * 3));
+            indices.push(Math.round(Math.random() * this.gpuMesh.vertexCount));
 
         const indicesUniform = uniformArray(indices, "int" as const);
 
-        const animateVertex = Fn(([vIndex]: [THREE.Node<"int">]) => {
-            const vertex = this.gpuMesh.vertices.element(vIndex);
-            const pos0 = vec4(vertex.get("position") as THREE.Node<"vec3">, 1);
-            const iSkin = (vertex.get("skinIndices") as THREE.Node<"ivec4">).toVar();
-            const wSkin = (vertex.get("skinWeights") as THREE.Node<"vec4">).toVar();
-            const bindMatrixIndices = vertex.get("bindMatrixIndices") as THREE.Node<"ivec2">;
-            const bindMatrix = this.gpuMesh.matrixBuffer.element(bindMatrixIndices.x);
-            const bindMatrixInverse = this.gpuMesh.matrixBuffer.element(bindMatrixIndices.y);
-
-            const pos = bindMatrix.mul(pos0).toVar();
-
-            const boneMatrix1 = this.gpuMesh.matrixBuffer.element(iSkin.x);
-            const term1 = boneMatrix1.mul(pos).mul(wSkin.x);
-            const boneMatrix2 = this.gpuMesh.matrixBuffer.element(iSkin.y);
-            const term2 = boneMatrix2.mul(pos).mul(wSkin.y);
-            const boneMatrix3 = this.gpuMesh.matrixBuffer.element(iSkin.z);
-            const term3 = boneMatrix3.mul(pos).mul(wSkin.z);
-            const boneMatrix4 = this.gpuMesh.matrixBuffer.element(iSkin.w);
-            const term4 = boneMatrix4.mul(pos).mul(wSkin.w);
-
-            const result = term1.add(term2).add(term3).add(term4);
-
-            const resultModel = bindMatrixInverse.mul(result);
-
-            return resultModel;
-        });     // TODO .setLayout
 
         const fn = Fn(() => {
-            const iIndex = indicesUniform.element(instanceIndex);
-            const vIndex = this.gpuMesh.indices.element(iIndex);
+            const vIndex = indicesUniform.element(instanceIndex);
 
-            const result = animateVertex(vIndex);
+            const vertex = this.gpuMesh.dynamicVertices.element(vIndex);
+            const pos = vertex.get("position") as THREE.Node<"vec3">;
+            const vel = vertex.get("velocity") as THREE.Node<"vec3">;
+            const normal = vertex.get("normal") as THREE.Node<"vec3">;
 
-            this.debugBuffer.element(instanceIndex).assign(result);
+            const result = vel;
+
+            this.debugBuffer.element(instanceIndex).assign(vec4(result, 0));
         })().compute(num);
         await renderer.compute(fn);
 

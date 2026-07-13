@@ -8,9 +8,9 @@ import * as THREE from 'three/webgpu';
 import { Inspector } from 'three/addons/inspector/Inspector.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { float, Fn, hash, If, instanceIndex, mat4, mrt, normalWorld, output, pass, perspectiveDepthToViewZ, positionWorld, reflect, Return, saturate, screenCoordinate, screenUV, select, smoothstep, storage, struct, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl';
+import { float, Fn, hash, If, instanceIndex, mat4, mrt, normalWorld, output, pass, perspectiveDepthToViewZ, positionWorld, reflect, Return, saturate, screenCoordinate, screenUV, select, smoothstep, storage, struct, texture, uniform, uniformArray, uv, vec2, vec3, vec4, vertexIndex } from 'three/tsl';
 import { SkinnedGeometryGPU } from './skinnedGeometryGPU';
-import { DebugGPU } from './debug';
+import { DebugGPU, getSkinnedVertexNormal } from './debug';
 
 
 export class RenderManager {
@@ -23,6 +23,7 @@ export class RenderManager {
     containerSize: THREE.Vector2 = new THREE.Vector2(0, 0);     // Used to check for resize
     timeScale: THREE.Uniform<number> = new THREE.Uniform(1);
     raycaster = new THREE.Raycaster();
+    time!: THREE.UniformArrayNode<"float">;
 
     scene!: THREE.Scene;
     camera!: THREE.PerspectiveCamera;
@@ -49,6 +50,8 @@ export class RenderManager {
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
         this.container.appendChild(this.renderer.domElement);
         this.renderer.inspector = new Inspector();
+
+        this.time = uniformArray([0, 0], "float" as const);
 
         this.setupCamera();
         await this.setupScene();
@@ -105,22 +108,24 @@ export class RenderManager {
             debugDump: async () => {
                 console.log("debugDump");
 
-                const n = 10;
+                const n = 100;
                 const gpuResult = await this.gpuDebug.debug(this.renderer, n);
-                console.log("GPU result:");
-                console.table(gpuResult);
-                const cpuResult = [];
+                // console.log("GPU result:");
+                // console.table(gpuResult);
+                const result = [];
                 for (let k = 0; k < n; k++) {
                     const gpuIndex = gpuResult[k].index;
-                    const mi = this.gpuGeometry.decodeIndex(gpuIndex);
-                    const vIndex = mi.mesh.geometry.index!.array[mi.index];
+                    const mi = this.gpuGeometry.decodeVertexIndex(gpuIndex);
 
-                    const v = mi.mesh.getVertexPosition(vIndex, new THREE.Vector3());
+                    // const v = mi.mesh.getVertexPosition(mi.index, new THREE.Vector3());
+                    const v = getSkinnedVertexNormal(mi.mesh, mi.index, true);
+                    const v2 = gpuResult[k].v;
 
-                    cpuResult.push({ index: gpuIndex, v: v });
+                    const error = Math.hypot(v.x - v2.x, v.y - v2.y, v.z - v2.z);
+                    result.push({ index: gpuIndex, error: error, cpu: v, gpu: gpuResult[k].v });
                 }
-                console.log("CPU result:");
-                console.table(cpuResult);
+                console.log("result:");
+                console.table(result);
             },
             debugLog: () => {
                 console.log("debugLog");
@@ -214,11 +219,32 @@ export class RenderManager {
 
         this.scene.add(light, this.model.scene);
 
-        this.gpuGeometry = new SkinnedGeometryGPU(this.model.scene);
+        this.gpuGeometry = new SkinnedGeometryGPU(this.model.scene, this.time);
         this.gpuDebug = new DebugGPU(this.gpuGeometry);
     }
 
     setupPipeline() {
+        const lineCount = this.gpuGeometry.vertexCount;
+        const lineGeometry = new THREE.BufferGeometry();
+        lineGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(lineCount * 2 * 3), 3));
+        const lineMaterial = new THREE.LineBasicNodeMaterial({ color: 0x00ffaa });
+        lineMaterial.positionNode = Fn(() => {
+            const isTarget = vertexIndex.bitAnd(1).equal(1); // start: 0, end: 1
+            const lineIndex = vertexIndex.shiftRight(1);
+            const vertex = this.gpuGeometry.dynamicVertices.element(lineIndex);
+            const pos = vertex.get("position") as THREE.Node<"vec3">;
+            const vel = vertex.get("velocity") as THREE.Node<"vec3">;
+            const normal = vertex.get("normal") as THREE.Node<"vec3">;
+            return isTarget.select(pos.add(vel.mul(-0.1)), pos.add(vel.mul(-0.05)));
+            // return isTarget.select(pos, pos.add(vel.mul(0.02)));
+            // return isTarget.select(pos, pos.add(normal.mul(0.1)));
+        })();
+        const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
+        lines.frustumCulled = false;
+        lines.rotateX(Math.PI / 2);
+        this.scene.add(lines);
+
+
         const basePass = pass(this.scene, this.camera);
         const baseColor = basePass.getTextureNode('output');
         this.pipeline = new THREE.RenderPipeline(this.renderer);
@@ -227,14 +253,17 @@ export class RenderManager {
 
     animate() {
         this.timer.update();
+        this.time.array = [this.timer.getElapsed(), this.timer.getDelta()];
+
         this.animationMixer.update(this.timer.getDelta());
-        this.controls.update();
         this.gpuGeometry.updateBones();
+        this.controls.update();
         this.handleResize();
         this.render();
     }
 
     render() {
+        this.renderer.compute(this.gpuGeometry.updateDynamicVertices);
         this.pipeline.render();
     }
 }
