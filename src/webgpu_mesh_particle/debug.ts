@@ -149,7 +149,7 @@ export class DebugGPU {
             const vel = vertex.get("velocity") as THREE.Node<"vec3">;
             const normal = vertex.get("normal") as THREE.Node<"vec3">;
 
-            const result = vel;
+            const result = normal;
 
             this.debugBuffer.element(instanceIndex).assign(vec4(result, 0));
         })().compute(num);

@@ -8,9 +8,12 @@ import * as THREE from 'three/webgpu';
 import { Inspector } from 'three/addons/inspector/Inspector.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { float, Fn, hash, If, instanceIndex, mat4, mrt, normalWorld, output, pass, perspectiveDepthToViewZ, positionWorld, reflect, Return, saturate, screenCoordinate, screenUV, select, smoothstep, storage, struct, texture, uniform, uniformArray, uv, vec2, vec3, vec4, vertexIndex } from 'three/tsl';
+import { Fn, pass, uniformArray, vertexIndex } from 'three/tsl';
 import { SkinnedGeometryGPU } from './skinnedGeometryGPU';
-import { DebugGPU, getSkinnedVertexNormal } from './debug';
+import { DebugGPU } from './debug';
+import { prefixSumTest } from './cpu_dispatch/prefixScan';
+import { bitonicSortTest } from './cpu_dispatch/bitonicSort';
+import { histogramTest } from './cpu_dispatch/histogram';
 
 
 export class RenderManager {
@@ -36,8 +39,6 @@ export class RenderManager {
 
     gpuGeometry!: SkinnedGeometryGPU;
     gpuDebug!: DebugGPU;
-
-    debugPositionAttribute!: THREE.BufferAttribute;
 
 
     constructor(container: HTMLDivElement) {
@@ -110,24 +111,24 @@ export class RenderManager {
             debugDump: async () => {
                 console.log("debugDump");
 
-                const n = 100;
-                const gpuResult = await this.gpuDebug.debug(this.renderer, n);
-                // console.log("GPU result:");
-                // console.table(gpuResult);
-                const result = [];
-                for (let k = 0; k < n; k++) {
-                    const gpuIndex = gpuResult[k].index;
-                    const mi = this.gpuGeometry.decodeVertexIndex(gpuIndex);
+                // const n = 100;
+                // const gpuResult = await this.gpuDebug.debug(this.renderer, n);
+                // const result = [];
+                // for (let k = 0; k < n; k++) {
+                //     const gpuIndex = gpuResult[k].index;
+                //     const mi = this.gpuGeometry.decodeVertexIndex(gpuIndex);
+                //     // const v = mi.mesh.getVertexPosition(mi.index, new THREE.Vector3());
+                //     const v = getSkinnedVertexNormal(mi.mesh, mi.index, true);
+                //     const v2 = gpuResult[k].v;
+                //     const error = Math.hypot(v.x - v2.x, v.y - v2.y, v.z - v2.z);
+                //     result.push({ index: gpuIndex, error: error, cpu: v, gpu: gpuResult[k].v });
+                // }
+                // console.log("result:");
+                // console.table(result);
 
-                    // const v = mi.mesh.getVertexPosition(mi.index, new THREE.Vector3());
-                    const v = getSkinnedVertexNormal(mi.mesh, mi.index, true);
-                    const v2 = gpuResult[k].v;
-
-                    const error = Math.hypot(v.x - v2.x, v.y - v2.y, v.z - v2.z);
-                    result.push({ index: gpuIndex, error: error, cpu: v, gpu: gpuResult[k].v });
-                }
-                console.log("result:");
-                console.table(result);
+                prefixSumTest();
+                bitonicSortTest();
+                histogramTest();
             },
             debugLog: () => {
                 console.log("debugLog");
@@ -192,7 +193,7 @@ export class RenderManager {
         this.camera = new THREE.PerspectiveCamera();
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
-        this.camera.position.set(1, -1.9, 2.3);
+        this.camera.position.set(1.5, -2, 1.5);
         this.controls.target.set(0, 0, 1);
     }
 
@@ -207,7 +208,7 @@ export class RenderManager {
         this.model.scene.rotateX(Math.PI / 2);
         // this.model.scene.translateZ(-1);
         if (this.model.animations?.length > 0) {
-            const clip = THREE.AnimationClip.findByName(this.model.animations, "Sword_Heavy_Combo") ?? this.model.animations[0];
+            const clip = THREE.AnimationClip.findByName(this.model.animations, "Zombie_Walk_Fwd_Loop") ?? this.model.animations[0];
             this.animationName = clip.name;
 
             this.animationMixer = new THREE.AnimationMixer(this.model.scene);
@@ -237,8 +238,9 @@ export class RenderManager {
             const pos = vertex.get("position") as THREE.Node<"vec3">;
             const vel = vertex.get("velocity") as THREE.Node<"vec3">;
             const normal = vertex.get("normal") as THREE.Node<"vec3">;
-            return isTarget.select(pos.add(vel.mul(-0.05)), pos.add(vel.mul(0)));
-            // return isTarget.select(pos, pos.add(vel.mul(0.02)));
+
+            const offsets = [0.02, -0.05, 0.00];
+            return isTarget.select(pos.add(normal.mul(offsets[0])).add(vel.mul(offsets[1])), pos.add(normal.mul(offsets[0])).add(vel.mul(offsets[2])));
             // return isTarget.select(pos, pos.add(normal.mul(0.1)));
         })();
         const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
@@ -246,39 +248,10 @@ export class RenderManager {
         lines.rotateX(Math.PI / 2);
         this.scene.add(lines);
 
-        const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(this.gpuGeometry.vertexCount * 6);
-        this.debugPositionAttribute = new THREE.BufferAttribute(positions, 3);
-        this.debugPositionAttribute.setUsage(THREE.DynamicDrawUsage);
-        geometry.setAttribute('position', this.debugPositionAttribute);
-        const material = new THREE.LineBasicMaterial({ color: 0xffffff });
-        const lineSegments = new THREE.LineSegments(geometry, material);
-        lineSegments.frustumCulled = false;
-        lineSegments.rotateX(Math.PI / 2);
-        this.scene.add(lineSegments);
-
-
         const basePass = pass(this.scene, this.camera);
         const baseColor = basePass.getTextureNode('output');
         this.pipeline = new THREE.RenderPipeline(this.renderer);
         this.pipeline.outputNode = baseColor;
-    }
-
-    debugUpdate(pos: THREE.Vector3[], vel: THREE.Vector3[]): void {
-        const positions = this.debugPositionAttribute.array as Float32Array;
-        const n = pos.length;
-        for (let i = 0; i < n; i++) {
-            const start = pos[i];
-            const end = pos[i].clone().addScaledVector(vel[i], 0.05);
-            const stride = i * 6;
-            positions[stride] = start.x;
-            positions[stride + 1] = start.y;
-            positions[stride + 2] = start.z;
-            positions[stride + 3] = end.x;
-            positions[stride + 4] = end.y;
-            positions[stride + 5] = end.z;
-        }
-        this.debugPositionAttribute.needsUpdate = true;
     }
 
     animate() {
@@ -286,12 +259,7 @@ export class RenderManager {
         this.time.array = [this.timer.getElapsed(), this.timer.getDelta()];
 
         this.animationMixer.update(this.timer.getDelta());
-        this.model.scene.updateMatrixWorld(true);       // updates bones' matrixWorld
         this.gpuGeometry.updateBones();
-
-        this.gpuDebug.computePos(this.timer.getDelta());
-        if (this.gpuDebug.vel.length == this.gpuDebug.newPos.length)
-            this.debugUpdate(this.gpuDebug.newPos, this.gpuDebug.vel);
 
         this.controls.update();
         this.handleResize();
@@ -299,6 +267,7 @@ export class RenderManager {
     }
 
     render() {
+        this.gpuDebug.computePos(this.timer.getDelta());
         this.renderer.compute(this.gpuGeometry.updateDynamicVertices);
         this.pipeline.render();
     }

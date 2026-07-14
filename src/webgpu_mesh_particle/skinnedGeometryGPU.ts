@@ -8,6 +8,7 @@ import { Fn, If, instanceIndex, mat3, select, storage, struct, vec3, vec4 } from
  * TODO store dynamic vertex pos, normal, vel(finite difference)
  */
 export class SkinnedGeometryGPU {
+    baseObj: THREE.Object3D;
     meshes: THREE.SkinnedMesh[];
     static StaticVertexStruct = struct({
         position: 'vec3',
@@ -44,6 +45,7 @@ export class SkinnedGeometryGPU {
 
 
     constructor(baseObj: THREE.Object3D, time: THREE.UniformArrayNode<"float">) {
+        this.baseObj = baseObj;
         this.meshes = [];
         let skeleton: THREE.Skeleton | null = null;
         let nVertex = 0;
@@ -169,7 +171,9 @@ export class SkinnedGeometryGPU {
      * Should be called once every frame to update `matrixBuffer` on GPU.
      */
     updateBones() {
+        this.baseObj.updateMatrixWorld(true);       // updates bones' matrixWorld
         this.skeleton.update();
+
         this.matrixBufferView.set(this.skeleton.boneMatrices!);
         for (let i = 0; i < this.meshes.length; i++) {
             const offset = (this.boneCount + 2 * i) * 16;
@@ -210,7 +214,7 @@ export class SkinnedGeometryGPU {
             const bm = boneMatrix1.add(boneMatrix2).add(boneMatrix3).add(boneMatrix4);
             const matrix4 = bindMatrixInverse.mul(bm).mul(bindMatrix).toVar();
 
-            const newPos = matrix4.mul(vec4(pos0, 1)).xyz;
+            const newPos = matrix4.mul(vec4(pos0, 1)).xyz.toVar();
 
             const matrix3 = matrix4.toMat3().toVar();
             // Correct new normal is normalize(adj(M)^{-T} normal0):
@@ -221,7 +225,7 @@ export class SkinnedGeometryGPU {
             const vertex = this.dynamicVertices.element(instanceIndex);
             const pos = vertex.get("position") as THREE.Node<"vec3">;
 
-            const dt = time.element(1).toVar();
+            const dt = time.element(1);
             const vel = newPos.sub(pos).div(dt);
 
             vertex.get("velocity").assign(select(dt.greaterThan(0), vel, vec3(0)));
