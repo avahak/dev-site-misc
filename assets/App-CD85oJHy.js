@@ -1,4 +1,4 @@
-import{i as e,n as t,t as n}from"./jsx-runtime-BnxRlLMJ.js";import{t as r}from"./Box-CFEfsCq7.js";import{a as i,i as a,r as o,t as s}from"./index-E5eBO_De.js";import{$t as c,Br as l,Cr as u,L as d,Pt as f,Vr as p,Xt as m,Yt as h,Zt as g,cr as _,f as v,r as y,sr as b,zt as x}from"./three.module-Dtgo5Ffh.js";import{t as S}from"./OrbitControls-DKC0dmvR.js";import{t as C}from"./lil-gui.module.min--1wMio4V.js";var w=e(t(),1),T=`precision highp float;\r
+import{i as e,n as t,t as n}from"./jsx-runtime-BnxRlLMJ.js";import{t as r}from"./Box-CFEfsCq7.js";import{a as i,i as a,r as o,t as s}from"./index-Bfjg7LR-.js";import{$t as c,Br as l,Cr as u,L as d,Pt as f,Vr as p,Xt as m,Yt as h,Zt as g,cr as _,f as v,r as y,sr as b,zt as x}from"./three.module-Dtgo5Ffh.js";import{t as S}from"./OrbitControls-DKC0dmvR.js";import{t as C}from"./lil-gui.module.min--1wMio4V.js";var w=e(t(),1),T=`precision highp float;\r
 \r
 out vec3 vPos;\r
 out vec2 vUv;\r
