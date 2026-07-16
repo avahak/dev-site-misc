@@ -5,6 +5,8 @@ import { Fn, instanceIndex, Loop, storage, uniform, uniformArray, vec3, vec4 } f
 import * as THREE from 'three/webgpu';
 import { StorageBufferAttribute } from 'three/webgpu';
 import { SkinnedGeometryGPU } from './skinnedGeometryGPU';
+import { PrefixScan } from './prefixScan';
+import { Reduction } from './reduction';
 
 // Just for reference
 export function getSkinnedVertexPosition(
@@ -114,9 +116,13 @@ export async function dumpBuffer<T>(
 
 export class DebugGPU {
     maxNum: number = 1024;
-    debugAttribute: THREE.StorageBufferAttribute;
-    debugBuffer: THREE.StorageBufferNode<"vec4">;
     gpuMesh: SkinnedGeometryGPU;
+
+    debugAttributeVec4: THREE.StorageBufferAttribute;
+    debugBufferVec4: THREE.StorageBufferNode<"vec4">;
+
+    debugAttributeFloat: THREE.StorageBufferAttribute;
+    debugBufferFloat: THREE.StorageBufferNode<"float">;
 
     oldPos: THREE.Vector3[] = [];
     newPos: THREE.Vector3[] = [];
@@ -125,11 +131,34 @@ export class DebugGPU {
 
     constructor(gpuMesh: SkinnedGeometryGPU) {
         this.gpuMesh = gpuMesh;
-        this.debugAttribute = new StorageBufferAttribute(this.maxNum, 4);
-        this.debugBuffer = storage(this.debugAttribute, "vec4", this.maxNum);
+        this.debugAttributeVec4 = new StorageBufferAttribute(this.maxNum, 4);
+        this.debugBufferVec4 = storage(this.debugAttributeVec4, "vec4", this.maxNum);
+
+        const initialValues = new Float32Array(Array.from({ length: this.maxNum }, (v, k) => k));
+        console.log(initialValues.reduce((s, v) => s + v, 0), initialValues);
+        this.debugAttributeFloat = new StorageBufferAttribute(initialValues, 1);
+        this.debugBufferFloat = storage(this.debugAttributeFloat, "float", this.maxNum);
     }
 
-    async debug(renderer: THREE.WebGPURenderer, num: number) {
+
+    async debugReduction(renderer: THREE.WebGPURenderer) {
+        const num = this.maxNum;
+        // let num = Math.ceil(5 + 5 * Math.random());
+        // if (num > this.maxNum)
+        //     throw Error("num too large");
+
+        const reduction = new Reduction(this.debugBufferFloat, num);
+        reduction.dispatch(renderer);
+
+        const dump = await dumpBuffer(renderer, this.debugAttributeFloat, 4, num, (view, base, _i) => {
+            const f32 = (offset: number) => view.getFloat32(base + offset, true);
+            return f32(0);
+        });
+        console.log("dump", dump);
+    }
+
+
+    async debugSkinning(renderer: THREE.WebGPURenderer, num: number) {
         if (num > this.maxNum)
             throw Error(`num can be at most maxNum=${this.maxNum}`);
 
@@ -144,18 +173,18 @@ export class DebugGPU {
         const fn = Fn(() => {
             const vIndex = indicesUniform.element(instanceIndex);
 
-            const vertex = this.gpuMesh.dynamicVertices.element(vIndex);
+            const vertex = this.gpuMesh.dynamicBuffer.element(vIndex);
             const pos = vertex.get("position") as THREE.Node<"vec3">;
             const vel = vertex.get("velocity") as THREE.Node<"vec3">;
             const normal = vertex.get("normal") as THREE.Node<"vec3">;
 
             const result = normal;
 
-            this.debugBuffer.element(instanceIndex).assign(vec4(result, 0));
+            this.debugBufferVec4.element(instanceIndex).assign(vec4(result, 0));
         })().compute(num);
         await renderer.compute(fn);
 
-        const dump = await dumpBuffer(renderer, this.debugAttribute, 4 * 4, num, (view, base, _i) => {
+        const dump = await dumpBuffer(renderer, this.debugAttributeVec4, 4 * 4, num, (view, base, _i) => {
             const f32 = (offset: number) => view.getFloat32(base + offset, true);
             return new THREE.Vector4(f32(0), f32(4), f32(8), f32(12));
             // return {

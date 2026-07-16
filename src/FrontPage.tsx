@@ -86,6 +86,11 @@ const FrontPage = () => {
                             </MUILink>
                         </li>
                         <li>
+                            <MUILink component={RouterLink} to="/collision_detection" variant="body1" color="primary">
+                                Collision detection
+                            </MUILink>
+                        </li>
+                        <li>
                             <MUILink component={RouterLink} to="/webgl_tools_text" variant="body1" color="primary">
                                 Text
                             </MUILink>

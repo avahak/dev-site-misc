@@ -10,7 +10,7 @@ const WG_SIZE = 16;
 
 function* localBitonicSortShader(
     builtins: ComputeBuiltins,
-    shared: { scratch: Float32Array },
+    shared: { local: Float32Array },
     data: Float32Array,
     dataOffset: number,
     dataSize: number,
@@ -22,7 +22,7 @@ function* localBitonicSortShader(
     //--------------------------------------------------
     // load
     //--------------------------------------------------
-    shared.scratch[localId] =
+    shared.local[localId] =
         g < end ? data[g] : Number.POSITIVE_INFINITY;
     yield barrier();
 
@@ -34,11 +34,11 @@ function* localBitonicSortShader(
             const partner = localId ^ j;
             if (partner > localId) {
                 const ascending = (localId & k) === 0;
-                const a = shared.scratch[localId];
-                const b = shared.scratch[partner];
+                const a = shared.local[localId];
+                const b = shared.local[partner];
                 if ((a > b) === ascending) {
-                    shared.scratch[localId] = b;
-                    shared.scratch[partner] = a;
+                    shared.local[localId] = b;
+                    shared.local[partner] = a;
                 }
             }
 
@@ -50,7 +50,7 @@ function* localBitonicSortShader(
     // store
     //--------------------------------------------------
     if (g < end) {
-        data[g] = shared.scratch[localId];
+        data[g] = shared.local[localId];
     }
 }
 
@@ -68,7 +68,7 @@ export function bitonicSortLocal(
             workgroupCount: 1,
             workgroupSize: WG_SIZE,
             createSharedMemory: () => ({
-                scratch: new Float32Array(WG_SIZE)
+                local: new Float32Array(WG_SIZE)
             })
         },
         localBitonicSortShader,

@@ -8,7 +8,7 @@ const WG_SIZE = 16;
 
 function* localScanShader(
     builtins: ComputeBuiltins,
-    shared: { scratch: Float32Array },
+    shared: { local: Float32Array },
     data: Float32Array,
     dataOffset: number,
     dataSize: number,
@@ -20,14 +20,14 @@ function* localScanShader(
     const end = dataOffset + dataSize;
 
     // load
-    shared.scratch[localId] = g < end ? data[g] : 0;
+    shared.local[localId] = g < end ? data[g] : 0;
     yield barrier();
 
     // upsweep
     for (let stride = 1; stride < workgroupSize; stride *= 2) {
         const index = (localId + 1) * stride * 2 - 1;
         if (index < workgroupSize) {
-            shared.scratch[index] += shared.scratch[index - stride];
+            shared.local[index] += shared.local[index - stride];
         }
         yield barrier();
     }
@@ -35,8 +35,8 @@ function* localScanShader(
     // Save block sum
     let blockSum = 0;
     if (localId === workgroupSize - 1) {
-        blockSum = shared.scratch[workgroupSize - 1];
-        shared.scratch[workgroupSize - 1] = 0;
+        blockSum = shared.local[workgroupSize - 1];
+        shared.local[workgroupSize - 1] = 0;
     }
     yield barrier();
 
@@ -44,19 +44,19 @@ function* localScanShader(
     for (let stride = workgroupSize / 2; stride >= 1; stride /= 2) {
         const index = (localId + 1) * stride * 2 - 1;
         if (index < workgroupSize) {
-            const t = shared.scratch[index - stride];
-            shared.scratch[index - stride] = shared.scratch[index];
-            shared.scratch[index] += t;
+            const t = shared.local[index - stride];
+            shared.local[index - stride] = shared.local[index];
+            shared.local[index] += t;
         }
         yield barrier();
     }
 
     // store, exclusive -> inclusive
     if (g < end) {
-        data[g] += shared.scratch[localId];
+        data[g] += shared.local[localId];
     }
 
-    // Write block sum out to the scratch buffer (only thread 0 needs to do this, 
+    // Write block sum out to the blockSums buffer (only thread 0 needs to do this, 
     // or the last thread. Here we use the last thread as it holds the value)
     if (localId === workgroupSize - 1 && blockSums) {
         blockSums[blockSumsOffset + workgroupId] = blockSum;
@@ -83,7 +83,11 @@ function* addBlockSumShader(
     }
 }
 
-function scratchSize(count: number): number {
+/**
+ * Size for the temporary buffer needed to store block sums. 
+ * Return value is approximately count/(WG_SIZE-1).
+ */
+function blockSumsBufferSize(count: number): number {
     let total = 0;
     while (count > 1) {
         count = Math.ceil(count / WG_SIZE);
@@ -96,11 +100,11 @@ export function prefixScanBlelloch(
     data: Float32Array,
     dataOffset = 0,
     dataSize = data.length,
-    scratch?: Float32Array,
-    scratchOffset = 0,
+    blockSums?: Float32Array,
+    blockSumsOffset = 0,
 ): void {
-    if (!scratch) {
-        scratch = new Float32Array(scratchSize(dataSize)); // NOTE: only allocated on first call
+    if (!blockSums) {
+        blockSums = new Float32Array(blockSumsBufferSize(dataSize)); // NOTE: only allocated on first call
     }
 
     const blockCount = Math.ceil(dataSize / WG_SIZE);
@@ -113,7 +117,7 @@ export function prefixScanBlelloch(
             {
                 workgroupCount: 1,
                 workgroupSize: WG_SIZE,
-                createSharedMemory: () => ({ scratch: new Float32Array(WG_SIZE) }),
+                createSharedMemory: () => ({ local: new Float32Array(WG_SIZE) }),
             },
             localScanShader, data, dataOffset, dataSize, null, 0
         );
@@ -127,22 +131,26 @@ export function prefixScanBlelloch(
         {
             workgroupCount: blockCount,
             workgroupSize: WG_SIZE,
-            createSharedMemory: () => ({ scratch: new Float32Array(WG_SIZE) }),
+            createSharedMemory: () => ({ local: new Float32Array(WG_SIZE) }),
         },
-        localScanShader, data, dataOffset, dataSize, scratch, scratchOffset
+        localScanShader, data, dataOffset, dataSize, blockSums, blockSumsOffset
     );
 
     //--------------------------------------------------
     // Pass 2
     //--------------------------------------------------
-    prefixScanBlelloch(scratch, scratchOffset, blockCount, scratch, scratchOffset + blockCount);
+    prefixScanBlelloch(blockSums, blockSumsOffset, blockCount, blockSums, blockSumsOffset + blockCount);
 
     //--------------------------------------------------
     // Pass 3
     //--------------------------------------------------
     dispatch({ workgroupCount: blockCount, workgroupSize: WG_SIZE, },
-        addBlockSumShader, data, dataOffset, dataSize, scratch, scratchOffset);
+        addBlockSumShader, data, dataOffset, dataSize, blockSums, blockSumsOffset);
 }
+
+//--------------------------------------------------
+// TESTING
+//--------------------------------------------------
 
 function prefixScanTrivial(data: Float32Array) {
     let sum = 0;
@@ -151,10 +159,6 @@ function prefixScanTrivial(data: Float32Array) {
         data[i] = sum;
     }
 }
-
-//--------------------------------------------------
-// TESTING
-//--------------------------------------------------
 
 function compareArrays(a: Float32Array, b: Float32Array): boolean {
     if (a.length !== b.length) {

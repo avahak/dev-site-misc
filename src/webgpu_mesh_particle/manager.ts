@@ -8,9 +8,9 @@ import * as THREE from 'three/webgpu';
 import { Inspector } from 'three/addons/inspector/Inspector.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { Fn, pass, uniformArray, vertexIndex } from 'three/tsl';
+import { Fn, pass, storage, uniformArray, vertexIndex } from 'three/tsl';
 import { SkinnedGeometryGPU } from './skinnedGeometryGPU';
-import { DebugGPU } from './debug';
+import { DebugGPU, getSkinnedVertexNormal } from './debug';
 import { prefixSumTest } from './cpu_dispatch/prefixScan';
 import { bitonicSortTest } from './cpu_dispatch/bitonicSort';
 import { histogramTest } from './cpu_dispatch/histogram';
@@ -108,30 +108,8 @@ export class RenderManager {
 
     createGUI() {
         const actions = {
-            debugDump: async () => {
-                console.log("debugDump");
-
-                // const n = 100;
-                // const gpuResult = await this.gpuDebug.debug(this.renderer, n);
-                // const result = [];
-                // for (let k = 0; k < n; k++) {
-                //     const gpuIndex = gpuResult[k].index;
-                //     const mi = this.gpuGeometry.decodeVertexIndex(gpuIndex);
-                //     // const v = mi.mesh.getVertexPosition(mi.index, new THREE.Vector3());
-                //     const v = getSkinnedVertexNormal(mi.mesh, mi.index, true);
-                //     const v2 = gpuResult[k].v;
-                //     const error = Math.hypot(v.x - v2.x, v.y - v2.y, v.z - v2.z);
-                //     result.push({ index: gpuIndex, error: error, cpu: v, gpu: gpuResult[k].v });
-                // }
-                // console.log("result:");
-                // console.table(result);
-
-                prefixSumTest();
-                bitonicSortTest();
-                histogramTest();
-            },
-            debugLog: () => {
-                console.log("debugLog");
+            debugLog0: () => {
+                console.log("debugLog0");
                 // console.log(this.model.scene);
                 let skeleton: THREE.Skeleton | null = null;
                 this.model.scene.traverse((obj) => {
@@ -156,6 +134,36 @@ export class RenderManager {
                     // console.log("d", skeleton.boneMatrices);
                     console.log("sum(boneMatrices)", skeleton.boneMatrices?.reduce((s, v) => s + v, 0));
                 }
+            },
+            debugLog1: async () => {
+                console.log("debugLog1");
+
+                prefixSumTest();
+                bitonicSortTest();
+                histogramTest();
+            },
+            debugLog2: async () => {
+                console.log("debugLog2");
+
+                const n = 100;
+                const gpuResult = await this.gpuDebug.debugSkinning(this.renderer, n);
+                const result = [];
+                for (let k = 0; k < n; k++) {
+                    const gpuIndex = gpuResult[k].index;
+                    const mi = this.gpuGeometry.decodeVertexIndex(gpuIndex);
+                    // const v = mi.mesh.getVertexPosition(mi.index, new THREE.Vector3());
+                    const v = getSkinnedVertexNormal(mi.mesh, mi.index, true);
+                    const v2 = gpuResult[k].v;
+                    const error = Math.hypot(v.x - v2.x, v.y - v2.y, v.z - v2.z);
+                    result.push({ index: gpuIndex, error: error, cpu: v, gpu: gpuResult[k].v });
+                }
+                console.log("result:");
+                console.table(result);
+            },
+            debugLog3: () => {
+                console.log("debugLog3");
+
+                this.gpuDebug.debugReduction(this.renderer);
             }
         };
 
@@ -166,8 +174,10 @@ export class RenderManager {
             .onChange((value: number) => {
                 this.timer.setTimescale(value == 0 ? 0 : Math.exp(numSteps * (value - 1)));
             });
-        gui.add(actions, 'debugLog').name('Debug log');
-        gui.add(actions, 'debugDump').name('Debug dump');
+        gui.add(actions, 'debugLog0').name('Debug log 0');
+        gui.add(actions, 'debugLog1').name('Debug log 1');
+        gui.add(actions, 'debugLog2').name('Debug log 2');
+        gui.add(actions, 'debugLog3').name('Debug log 3');
 
         const selection: string[] = [];
         if (this.model.animations?.length > 0) {
@@ -234,13 +244,13 @@ export class RenderManager {
         lineMaterial.positionNode = Fn(() => {
             const isTarget = vertexIndex.bitAnd(1).equal(1); // start: 0, end: 1
             const lineIndex = vertexIndex.shiftRight(1);
-            const vertex = this.gpuGeometry.dynamicVertices.element(lineIndex);
+            const vertex = this.gpuGeometry.dynamicBuffer.element(lineIndex);
             const pos = vertex.get("position") as THREE.Node<"vec3">;
             const vel = vertex.get("velocity") as THREE.Node<"vec3">;
             const normal = vertex.get("normal") as THREE.Node<"vec3">;
 
-            const offsets = [0.02, -0.05, 0.00];
-            return isTarget.select(pos.add(normal.mul(offsets[0])).add(vel.mul(offsets[1])), pos.add(normal.mul(offsets[0])).add(vel.mul(offsets[2])));
+            const offsets = [0.02, -0.05, 0.03, 0];
+            return isTarget.select(pos.add(normal.mul(offsets[0])).add(vel.mul(offsets[1])), pos.add(normal.mul(offsets[2])).add(vel.mul(offsets[3])));
             // return isTarget.select(pos, pos.add(normal.mul(0.1)));
         })();
         const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
@@ -268,7 +278,7 @@ export class RenderManager {
 
     render() {
         this.gpuDebug.computePos(this.timer.getDelta());
-        this.renderer.compute(this.gpuGeometry.updateDynamicVertices);
+        this.renderer.compute(this.gpuGeometry.updateDynamicBuffer);    // ~0.07ms
         this.pipeline.render();
     }
 }

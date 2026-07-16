@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { StorageBufferAttribute } from 'three/webgpu';
-import { Fn, If, instanceIndex, mat3, select, storage, struct, vec3, vec4 } from 'three/tsl';
+import { Fn, instanceIndex, select, storage, struct, vec3, vec4 } from 'three/tsl';
 
 /**
  * Stores skinned mesh geometry on GPU. Everything other than matrixBuffer is static.
@@ -10,127 +10,133 @@ import { Fn, If, instanceIndex, mat3, select, storage, struct, vec3, vec4 } from
 export class SkinnedGeometryGPU {
     baseObj: THREE.Object3D;
     meshes: THREE.SkinnedMesh[];
-    static StaticVertexStruct = struct({
+    skeleton: THREE.Skeleton;
+    vertexCount: number;
+    triangleCount: number;
+    boneCount: number;
+
+    static BaseLayout = struct({
         position: 'vec3',
         normal: 'vec3',
+        uv: 'vec2',
+    });
+    static BaseStride: number = 3 * 4;    // Careful with storage buffer alignment rules!
+    baseBuffer: THREE.StorageBufferNode<"struct">;
+
+    static SkinLayout = struct({
         skinIndices: 'ivec4',
         skinWeights: 'vec4',
-        uv: 'vec2',
         bindTransformIndex: 'uint',     // index in matrixBuffer for bindMatrix, and bindMatrixInverse is always next
     });
-    static DynamicVertexStruct = struct({
+    static SkinStride: number = 3 * 4;
+    skinBuffer: THREE.StorageBufferNode<"struct">;
+
+    static DynamicLayout = struct({
         position: 'vec3',
         velocity: 'vec3',
         normal: 'vec3',
     });
-    static staticVertexStride: number = 5 * 4;    // Careful with storage buffer alignment rules!
-    static dynamicVertexStride: number = 3 * 4;
+    static DynamicStride: number = 3 * 4;
+    dynamicBuffer: THREE.StorageBufferNode<"struct">;
 
-    staticVertices: THREE.StorageBufferNode<"struct">;      // StaticVertexStruct
-    dynamicVertices: THREE.StorageBufferNode<"struct">;     // DynamicVertexStruct
-    vertexCount: number;
+    /** Indexing for triangle vertices, always 3 per triangle */
+    indexBuffer: THREE.StorageBufferNode<"uint">;
+    areaBuffer: THREE.StorageBufferNode<"float"> | null = null;
 
-    dynamicVertexBufferAttribute: THREE.StorageBufferAttribute;     // here just for debugging!
+    /** (...boneMatrices, ...bindMatrices(and each inverse directly next)) */
+    skinMatrixBuffer: THREE.StorageBufferNode<"mat4">;
+    private skinMatrixAttribute: THREE.StorageBufferAttribute;
+    private skinMatrixFloats: Float32Array;
 
-    indices: THREE.StorageBufferNode<"int">;
-    triangleCount: number;
-
-    skeleton: THREE.Skeleton;
-    boneCount: number;
-    matrixBuffer: THREE.StorageBufferNode<"mat4">;  // (...boneMatrices, ...bindMatrices(and inverses))
-    private matrixBufferAttribute: THREE.StorageBufferAttribute;
-    private matrixBufferView: Float32Array;
-
-    updateDynamicVertices!: THREE.ComputeNode;
+    updateDynamicBuffer!: THREE.ComputeNode;
+    /** Computed from static mesh so only should be done once */
+    computeAreas!: THREE.ComputeNode;
 
 
     constructor(baseObj: THREE.Object3D, time: THREE.UniformArrayNode<"float">) {
         this.baseObj = baseObj;
         this.meshes = [];
         let skeleton: THREE.Skeleton | null = null;
-        let nVertex = 0;
-        let nIndex = 0;
+        this.vertexCount = 0;
+        this.triangleCount = 0;
         baseObj.traverse((obj) => {
             if (!(obj instanceof THREE.SkinnedMesh))
                 return;
             if (skeleton && (skeleton !== obj.skeleton))
                 throw Error("All SkinnedMesh:s need to share the same skeleton.");
             skeleton = obj.skeleton;
-            nVertex += obj.geometry.attributes.position.count;
-            nIndex += obj.geometry.index.count;
+            this.vertexCount += obj.geometry.attributes.position.count;
+            this.triangleCount += obj.geometry.index.count / 3;
             this.meshes.push(obj);
         });
-        if (nVertex == 0 || nIndex == 0)
+        if (this.vertexCount == 0 || this.triangleCount == 0)
             throw Error("No SkinnedMesh geometry found.");
 
         this.skeleton = skeleton!;
         this.boneCount = this.skeleton.bones.length;
 
-        const staticVertexBufferAttribute = new StorageBufferAttribute(nVertex, SkinnedGeometryGPU.staticVertexStride);
-        const vertexRawBuffer: ArrayBuffer = staticVertexBufferAttribute.array.buffer as ArrayBuffer;
-        const vertexFloatView = new Float32Array(vertexRawBuffer);
-        const vertexIntView = new Int32Array(vertexRawBuffer);
+        const baseAttribute = new StorageBufferAttribute(this.vertexCount, SkinnedGeometryGPU.BaseStride);
+        this.baseBuffer = storage(baseAttribute, SkinnedGeometryGPU.BaseLayout, this.vertexCount);
 
-        const indexBufferAttribute = new StorageBufferAttribute(nIndex, 1);
-        const indexRawBuffer: ArrayBuffer = indexBufferAttribute.array.buffer as ArrayBuffer;
-        const indexIntView = new Int32Array(indexRawBuffer);
+        const baseRawBuffer: ArrayBuffer = baseAttribute.array.buffer as ArrayBuffer;
+        const baseFloats = new Float32Array(baseRawBuffer);
 
-        console.log("this.boneCount", this.boneCount);
-        console.log("this.meshes", this.meshes);
-        console.log("nVertex", nVertex);
-        console.log("nVertex*SkinnedGeometryGPU.vertexStride*4", nVertex * SkinnedGeometryGPU.staticVertexStride * 4);
-        console.log("vertexRawBuffer.byteLength", vertexRawBuffer.byteLength);
-        console.log("nIndex", nIndex);
-        console.log("nIndex*4", nIndex * 4);
-        console.log("indexRawBuffer.byteLength", indexRawBuffer.byteLength);
+        const skinAttribute = new StorageBufferAttribute(this.vertexCount, SkinnedGeometryGPU.SkinStride);
+        this.skinBuffer = storage(skinAttribute, SkinnedGeometryGPU.SkinLayout, this.vertexCount);
+        const skinRawBuffer: ArrayBuffer = skinAttribute.array.buffer as ArrayBuffer;
+        const skinFloats = new Float32Array(skinRawBuffer);
+        const skinInts = new Int32Array(skinRawBuffer);
 
-        let vOffset = 0;
-        let iOffset = 0;
+        const indexAttribute = new StorageBufferAttribute(this.triangleCount, 1);
+        this.indexBuffer = storage(indexAttribute, "uint", this.triangleCount);
+        const indexRawBuffer: ArrayBuffer = indexAttribute.array.buffer as ArrayBuffer;
+        const indexInts = new Int32Array(indexRawBuffer);
+
+        const dynamicBufferAttribute = new StorageBufferAttribute(this.vertexCount, SkinnedGeometryGPU.DynamicStride);
+        this.dynamicBuffer = storage(dynamicBufferAttribute, SkinnedGeometryGPU.DynamicLayout, this.vertexCount);
+
+        // Create 1 matrix for each bone and 2 matrices for each mesh to store its bindMatrix,bindMatrixInverse
+        const skinMatrixCount = this.boneCount + 2 * this.meshes.length;
+        this.skinMatrixAttribute = new StorageBufferAttribute(skinMatrixCount, 16);
+        this.skinMatrixBuffer = storage(this.skinMatrixAttribute, "mat4", skinMatrixCount);
+        this.skinMatrixFloats = this.skinMatrixAttribute.array as Float32Array;
+
+
+        let vIndex = 0;
+        let tIndex = 0;
         for (let i = 0; i < this.meshes.length; i++) {
-            const vIndexStart = vOffset / SkinnedGeometryGPU.staticVertexStride;
+            const indexStart = vIndex;
             const attr = this.meshes[i].geometry.attributes;
             for (let j = 0; j < attr.position.count; j++) {
+                const vGeometryOffset = vIndex * SkinnedGeometryGPU.BaseStride;
+                const vSkinningOffset = vIndex * SkinnedGeometryGPU.SkinStride;
                 // positions
                 for (let k = 0; k < 3; k++)
-                    vertexFloatView[vOffset + k] = attr.position.array[3 * j + k];
+                    baseFloats[vGeometryOffset + k] = attr.position.getComponent(j, k);
                 // normals
                 for (let k = 0; k < 3; k++)
-                    vertexFloatView[vOffset + 4 + k] = attr.normal.array[3 * j + k];
-                // skin indices
-                for (let k = 0; k < 4; k++)
-                    vertexIntView[vOffset + 8 + k] = attr.skinIndex.array[4 * j + k];
-                // skin weights
-                for (let k = 0; k < 4; k++)
-                    vertexFloatView[vOffset + 12 + k] = attr.skinWeight.array[4 * j + k];
+                    baseFloats[vGeometryOffset + 4 + k] = attr.normal.getComponent(j, k);
                 // uv
                 for (let k = 0; k < 2; k++)
-                    vertexFloatView[vOffset + 16 + k] = attr.uv.array[2 * j + k];
+                    baseFloats[vGeometryOffset + 8 + k] = attr.uv.getComponent(j, k);
+                // skin indices
+                for (let k = 0; k < 4; k++)
+                    skinInts[vSkinningOffset + k] = attr.skinIndex.getComponent(j, k);
+                // skin weights
+                for (let k = 0; k < 4; k++)
+                    skinFloats[vSkinningOffset + 4 + k] = attr.skinWeight.getComponent(j, k);
                 // bindTransformIndex
-                vertexIntView[vOffset + 18] = this.boneCount + 2 * i;
+                skinInts[vSkinningOffset + 8] = this.boneCount + 2 * i;
 
-                vOffset += SkinnedGeometryGPU.staticVertexStride;
+                vIndex++;
             }
 
             // indices
             for (let j = 0; j < this.meshes[i].geometry.index!.count; j++) {
-                indexIntView[iOffset] = vIndexStart + this.meshes[i].geometry.index!.array[j];
-                iOffset++;
+                indexInts[tIndex] = indexStart + this.meshes[i].geometry.index!.array[j];
+                tIndex++;
             }
         }
-
-        this.staticVertices = storage(staticVertexBufferAttribute, SkinnedGeometryGPU.StaticVertexStruct, nVertex);
-        this.indices = storage(indexBufferAttribute, "int", nIndex);
-        this.vertexCount = nVertex;
-        this.triangleCount = nIndex / 3;
-
-        this.dynamicVertexBufferAttribute = new StorageBufferAttribute(nVertex, SkinnedGeometryGPU.dynamicVertexStride);
-        this.dynamicVertices = storage(this.dynamicVertexBufferAttribute, SkinnedGeometryGPU.DynamicVertexStruct, nVertex);
-
-        // Create 1 matrix for each bone and 2 matrices for each mesh to store its bindMatrix,bindMatrixInverse
-        const nMatrix = this.boneCount + 2 * this.meshes.length;
-        this.matrixBufferAttribute = new StorageBufferAttribute(nMatrix, 16);
-        this.matrixBuffer = storage(this.matrixBufferAttribute, "mat4", nMatrix);
-        this.matrixBufferView = this.matrixBufferAttribute.array as Float32Array;
 
         this.createComputeNodes(time);
     }
@@ -174,43 +180,32 @@ export class SkinnedGeometryGPU {
         this.baseObj.updateMatrixWorld(true);       // updates bones' matrixWorld
         this.skeleton.update();
 
-        this.matrixBufferView.set(this.skeleton.boneMatrices!);
+        this.skinMatrixFloats.set(this.skeleton.boneMatrices!);
         for (let i = 0; i < this.meshes.length; i++) {
             const offset = (this.boneCount + 2 * i) * 16;
-            this.matrixBufferView.set([...this.meshes[i].bindMatrix.elements], offset);
-            this.matrixBufferView.set([...this.meshes[i].bindMatrixInverse.elements], offset + 16)
+            this.skinMatrixFloats.set([...this.meshes[i].bindMatrix.elements], offset);
+            this.skinMatrixFloats.set([...this.meshes[i].bindMatrixInverse.elements], offset + 16)
         }
-        this.matrixBufferAttribute.needsUpdate = true;
+        this.skinMatrixAttribute.needsUpdate = true;
     }
 
 
     createComputeNodes(time: THREE.UniformArrayNode<"float">) {
-        this.updateDynamicVertices = Fn(() => {
-            const vertex0 = this.staticVertices.element(instanceIndex);
-            const pos0 = vertex0.get("position") as THREE.Node<"vec3">;
-            const normal0 = vertex0.get("normal") as THREE.Node<"vec3">;
-            const iSkin = (vertex0.get("skinIndices") as THREE.Node<"ivec4">).toVar();
-            const wSkin = (vertex0.get("skinWeights") as THREE.Node<"vec4">).toVar();
-            const bindTransformIndex = vertex0.get("bindTransformIndex") as THREE.Node<"uint">;
-            const bindMatrix = this.matrixBuffer.element(bindTransformIndex);
-            const bindMatrixInverse = this.matrixBuffer.element(bindTransformIndex.add(1));
+        this.updateDynamicBuffer = Fn(() => {
+            const baseVertex = this.baseBuffer.element(instanceIndex);
+            const skinVertex = this.skinBuffer.element(instanceIndex);
+            const pos0 = baseVertex.get("position") as THREE.Node<"vec3">;
+            const normal0 = baseVertex.get("normal") as THREE.Node<"vec3">;
+            const iSkin = (skinVertex.get("skinIndices") as THREE.Node<"ivec4">).toVar();
+            const wSkin = (skinVertex.get("skinWeights") as THREE.Node<"vec4">).toVar();
+            const bindTransformIndex = skinVertex.get("bindTransformIndex") as THREE.Node<"uint">;
+            const bindMatrix = this.skinMatrixBuffer.element(bindTransformIndex);
+            const bindMatrixInverse = this.skinMatrixBuffer.element(bindTransformIndex.add(1));
 
-            // const pos = bindMatrix.mul(pos0).toVar();
-            // const boneMatrix1 = this.matrixBuffer.element(iSkin.x);
-            // const term1 = boneMatrix1.mul(pos).mul(wSkin.x);
-            // const boneMatrix2 = this.matrixBuffer.element(iSkin.y);
-            // const term2 = boneMatrix2.mul(pos).mul(wSkin.y);
-            // const boneMatrix3 = this.matrixBuffer.element(iSkin.z);
-            // const term3 = boneMatrix3.mul(pos).mul(wSkin.z);
-            // const boneMatrix4 = this.matrixBuffer.element(iSkin.w);
-            // const term4 = boneMatrix4.mul(pos).mul(wSkin.w);
-            // const result = term1.add(term2).add(term3).add(term4);
-            // const resultModel = bindMatrixInverse.mul(result);
-
-            const boneMatrix1 = this.matrixBuffer.element(iSkin.x).mul(wSkin.x);
-            const boneMatrix2 = this.matrixBuffer.element(iSkin.y).mul(wSkin.y);
-            const boneMatrix3 = this.matrixBuffer.element(iSkin.z).mul(wSkin.z);
-            const boneMatrix4 = this.matrixBuffer.element(iSkin.w).mul(wSkin.w);
+            const boneMatrix1 = this.skinMatrixBuffer.element(iSkin.x).mul(wSkin.x);
+            const boneMatrix2 = this.skinMatrixBuffer.element(iSkin.y).mul(wSkin.y);
+            const boneMatrix3 = this.skinMatrixBuffer.element(iSkin.z).mul(wSkin.z);
+            const boneMatrix4 = this.skinMatrixBuffer.element(iSkin.w).mul(wSkin.w);
             const bm = boneMatrix1.add(boneMatrix2).add(boneMatrix3).add(boneMatrix4);
             const matrix4 = bindMatrixInverse.mul(bm).mul(bindMatrix).toVar();
 
@@ -222,7 +217,7 @@ export class SkinnedGeometryGPU {
             // NOTE: Often people just use normalize(M normal0) since typically M is close to rotation:
             // const newNormal = matrix3.mul(normal0).normalize();
 
-            const vertex = this.dynamicVertices.element(instanceIndex);
+            const vertex = this.dynamicBuffer.element(instanceIndex);
             const pos = vertex.get("position") as THREE.Node<"vec3">;
 
             const dt = time.element(1);
@@ -232,13 +227,20 @@ export class SkinnedGeometryGPU {
             pos.assign(newPos);
             vertex.get("normal").assign(newNormal);
         })().compute(this.vertexCount);
+
+
+        this.computeAreas = Fn(() => {
+            // ...
+        })().compute(this.triangleCount);
     }
 
 
     dispose() {
-        this.meshes = [];
-        this.staticVertices.dispose();
-        this.indices.dispose();
-        this.matrixBuffer.dispose();
+        this.baseBuffer.dispose();
+        this.skinBuffer.dispose();
+        this.dynamicBuffer.dispose();
+        this.skinMatrixBuffer.dispose();
+        this.indexBuffer.dispose();
+        this.areaBuffer?.dispose();
     }
 }
