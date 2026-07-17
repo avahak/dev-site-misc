@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { MovingSphere, TrustRegionBroadPhase } from './broadPhase';
+import { runBenchmark } from './data_structures/benchmark';
 
 /**
  * @returns A random Gaussian-distributed pair of reals.
@@ -100,15 +101,20 @@ export class RenderManager {
     }
 
     createGUI() {
+        const benchmark = () => {
+            console.log("Benchmarking..");
+            runBenchmark();
+        };
         this.gui = new GUI();
         const myObject = {
+            benchmark,
             timeScale: 0,
         };
         this.gui.add(myObject, 'timeScale', -6, 2, 1).name("Log time scale")
             .onChange((value: number) => {
                 this.timer.setTimescale(Math.exp(value));
             });
-        // this.gui.close();
+        this.gui.add(myObject, 'benchmark').name("Benchmark");
     }
 
     setupCamera() {
@@ -138,19 +144,24 @@ export class RenderManager {
             this.spheres.push(mSphere);
             this.scene.add(sphere);
         }
-        this.detector = new TrustRegionBroadPhase(this.spheres, 10);
+        this.detector = new TrustRegionBroadPhase(this.spheres, 5);
     }
 
     moveSpheres() {
         for (const sphere of this.spheres) {
             const dp = gaussian3().multiplyScalar(0.1);
-            if (Math.random() < 0.1)
+            if (Math.random() < 0.1) {
                 sphere.position.add(dp);
+                sphere.position.x = (sphere.position.x + 1) % 2 - 1;
+                sphere.position.y = (sphere.position.y + 1) % 2 - 1;
+                sphere.position.z = (sphere.position.z + 1) % 2 - 1;
+            }
 
             sphere.obj!.position.copy(sphere.position);
         }
-        const collisions = this.detector.update();
-        this.detector.validate(collisions);
+
+        // this.detector.update();
+        // this.detector.validate();
     }
 
     animate() {

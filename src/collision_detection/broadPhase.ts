@@ -1,22 +1,44 @@
-// Testing an algorithm
+/* Testing an algorithm
+NOTE could we could use half-planes (vec4) for certificates somehow? No sorting then..
+     trustRadius would still stay a radius.
+TODO How to handle duplicates?
+
+
+Denote delta_{ij}=d(B(pBuild_i),r_i),B(pBuild_j,r_j)-r_i-r_j.
+
+Invariants (ideally):
+    1) After every update:
+        For each i indices j are partitioned into active_i, certified_i, dormant_i
+    2) After every update: For indices i and j:
+        a) If delta_{ij} < 0 then j is in active_i
+        b) If delta_{ij} < deltaTrust_i then j is in active_i or certified_i
+    NOTE: This involves pBuild_i, pBuild_j only, no actual positions!
+*/
+
+
 
 import * as THREE from "three";
+import { PriorityNode, SortedArrayQueue } from "./data_structures/sortedArrayQueue";
 
 
 export class MovingSphere {
     position: THREE.Vector3;
     radius: number;
-    rebuildPosition: THREE.Vector3;
+    buildPosition: THREE.Vector3;
     trustRadius: number;
+    /** indices for spheres that are actively tracked */
     active: number[];
+    /** (radius,index) for spheres that were closest at build time */
+    certificates: SortedArrayQueue<PriorityNode>;
     obj?: THREE.Object3D;
 
     constructor(position: THREE.Vector3, radius: number) {
         this.position = position;
         this.radius = radius;
-        this.rebuildPosition = new THREE.Vector3();
+        this.buildPosition = new THREE.Vector3();
         this.trustRadius = 0;
         this.active = [];
+        this.certificates = new SortedArrayQueue();
     }
 }
 
@@ -32,46 +54,73 @@ export class TrustRegionBroadPhase {
     constructor(objects: MovingSphere[], M: number = 10) {
         this.objects = objects;
         this.M = M;
-        // Initial rebuild of every object.
-        for (let i = 0; i < objects.length; ++i) {
-            this.rebuild(i);
-        }
+        // Initial build of every object.
+        for (let i = 0; i < objects.length; i++)
+            this.build(i);
     }
 
-    rebuild(i: number): void {
+    build(i: number): void {
         const a = this.objects[i];
-        a.rebuildPosition.copy(a.position);
+        a.buildPosition.copy(a.position);
         a.active.length = 0;
-        const positive: { index: number; delta: number }[] = [];
-        for (let j = 0; j < this.objects.length; ++j) {
+
+        const positive: PriorityNode[] = [];
+        for (let j = 0; j < this.objects.length; j++) {
             if (i === j)
                 continue;
             const b = this.objects[j];
             const centerDistance = a.position.distanceTo(b.position);
             const delta = centerDistance - a.radius - b.radius;
-            if (delta <= 0) {
+            if (delta <= 0)
                 a.active.push(j);
-            } else {
+            else
                 positive.push({ index: j, delta });
-            }
         }
-        positive.sort((x, y) => x.delta - y.delta);
+        positive.sort((x, y) => y.delta - x.delta);       // sort in decreasing radius
+
+        // Assign new certificates:
         const count = Math.min(this.M, positive.length);
-        for (let k = 0; k < count; ++k) {
-            a.active.push(positive[k].index);
-        }
+        a.certificates.setFrom(positive, positive.length - count, count);
         a.trustRadius = positive[count - 1].delta / 2;
+
+        // Adjust other objects' certificates:
+        // ...
     }
 
     /**
      * Perform one simulation step.
-     * Returns all currently intersecting pairs found through the active lists.
      */
-    update(): CollisionPair[] {
+    update() {
+        for (let i = 0; i < this.objects.length; i++) {
+            const a = this.objects[i];
+            const buildDistance = a.position.distanceTo(a.buildPosition);
+
+            // Extract expired certificates:
+            do {
+                const cert = a.certificates.peekMin();
+                if (!cert) {
+                    // console.log("DEBUG: certificates was empty.");
+                    this.build(i);
+                    return;
+                }
+                if (buildDistance <= cert.delta)
+                    break;      // Certificate still holds
+
+                // Certificate expires, move to active tracking
+                a.certificates.extractMin();
+                a.active.push(cert.index);
+            } while (true);
+        }
+    }
+
+    /**
+     * Returns all currently intersecting pairs found through the active lists.
+     * TODO What about duplicates?
+     */
+    getCollisions() {
         const collisions: CollisionPair[] = [];
         for (let i = 0; i < this.objects.length; i++) {
             const a = this.objects[i];
-            // Check active list.
             for (const j of a.active) {
                 if (j === i)
                     continue;
@@ -80,18 +129,14 @@ export class TrustRegionBroadPhase {
                     collisions.push({ i: Math.min(i, j), j: Math.max(i, j) });
                 }
             }
-            // Rebuild if outside trust region.
-            if (a.position.distanceTo(a.rebuildPosition) > a.trustRadius) {
-                this.rebuild(i);
-            }
         }
-        return collisions;          // What about duplicates?
+        return collisions;
     }
 
     /**
      * Brute-force method.
      */
-    bruteForce(): CollisionPair[] {
+    getCollisionsBruteForce(): CollisionPair[] {
         const collisions: CollisionPair[] = [];
         for (let i = 0; i < this.objects.length; i++) {
             const a = this.objects[i];
@@ -106,8 +151,9 @@ export class TrustRegionBroadPhase {
         return collisions;
     }
 
-    validate(collisions: CollisionPair[]): boolean {
-        const groundTruth = this.bruteForce();
+    validate(): boolean {
+        const collisions = this.getCollisions();
+        const groundTruth = this.getCollisionsBruteForce();
         const reported = new Set<string>();
         for (const c of collisions) {
             reported.add(`${c.i},${c.j}`);
