@@ -23,6 +23,10 @@ export class SmallPriorityList2 {
         return this._size;
     }
 
+    clear() {
+        this._size = 0;
+    }
+
     hasIndex(index: number): boolean {
         for (let i = 0; i < this._size; i++) {
             if (this.indices[i] === index)
@@ -37,6 +41,12 @@ export class SmallPriorityList2 {
                 return { delta: this.deltas[i], index: this.indices[i] };
         }
         return null;
+    }
+
+    peekMax(): PriorityNode | null {
+        if (this._size === 0)
+            return null;
+        return { delta: this.deltas[0], index: this.indices[0] };
     }
 
     peekMin(): PriorityNode | null {

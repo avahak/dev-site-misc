@@ -25,6 +25,10 @@ export class SmallPriorityList {
         return this._size;
     }
 
+    clear() {
+        this._size = 0;
+    }
+
     /**
      * O(M).
      */
@@ -45,6 +49,15 @@ export class SmallPriorityList {
                 return { delta: this.deltas[i], index: this.indices[i] };
         }
         return null;
+    }
+
+    /**
+     * Returns the node with smallest delta. O(1).
+     */
+    peekMax(): PriorityNode | null {
+        if (this._size === 0)
+            return null;
+        return { delta: this.deltas[0], index: this.indices[0] };
     }
 
     /**

@@ -131,9 +131,12 @@ export class RenderManager {
         const ambientLight = new THREE.AmbientLight(0xffffff, 1);
         this.scene.add(ambientLight);
 
-        for (let k = 0; k < 100; k++) {
+        const n = 200;
+        const M = 5;
+
+        for (let k = 0; k < n; k++) {
             const r = 0.25 * (Math.random() + 1);
-            const mSphere = new MovingSphere(gaussian3().multiplyScalar(2), r);
+            const mSphere = new MovingSphere(gaussian3().multiplyScalar(2), r, M);
 
             const geometry = new THREE.SphereGeometry(mSphere.radius);
             const color = new THREE.Color().setHSL(Math.random(), 1, 0.5);
@@ -144,7 +147,7 @@ export class RenderManager {
             this.spheres.push(mSphere);
             this.scene.add(sphere);
         }
-        this.detector = new TrustRegionBroadPhase(this.spheres, 5);
+        this.detector = new TrustRegionBroadPhase(this.spheres);
     }
 
     moveSpheres() {
@@ -160,8 +163,9 @@ export class RenderManager {
             sphere.obj!.position.copy(sphere.position);
         }
 
-        // this.detector.update();
-        // this.detector.validate();
+        this.detector.update();
+        this.detector.validateInvariants();
+        this.detector.validateCollisions();
     }
 
     animate() {
@@ -172,7 +176,8 @@ export class RenderManager {
     }
 
     render() {
-        this.moveSpheres();
+        for (let k = 0; k < 100; k++)
+            this.moveSpheres();
         this.renderer.render(this.scene, this.camera);
     }
 }

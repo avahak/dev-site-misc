@@ -4,9 +4,13 @@ import { SmallPriorityList2 } from "./smallPriorityList2";
 type Distribution<T> = [value: T, weight: number][];
 
 const enum OperationKind {
+    HasIndex,
+    FindByIndex,
     Insert,
-    Extract,
-    Delete
+    DeleteByIndex,
+    PeekMax,
+    PeekMin,
+    ExtractMin,
 }
 
 interface BenchmarkParams {
@@ -70,21 +74,48 @@ function benchmark(
         const queue = queues[operation.queue];
 
         switch (operation.kind) {
-            case OperationKind.Insert:
-                queue.insert(operation.delta, operation.index);
+            case OperationKind.HasIndex:
+                const value = queue.hasIndex(operation.index);
+                if (value)
+                    checksum += 1;
                 break;
 
-            case OperationKind.Extract: {
-                const node = queue.extractMin();
+            case OperationKind.FindByIndex: {
+                const node = queue.findByIndex(operation.index);
                 if (node)
                     checksum += node.index;
                 break;
             }
 
-            case OperationKind.Delete:
+            case OperationKind.Insert:
+                queue.insert(operation.delta, operation.index);
+                break;
+
+            case OperationKind.DeleteByIndex:
                 if (queue.deleteByIndex(operation.index))
                     checksum++;
                 break;
+
+            case OperationKind.PeekMax: {
+                const node = queue.peekMax();
+                if (node)
+                    checksum += node.index;
+                break;
+            }
+
+            case OperationKind.PeekMin: {
+                const node = queue.peekMin();
+                if (node)
+                    checksum += node.index;
+                break;
+            }
+
+            case OperationKind.ExtractMin: {
+                const node = queue.extractMin();
+                if (node)
+                    checksum += node.index;
+                break;
+            }
         }
     }
 
@@ -118,13 +149,17 @@ function createQueues(
 
 export function runBenchmark() {
     const params: BenchmarkParams = {
-        queueCount: 200,
-        queueCapacity: 100,
+        queueCount: 1000,
+        queueCapacity: 10,
         operationCount: 10_000_000,
         weights: [
-            [OperationKind.Insert, 80],
-            [OperationKind.Extract, 10],
-            [OperationKind.Delete, 10]
+            [OperationKind.HasIndex, 1000],
+            [OperationKind.FindByIndex, 100],
+            [OperationKind.Insert, 200],
+            [OperationKind.DeleteByIndex, 10],
+            [OperationKind.PeekMax, 50],
+            [OperationKind.PeekMin, 500],
+            [OperationKind.ExtractMin, 50],
         ]
     };
 
@@ -140,7 +175,7 @@ export function runBenchmark() {
         operations
     );
 
-    console.log(`SmallPriorityList: ${ms1.toFixed(1)} ms`);
+    console.log(`TypedArray: ${ms1.toFixed(1)} ms`);
 
     benchmark(
         createQueues(params, () => new SmallPriorityList2(params.queueCapacity)),
@@ -152,5 +187,5 @@ export function runBenchmark() {
         operations
     );
 
-    console.log(`SmallPriorityList2: ${ms2.toFixed(1)} ms`);
+    console.log(`JS array: ${ms2.toFixed(1)} ms`);
 }
