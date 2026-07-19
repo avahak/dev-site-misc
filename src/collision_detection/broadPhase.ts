@@ -1,22 +1,52 @@
-/* Testing an algorithm
-NOTE could we could use half-planes (vec4) for certificates somehow? No sorting then..
-TODO How to handle duplicates?
+/*
+Broad phase collision algorithm.
 
-Denote half of the distance between balls i, j with delta_{ij}:
-    delta_{ij} := (d(pBuild_i, pBuild_j) - r_i - r_j) / 2.
+Notation.
+    p_i      = current position
+    pHat_i   = build position
 
-Possible invariants? (TODO, NOT THOUGHT THROUGH!):
-    1) After every update:
-        For each i indices j are partitioned into active_i, certified_i, dormant_i
-        Since we do not track dormand_i, this just means active_i\cap certified_i=\emptyset
-    2) After every update: For indices i and j:
-        a) If delta_{ij} < 0 then j is in active_i
-        b) If delta_{ij} < deltaTrust_i then j is in active_i or certified_i
-    NOTE: This involves pBuild_i, pBuild_j only, no actual positions!
+Each object i partitions the other objects into
+    active_i
+    certificates_i
+    dormant_i
+where the dormant set is implicit.
 
-NOTE: SmallPriorityList is a list with fixed maximum size M and stores elements with
-smallest deltas in it. If a new element is inserted and the list is full, one element is dropped.
+For every pair (i,j) that is not active from either side define
+    beta_ij =
+        certificate(i,j)      if j is certified by i
+        H_i                   if j is dormant for i
+where H_i is the horizon certificate.
+
+The invariants we have are:
+- active and certificates are disjoint.
+- Certificates of i are in order and <= H_i.
+- The budget invariant a)<=>a') explained below.
+
+Invariant:
+a) Geometric form:
+    If j is not active for i and i is not active for j, then
+        B(q_i,r_i) and B(q_j,r_j)
+    are disjoint for every
+        q_i in B(pHat_i,beta_ij)
+        q_j in B(pHat_j,beta_ji)
+
+a') Equivalent algebraic form (budget form):
+    beta_ij + beta_ji <= |pHat_i - pHat_j| - r_i - r_j
+
+The algorithm is designed so that the invariants holds after initialization 
+and every update call.
+
+The only invariants we really have are:
+
+- active and certificates are disjoint.
+- Every explicit certificate satisfies certificate <= horizon.
+ -The budget invariant a)<=>a').
 */
+
+export interface CollisionPair {
+    i: number;
+    j: number;
+}
 
 
 import * as THREE from "three";
@@ -26,11 +56,18 @@ import { SmallPriorityList } from "./data_structures/smallPriorityList";
 export class MovingSphere {
     position: THREE.Vector3;
     radius: number;
+    /** Frozen reference position from the last rebuild. */
     buildPosition: THREE.Vector3;
-    /** indices for spheres that are actively tracked, TODO inefficient */
+    /** Pairs tracked explicitly. */
     active: Set<number>;
-    /** (delta,index) for spheres that were closest at build time */
+    /** Explicit pair certificates. Each entry stores (beta,index). */
     certificates: SmallPriorityList;
+    /**
+     * Horizon certificate.
+     * Every dormant pair is assigned this beta value.
+     * It may decrease but never increase until object is rebuilt.
+     */
+    horizon: number;
     obj?: THREE.Object3D;
 
     constructor(position: THREE.Vector3, radius: number, M: number) {
@@ -39,28 +76,25 @@ export class MovingSphere {
         this.buildPosition = new THREE.Vector3();
         this.active = new Set();
         this.certificates = new SmallPriorityList(M);
+        this.horizon = 0;
     }
 }
 
-export interface CollisionPair {
-    i: number;
-    j: number;
-}
-
-export class TrustRegionBroadPhase {
+export class CertificateBroadPhase {
     objects: MovingSphere[];
     rebuildSet: Set<number>;
 
     constructor(objects: MovingSphere[]) {
         this.objects = objects;
         this.rebuildSet = new Set();
-        for (let i = 0; i < objects.length; i++)
-            this.objects[i].buildPosition.copy(this.objects[i].position);
+
+        for (const object of objects)
+            object.buildPosition.copy(object.position);
         for (let i = 0; i < objects.length; i++)
             this.build(i, false);
     }
 
-    build(i: number, adjustOthers: boolean): void {
+    build(i: number, updateOtherObjects: boolean): void {
         const a = this.objects[i];
         this.rebuildSet.delete(i);
         a.buildPosition.copy(a.position);
@@ -70,92 +104,143 @@ export class TrustRegionBroadPhase {
         for (let j = 0; j < this.objects.length; j++) {
             if (i === j)
                 continue;
+
             const b = this.objects[j];
-            const centerDistance = a.position.distanceTo(b.position);
-            const delta = (centerDistance - a.radius - b.radius) / 2;
-            if (delta < 0)
+            const distance = a.position.distanceTo(b.position);
+            const beta = (distance - a.radius - b.radius) / 2;
+
+            if (beta < 0)
                 a.active.add(j);
             else
-                a.certificates.insert(delta, j);
+                a.certificates.insert(beta, j);
         }
+        a.horizon = a.certificates.size === 0 ?
+            Number.POSITIVE_INFINITY : a.certificates.peekMax()!.value;
 
-        if (!adjustOthers)
+
+        if (!updateOtherObjects)
             return;
 
-        // Adjust other objects' certificates w.r.t. i:
         for (let j = 0; j < this.objects.length; j++) {
             if (i === j)
                 continue;
+
             const b = this.objects[j];
-            // This comes out of the invariant property:
-            const centerBuildDistance = a.position.distanceTo(b.buildPosition);
-            const centerDistance = a.position.distanceTo(b.position);
-            const delta = centerBuildDistance - (centerDistance + a.radius + b.radius) / 2;
+            const buildDistance = a.position.distanceTo(b.buildPosition);
+            const currentDistance = a.position.distanceTo(b.position);
 
-            let trustDelta = 0;
-            if (b.certificates.size !== 0)
-                trustDelta = b.certificates.peekMax()!.delta;
+            // Largest beta preserving the budget invariant
+            const beta = buildDistance - (currentDistance + a.radius + b.radius) / 2;
 
-            // Clear previous record of i
             b.active.delete(i);
             b.certificates.deleteByIndex(i);
 
-            if (delta < 0)
+            if (beta < 0) {
                 b.active.add(i);
-            if (delta >= 0 && delta < trustDelta)   // initial trust region cannot be extended
-                b.certificates.insert(delta, i);
+                continue;
+            }
 
-            if (b.certificates.size === 0)
+            if (beta >= b.horizon)
+                continue;
+
+            const largestCertificate = b.certificates.peekMax()?.value ?? -Infinity;
+
+            if (b.certificates.size === b.certificates.capacity && beta > largestCertificate) {
+                b.horizon = beta;
+            } else {
+                const dropped = b.certificates.insert(beta, i);
+                if (dropped)
+                    b.horizon = dropped.value;
+            }
+
+            const displacement = b.position.distanceTo(b.buildPosition);
+            if (displacement > b.horizon)
                 this.rebuildSet.add(j);
         }
     }
 
-    /**
-     * Perform one simulation step.
-     */
-    update() {
+    update(): void {
         for (let i = 0; i < this.objects.length; i++) {
             const a = this.objects[i];
-            const buildDistance = a.position.distanceTo(a.buildPosition);
+            const displacement = a.position.distanceTo(a.buildPosition);
 
-            // Extract expired certificates:
-            do {
-                const cert = a.certificates.peekMin();
-                if (!cert) {
-                    // need to rebuild i
-                    this.rebuildSet.add(i);
+            while (true) {
+                const certificate = a.certificates.peekMin();
+                if (!certificate)
                     break;
-                }
-                if (buildDistance <= cert.delta)
-                    break;      // Certificate still holds
+                if (displacement <= certificate.value)
+                    break;
 
-                // Certificate expires, move it to active tracking
                 a.certificates.extractMin();
-                a.active.add(cert.index);
-            } while (true);
+                a.active.add(certificate.index);
+            }
+
+            if (displacement > a.horizon)
+                this.rebuildSet.add(i);
         }
 
-        // Rebuild if there are no certificates left
         while (this.rebuildSet.size > 0) {
-            const [i] = this.rebuildSet;        // JS... 
-            const a = this.objects[i];
-            if (a.certificates.size === 0)
-                this.build(i, true);
-            else
-                throw Error("DEBUG: expected a.certificates.size===0");
+            const [i] = this.rebuildSet;
+            this.build(i, true);
         }
     }
 
-    validateInvariants() {
-        // Should check invariants here.
+
+    validateInvariants(): boolean {
+        const eps = 1e-8;
+        for (let i = 0; i < this.objects.length; i++) {
+            const a = this.objects[i];
+
+            // active and certificates must be disjoint
+            for (const cert of a.certificates) {
+                if (a.active.has(cert.index)) {
+                    console.error("Invariant failed: active/certificate overlap", { i, j: cert.index });
+                    return false;
+                }
+
+                if (cert.value > a.horizon + eps) {
+                    console.error("Invariant failed: certificate exceeds horizon", {
+                        i,
+                        j: cert.index,
+                        certificate: cert.value,
+                        horizon: a.horizon
+                    });
+                    return false;
+                }
+            }
+
+            for (let j = 0; j < this.objects.length; j++) {
+                if (i === j)
+                    continue;
+                const b = this.objects[j];
+                if (a.active.has(j) || b.active.has(i))
+                    continue;
+
+                const buildClearance = a.buildPosition.distanceTo(b.buildPosition) - a.radius - b.radius;
+                const cert_ij = a.certificates.findByIndex(j);
+                const cert_ji = b.certificates.findByIndex(i);
+                const beta_ij = cert_ij ? cert_ij.value : a.horizon;
+                const beta_ji = cert_ji ? cert_ji.value : b.horizon;
+
+                if (beta_ij + beta_ji > buildClearance + eps) {
+                    console.error("Invariant failed: budget", {
+                        i,
+                        j,
+                        beta_ij,
+                        beta_ji,
+                        buildClearance
+                    });
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
-    /**
-     * Returns all currently intersecting pairs found through the active lists.
-     * TODO What about duplicates?
-     */
     getCollisions() {
         const collisions: CollisionPair[] = [];
+        const reported = new Set<string>();
+
         for (let i = 0; i < this.objects.length; i++) {
             const a = this.objects[i];
             for (const j of a.active) {
@@ -163,10 +248,17 @@ export class TrustRegionBroadPhase {
                     continue;
                 const b = this.objects[j];
                 if (a.position.distanceTo(b.position) <= a.radius + b.radius) {
-                    collisions.push({ i: Math.min(i, j), j: Math.max(i, j) });
+                    const i0 = Math.min(i, j);
+                    const j0 = Math.max(i, j);
+                    const key = `${i0},${j0}`;
+                    if (!reported.has(key)) {
+                        reported.add(key);
+                        collisions.push({ i: i0, j: j0 });
+                    }
                 }
             }
         }
+
         return collisions;
     }
 
@@ -191,7 +283,7 @@ export class TrustRegionBroadPhase {
     validateCollisions(): boolean {
         const collisions = this.getCollisions();
         const groundTruth = this.getCollisionsBruteForce();
-        // if (Math.random() < 0.0001)
+        // if (Math.random() < 0.001)
         //     console.log("validate: ", collisions.length, groundTruth.length);
         const reported = new Set<string>();
         for (const c of collisions) {

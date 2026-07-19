@@ -4,23 +4,9 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { MovingSphere, TrustRegionBroadPhase } from './broadPhase';
+import { MovingSphere, CertificateBroadPhase } from './broadPhase';
 import { runBenchmark } from './data_structures/benchmark';
-
-/**
- * @returns A random Gaussian-distributed pair of reals.
- */
-function complexGaussian(): [number, number] {
-    let u = Math.max(Number.MIN_VALUE, Math.random());
-    const r = Math.sqrt(-2.0 * Math.log(u));
-    const phi = 2.0 * Math.PI * Math.random();
-    return [r * Math.cos(phi), r * Math.sin(phi)];
-}
-function gaussian3(): THREE.Vector3 {
-    const z1 = complexGaussian();
-    const z2 = complexGaussian();
-    return new THREE.Vector3(z1[0], z1[1], z2[0]);
-}
+import { SeededRandom } from './seededRandom';
 
 
 export class RenderManager {
@@ -37,12 +23,17 @@ export class RenderManager {
     camera!: THREE.Camera;
 
     spheres: MovingSphere[] = [];
-    detector!: TrustRegionBroadPhase;
+    detector!: CertificateBroadPhase;
+
+    seededRandom: SeededRandom;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
         this.isInitialized = false;
         THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
+
+        this.seededRandom = new SeededRandom(1002);
+        console.log(this.seededRandom.next());
     }
 
     async init(abortSignal: AbortSignal) {
@@ -131,15 +122,15 @@ export class RenderManager {
         const ambientLight = new THREE.AmbientLight(0xffffff, 1);
         this.scene.add(ambientLight);
 
-        const n = 200;
-        const M = 5;
+        const n = 100;
+        const M = 3;
 
         for (let k = 0; k < n; k++) {
-            const r = 0.25 * (Math.random() + 1);
-            const mSphere = new MovingSphere(gaussian3().multiplyScalar(2), r, M);
+            const r = 0.25 * (this.seededRandom.next() + 1);
+            const mSphere = new MovingSphere(this.gaussian3().multiplyScalar(2), r, M);
 
             const geometry = new THREE.SphereGeometry(mSphere.radius);
-            const color = new THREE.Color().setHSL(Math.random(), 1, 0.5);
+            const color = new THREE.Color().setHSL(this.seededRandom.next(), 1, 0.5);
             const material = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.7 });
             const sphere = new THREE.Mesh(geometry, material);
             mSphere.obj = sphere;
@@ -147,13 +138,28 @@ export class RenderManager {
             this.spheres.push(mSphere);
             this.scene.add(sphere);
         }
-        this.detector = new TrustRegionBroadPhase(this.spheres);
+        this.detector = new CertificateBroadPhase(this.spheres);
+    }
+
+    /**
+     * @returns A random Gaussian-distributed pair of reals.
+     */
+    complexGaussian(): [number, number] {
+        let u = Math.max(Number.MIN_VALUE, this.seededRandom.next());
+        const r = Math.sqrt(-2.0 * Math.log(u));
+        const phi = 2.0 * Math.PI * this.seededRandom.next();
+        return [r * Math.cos(phi), r * Math.sin(phi)];
+    }
+    gaussian3(): THREE.Vector3 {
+        const z1 = this.complexGaussian();
+        const z2 = this.complexGaussian();
+        return new THREE.Vector3(z1[0], z1[1], z2[0]);
     }
 
     moveSpheres() {
         for (const sphere of this.spheres) {
-            const dp = gaussian3().multiplyScalar(0.1);
-            if (Math.random() < 0.1) {
+            const dp = this.gaussian3().multiplyScalar(0.1);
+            if (this.seededRandom.next() < 0.1) {
                 sphere.position.add(dp);
                 sphere.position.x = (sphere.position.x + 1) % 2 - 1;
                 sphere.position.y = (sphere.position.y + 1) % 2 - 1;
@@ -163,9 +169,24 @@ export class RenderManager {
             sphere.obj!.position.copy(sphere.position);
         }
 
+        const debugStateString = () => JSON.stringify(this.spheres.map((v) => ({ ...v, obj: undefined })));
+        const oldOk = this.detector.validateInvariants();
+        const oldBadState = debugStateString();
+
         this.detector.update();
-        this.detector.validateInvariants();
         this.detector.validateCollisions();
+        const newOk = this.detector.validateInvariants();
+        const newBadState = debugStateString();
+
+        if (oldOk && !newOk) {
+            console.log("oldOk", oldOk);
+            console.log("oldGoodState", oldBadState);
+            console.log("newOk", newOk);
+            console.log("newBadState", newBadState);
+            throw Error();
+        } else {
+            console.log(oldOk, newOk);
+        }
     }
 
     animate() {
@@ -176,7 +197,7 @@ export class RenderManager {
     }
 
     render() {
-        for (let k = 0; k < 100; k++)
+        for (let k = 0; k < 10; k++)
             this.moveSpheres();
         this.renderer.render(this.scene, this.camera);
     }
