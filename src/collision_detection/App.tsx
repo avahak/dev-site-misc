@@ -2,8 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import { Box, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
-import { RenderManager } from './manager';
-// import { RenderManager } from './visualization';
+// import { RenderManager } from './manager';
+import { RenderManager } from './visualization';
 
 const SceneComponent: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);

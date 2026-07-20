@@ -3,6 +3,12 @@ export interface Node {
     index: number;
 }
 
+export const enum DividerList_OfferResult {
+    Ignored,
+    Explicit,
+    DividerChanged,
+}
+
 /**
  * Stores a divider together with up to M explicit values in a fixed-size,
  * decreasingly sorted array.
@@ -71,6 +77,25 @@ export class DividerList {
     }
 
     /**
+     * O(1).
+     */
+    clear() {
+        this.values[0] = Infinity;
+        this._size = 1;
+    }
+
+    /**
+     * O(n).
+     */
+    findByIndex(index: number): Node | null {
+        for (let i = 1; i < this._size; i++) {
+            if (this.indices[i] === index)
+                return { value: this.values[i], index: this.indices[i] };
+        }
+        return null;
+    }
+
+    /**
      * Returns the smallest explicit certificate.
      */
     peekMin(): Node | null {
@@ -125,14 +150,14 @@ export class DividerList {
 
     /**
      * Offers a new explicit certificate. O(n).
-     * @returns true iff the certificate became explicit.
+     * @returns value from `DividerList_OfferResult` based on resulting changes.
      */
-    offer(value: number, index: number): boolean {
+    offer(value: number, index: number): DividerList_OfferResult {
         const values = this.values;
         const indices = this.indices;
 
         if (value >= values[0])
-            return false;
+            return DividerList_OfferResult.Ignored;
 
         // Find insertion position among explicit certificates.
         let pos = 1;
@@ -145,11 +170,10 @@ export class DividerList {
                 values.copyWithin(pos + 1, pos, this._size);
                 indices.copyWithin(pos + 1, pos, this._size);
             }
-
             values[pos] = value;
             indices[pos] = index;
             this._size++;
-            return true;
+            return DividerList_OfferResult.Explicit;
         }
 
         // The explicit list is full.
@@ -160,10 +184,8 @@ export class DividerList {
             values.copyWithin(0, 1, pos);
             indices.copyWithin(0, 1, pos);
         }
-
         values[pos - 1] = value;
         indices[pos - 1] = index;
-
-        return true;
+        return DividerList_OfferResult.DividerChanged;
     }
 }

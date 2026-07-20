@@ -32,7 +32,7 @@ export class RenderManager {
         this.isInitialized = false;
         THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
-        this.seededRandom = new SeededRandom(1002);
+        this.seededRandom = new SeededRandom(1003);
         console.log(this.seededRandom.next());
     }
 
@@ -123,11 +123,13 @@ export class RenderManager {
         this.scene.add(ambientLight);
 
         const n = 100;
-        const M = 3;
+        const M_LOW = 1;
+        const M_HIGH = 20;
 
         for (let k = 0; k < n; k++) {
             const r = 0.25 * (this.seededRandom.next() + 1);
-            const mSphere = new MovingSphere(this.gaussian3().multiplyScalar(2), r, M);
+            const m = this.seededRandom.nextInt(M_LOW, M_HIGH);
+            const mSphere = new MovingSphere(this.gaussian3().multiplyScalar(2), r, m);
 
             const geometry = new THREE.SphereGeometry(mSphere.radius);
             const color = new THREE.Color().setHSL(this.seededRandom.next(), 1, 0.5);

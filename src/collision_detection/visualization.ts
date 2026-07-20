@@ -8,6 +8,7 @@ import { CertificateBroadPhase, MovingSphere } from './broadPhase';
 const N = 1000;
 const M = 10;
 const R = 0.2;
+const TIMESTEP = 0.001;
 
 export class RenderManager {
     container: HTMLDivElement;
@@ -45,6 +46,7 @@ export class RenderManager {
 
     simulationTime = 0;
     detectorTime = 0;
+    bfTime = 0;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -96,7 +98,7 @@ export class RenderManager {
         this.renderer.setSize(width, height);
 
         const aspect = width / height;
-        const viewSize = 10; // 10 units wide/tall vertically
+        const viewSize = 15;
         this.camera.left = -aspect * viewSize / 2;
         this.camera.right = aspect * viewSize / 2;
         this.camera.top = viewSize / 2;
@@ -282,7 +284,7 @@ export class RenderManager {
             // 4. Update Horizon Disc
             const horizonMesh = ball.obj.userData.horizonMesh as THREE.Mesh;
             horizonMesh.position.copy(ball.buildPosition);
-            horizonMesh.scale.setScalar(ball.horizon);
+            horizonMesh.scale.setScalar(ball.certificates.divider);
             (horizonMesh.material as THREE.MeshBasicMaterial).opacity = extraOpacity * 0.5; // Slightly dimmer than certificates
             horizonMesh.renderOrder = 0; // Draw horizon beneath everything
 
@@ -362,20 +364,41 @@ export class RenderManager {
     }
 
     render() {
-        this.simulationTime += 0.01;
+        this.simulationTime += TIMESTEP;
         if (this.guiState.animate)
             this.animateBallPositions(this.simulationTime);
 
-        const time = performance.now();
+        let time, dt, deviation, normalizedDeviation, alpha;
+
+        time = performance.now();
         this.detector.update();
         const count = this.detector.countCollisions();
-        const dt = performance.now() - time;
-        const deviation = Math.abs(dt - this.detectorTime);
-        const normalizedDeviation = Math.min(deviation / this.detectorTime, 1);
-        const alpha = 0.01 + 0.04 * normalizedDeviation;
+        dt = performance.now() - time;
+        deviation = Math.abs(dt - this.detectorTime);
+        normalizedDeviation = Math.min(deviation / this.detectorTime, 1);
+        alpha = 0.01 + 0.04 * normalizedDeviation;
         this.detectorTime = (1 - alpha) * this.detectorTime + alpha * dt;
 
-        this.textElement.innerHTML = `n=${N}\nM=${M}\ndetector: ${(1000 / this.detectorTime).toFixed(2)} fps\ncount=${count}`;
+        time = performance.now();
+        const countBF = this.detector.countCollisionsBruteForce();
+        dt = performance.now() - time;
+        deviation = Math.abs(dt - this.bfTime);
+        normalizedDeviation = Math.min(deviation / this.bfTime, 1);
+        alpha = 0.01 + 0.04 * normalizedDeviation;
+        this.bfTime = (1 - alpha) * this.bfTime + alpha * dt;
+
+        const textParts = [
+            `n=${N}`,
+            `M=${M}`,
+            `detector: ${(1000 / this.detectorTime).toFixed(2)} fps`,
+            `brute force: ${(1000 / this.bfTime).toFixed(2)} fps`,
+            `count=${count}`,
+            `countBF=${countBF}`,
+        ];
+        this.textElement.innerHTML = textParts.join("\n");
+
+        if (count !== countBF)
+            throw Error("Counts don't match.");
 
         this.updateVisuals();
         this.renderer.render(this.scene, this.camera);
