@@ -178,14 +178,12 @@ export class RenderManager {
         const newOk = this.detector.validateInvariants();
         const newBadState = debugStateString();
 
-        if (oldOk && !newOk) {
+        if (!oldOk || !newOk) {
             console.log("oldOk", oldOk);
             console.log("oldGoodState", oldBadState);
             console.log("newOk", newOk);
             console.log("newBadState", newBadState);
             throw Error();
-        } else {
-            console.log(oldOk, newOk);
         }
     }
 

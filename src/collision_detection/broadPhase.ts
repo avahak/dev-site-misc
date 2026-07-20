@@ -1,4 +1,8 @@
 /*
+- Compare: old active: (N,M,R,fps,div)=(1000,10,0.2,35,1000)
+*/
+
+/*
 Broad phase collision algorithm.
 
 Notation.
@@ -17,30 +21,24 @@ For every pair (i,j) that is not active from either side define
         H_i                   if j is dormant for i
 where H_i is the horizon certificate.
 
-The invariants we have are:
-- active and certificates are disjoint.
-- Certificates of i are in order and <= H_i.
-- The budget invariant a)<=>a') explained below.
-
-Invariant:
+Main invariant:
 a) Geometric form:
     If j is not active for i and i is not active for j, then
         B(q_i,r_i) and B(q_j,r_j)
     are disjoint for every
         q_i in B(pHat_i,beta_ij)
         q_j in B(pHat_j,beta_ji)
-
-a') Equivalent algebraic form (budget form):
+or equivalent form:
+a') Algebraic form (budget form):
     beta_ij + beta_ji <= |pHat_i - pHat_j| - r_i - r_j
+
+The invariants we have are:
+- active and certificates are disjoint.
+- Certificates of i are in order and <= H_i.
+- The main invariant a) <=> a').
 
 The algorithm is designed so that the invariants holds after initialization 
 and every update call.
-
-The only invariants we really have are:
-
-- active and certificates are disjoint.
-- Every explicit certificate satisfies certificate <= horizon.
- -The budget invariant a)<=>a').
 */
 
 export interface CollisionPair {
@@ -50,7 +48,7 @@ export interface CollisionPair {
 
 
 import * as THREE from "three";
-import { SmallPriorityList } from "./data_structures/smallPriorityList";
+import { SortedList } from "./data_structures/sortedList";
 
 
 export class MovingSphere {
@@ -61,7 +59,7 @@ export class MovingSphere {
     /** Pairs tracked explicitly. */
     active: Set<number>;
     /** Explicit pair certificates. Each entry stores (beta,index). */
-    certificates: SmallPriorityList;
+    certificates: SortedList;
     /**
      * Horizon certificate.
      * Every dormant pair is assigned this beta value.
@@ -75,7 +73,7 @@ export class MovingSphere {
         this.radius = radius;
         this.buildPosition = new THREE.Vector3();
         this.active = new Set();
-        this.certificates = new SmallPriorityList(M);
+        this.certificates = new SortedList(M);
         this.horizon = 0;
     }
 }
@@ -94,6 +92,7 @@ export class CertificateBroadPhase {
             this.build(i, false);
     }
 
+
     build(i: number, updateOtherObjects: boolean): void {
         const a = this.objects[i];
         this.rebuildSet.delete(i);
@@ -104,8 +103,11 @@ export class CertificateBroadPhase {
         for (let j = 0; j < this.objects.length; j++) {
             if (i === j)
                 continue;
-
             const b = this.objects[j];
+
+            // NOTE: There is leeway in how we choose beta. Here we choose to use half of 
+            // the current clearance. If another beta_{ij} was chosen, the corresponding 
+            // beta_{ji} would have to be adjusted accordingly to preserve the invariant.
             const distance = a.position.distanceTo(b.position);
             const beta = (distance - a.radius - b.radius) / 2;
 
@@ -114,9 +116,11 @@ export class CertificateBroadPhase {
             else
                 a.certificates.insert(beta, j);
         }
+        // NOTE: The best value for a.horizon is min(beta) over all dormant objects
+        // but this is the smallest beta not included in certificates. We dont have this
+        // so we can use slightly smaller value instead:
         a.horizon = a.certificates.size === 0 ?
             Number.POSITIVE_INFINITY : a.certificates.peekMax()!.value;
-
 
         if (!updateOtherObjects)
             return;
@@ -132,19 +136,20 @@ export class CertificateBroadPhase {
             // Largest beta preserving the budget invariant
             const beta = buildDistance - (currentDistance + a.radius + b.radius) / 2;
 
-            b.active.delete(i);
             b.certificates.deleteByIndex(i);
 
             if (beta < 0) {
                 b.active.add(i);
                 continue;
             }
+            b.active.delete(i);
+
+            // NOTE: All the below would just be one insert if horizon was in certificates too.
 
             if (beta >= b.horizon)
                 continue;
 
             const largestCertificate = b.certificates.peekMax()?.value ?? -Infinity;
-
             if (b.certificates.size === b.certificates.capacity && beta > largestCertificate) {
                 b.horizon = beta;
             } else {
@@ -235,6 +240,24 @@ export class CertificateBroadPhase {
             }
         }
         return true;
+    }
+
+    countCollisions(): number {
+        let size = 0;
+        let count = 0;
+        for (let i = 0; i < this.objects.length; i++) {
+            const a = this.objects[i];
+            for (const j of a.active) {
+                size++;
+                if (j === i)
+                    continue;
+                const b = this.objects[j];
+                if (a.position.distanceTo(b.position) < a.radius + b.radius)
+                    count++;
+            }
+        }
+        console.log("size", size);
+        return count;
     }
 
     getCollisions() {

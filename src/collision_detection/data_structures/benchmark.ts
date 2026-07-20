@@ -1,5 +1,5 @@
-import { SmallPriorityList } from "./smallPriorityList";
-import { SmallPriorityList2 } from "./smallPriorityList2";
+import { SortedList } from "./sortedList";
+import { SortedList2 } from "./sortedList2";
 
 type Distribution<T> = [value: T, weight: number][];
 
@@ -63,7 +63,7 @@ function generateOperations(params: BenchmarkParams): Operation[] {
 }
 
 function benchmark(
-    queues: (SmallPriorityList | SmallPriorityList2)[],
+    queues: (SortedList | SortedList2)[],
     operations: Operation[]
 ): number {
     let checksum = 0;
@@ -136,9 +136,9 @@ function benchmark(
 
 function createQueues(
     params: BenchmarkParams,
-    createQueue: () => SmallPriorityList | SmallPriorityList2
-): (SmallPriorityList | SmallPriorityList2)[] {
-    const queues = new Array<SmallPriorityList | SmallPriorityList2>(params.queueCount);
+    createQueue: () => SortedList | SortedList2
+): (SortedList | SortedList2)[] {
+    const queues = new Array<SortedList | SortedList2>(params.queueCount);
 
     for (let i = 0; i < queues.length; i++)
         queues[i] = createQueue();
@@ -166,24 +166,24 @@ export function runBenchmark() {
     const operations = generateOperations(params);
 
     benchmark(
-        createQueues(params, () => new SmallPriorityList(params.queueCapacity)),
+        createQueues(params, () => new SortedList(params.queueCapacity)),
         operations
     );
 
     const ms1 = benchmark(
-        createQueues(params, () => new SmallPriorityList(params.queueCapacity)),
+        createQueues(params, () => new SortedList(params.queueCapacity)),
         operations
     );
 
     console.log(`TypedArray: ${ms1.toFixed(1)} ms`);
 
     benchmark(
-        createQueues(params, () => new SmallPriorityList2(params.queueCapacity)),
+        createQueues(params, () => new SortedList2(params.queueCapacity)),
         operations
     );
 
     const ms2 = benchmark(
-        createQueues(params, () => new SmallPriorityList2(params.queueCapacity)),
+        createQueues(params, () => new SortedList2(params.queueCapacity)),
         operations
     );
 

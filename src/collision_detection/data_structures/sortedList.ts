@@ -1,24 +1,24 @@
 // TypedArray version
 // TODO rethink duplicate checking, does not work fully here. Maybe remove completely.
 
-export interface PriorityNode {
+export interface Node {
     value: number;
     index: number;
 }
 
 
-export class SmallPriorityList {
+export class SortedList {
     readonly capacity: number;
-    private _size: number;
-    /** values in decreasing order */
-    private values: Float64Array;
-    private indices: Int32Array;
+    _size: number;
+    /** _values in decreasing order */
+    _values: Float64Array;
+    _indices: Int32Array;
 
     constructor(M: number) {
         this.capacity = M;
         this._size = 0;
-        this.values = new Float64Array(M);
-        this.indices = new Int32Array(M);
+        this._values = new Float64Array(M);
+        this._indices = new Int32Array(M);
     }
 
     get size(): number {
@@ -28,12 +28,15 @@ export class SmallPriorityList {
     /**
      * Allows iteration.
      */
-    *[Symbol.iterator](): IterableIterator<PriorityNode> {
+    *[Symbol.iterator](): IterableIterator<Node> {
         for (let i = 0; i < this._size; i++) {
-            yield { value: this.values[i], index: this.indices[i] };
+            yield { value: this._values[i], index: this._indices[i] };
         }
     }
 
+    /**
+     * O(1).
+     */
     clear() {
         this._size = 0;
     }
@@ -43,7 +46,7 @@ export class SmallPriorityList {
      */
     hasIndex(index: number): boolean {
         for (let i = 0; i < this._size; i++) {
-            if (this.indices[i] === index)
+            if (this._indices[i] === index)
                 return true;
         }
         return false;
@@ -52,10 +55,10 @@ export class SmallPriorityList {
     /**
      * O(n).
      */
-    findByIndex(index: number): PriorityNode | null {
+    findByIndex(index: number): Node | null {
         for (let i = 0; i < this._size; i++) {
-            if (this.indices[i] === index)
-                return { value: this.values[i], index: this.indices[i] };
+            if (this._indices[i] === index)
+                return { value: this._values[i], index: this._indices[i] };
         }
         return null;
     }
@@ -63,30 +66,30 @@ export class SmallPriorityList {
     /**
      * Returns the node with smallest value. O(1).
      */
-    peekMax(): PriorityNode | null {
+    peekMax(): Node | null {
         if (this._size === 0)
             return null;
-        return { value: this.values[0], index: this.indices[0] };
+        return { value: this._values[0], index: this._indices[0] };
     }
 
     /**
      * Returns the node with smallest value. O(1).
      */
-    peekMin(): PriorityNode | null {
+    peekMin(): Node | null {
         if (this._size === 0)
             return null;
         const lastIdx = this._size - 1;
-        return { value: this.values[lastIdx], index: this.indices[lastIdx] };
+        return { value: this._values[lastIdx], index: this._indices[lastIdx] };
     }
 
     /**
      * Removes and returns node with smallest value. O(1).
      */
-    extractMin(): PriorityNode | null {
+    extractMin(): Node | null {
         if (this._size === 0)
             return null;
         const lastIdx = this._size - 1;
-        const minElement = { value: this.values[lastIdx], index: this.indices[lastIdx] };
+        const minElement = { value: this._values[lastIdx], index: this._indices[lastIdx] };
         this._size--;
         return minElement;
     }
@@ -96,11 +99,11 @@ export class SmallPriorityList {
      */
     deleteByIndex(index: number): boolean {
         for (let i = 0; i < this._size; i++) {
-            if (this.indices[i] === index) {
+            if (this._indices[i] === index) {
                 if (i < this._size - 1) {
                     // Shift everything right of i to the left
-                    this.values.copyWithin(i, i + 1, this._size);
-                    this.indices.copyWithin(i, i + 1, this._size);
+                    this._values.copyWithin(i, i + 1, this._size);
+                    this._indices.copyWithin(i, i + 1, this._size);
                 }
                 this._size--;
                 return true;
@@ -114,14 +117,14 @@ export class SmallPriorityList {
      * NOTE: If trying to insert an existing element does not always update correctly.
      * @returns `null` or element that was dropped due to capacity limit
      */
-    insert(value: number, index: number): PriorityNode | null {
+    insert(value: number, index: number): Node | null {
         // If full and value is larger than largest element, do nothing
-        if (this._size === this.capacity && value >= this.values[0])
+        if (this._size === this.capacity && value >= this._values[0])
             return null;
 
         // If the index already exists, remove it first to avoid duplicates.
         // for (let i = 0; i < this._size; i++) {
-        //     if (this.indices[i] === index) {
+        //     if (this._indices[i] === index) {
         //         this.deleteByIndex(index);
         //         break;
         //     }
@@ -129,30 +132,30 @@ export class SmallPriorityList {
 
         // Find insertion position
         let pos = 0;
-        while (pos < this._size && value < this.values[pos])
+        while (pos < this._size && value < this._values[pos])
             pos++;
 
         if (this._size < this.capacity) {
             // Array is not full: shift elements right to make room
             if (pos < this._size) {
-                this.values.copyWithin(pos + 1, pos, this._size);
-                this.indices.copyWithin(pos + 1, pos, this._size);
+                this._values.copyWithin(pos + 1, pos, this._size);
+                this._indices.copyWithin(pos + 1, pos, this._size);
             }
-            this.values[pos] = value;
-            this.indices[pos] = index;
+            this._values[pos] = value;
+            this._indices[pos] = index;
             this._size++;
             return null;
         }
 
         // Now the array is full, pos > 0, and we need to drop element at 0.
         // Shift elements to the left, from index 1 up to pos-1.
-        const dropped = { value: this.values[0], index: this.indices[0] };
+        const dropped = { value: this._values[0], index: this._indices[0] };
         if (pos > 1) {
-            this.values.copyWithin(0, 1, pos);
-            this.indices.copyWithin(0, 1, pos);
+            this._values.copyWithin(0, 1, pos);
+            this._indices.copyWithin(0, 1, pos);
         }
-        this.values[pos - 1] = value;
-        this.indices[pos - 1] = index;
+        this._values[pos - 1] = value;
+        this._indices[pos - 1] = index;
         return dropped;
     }
 }

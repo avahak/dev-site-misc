@@ -1,12 +1,12 @@
 // array version
 
-export interface PriorityNode {
+export interface Node {
     value: number;
     index: number;
 }
 
 
-export class SmallPriorityList2 {
+export class SortedList2 {
     readonly capacity: number;
     private _size: number;
     private values: number[];
@@ -23,10 +23,7 @@ export class SmallPriorityList2 {
         return this._size;
     }
 
-    /**
-     * Allows iteration.
-     */
-    *[Symbol.iterator](): IterableIterator<PriorityNode> {
+    *[Symbol.iterator](): IterableIterator<Node> {
         for (let i = 0; i < this._size; i++) {
             yield { value: this.values[i], index: this.indices[i] };
         }
@@ -44,7 +41,7 @@ export class SmallPriorityList2 {
         return false;
     }
 
-    findByIndex(index: number): PriorityNode | null {
+    findByIndex(index: number): Node | null {
         for (let i = 0; i < this._size; i++) {
             if (this.indices[i] === index)
                 return { value: this.values[i], index: this.indices[i] };
@@ -52,20 +49,20 @@ export class SmallPriorityList2 {
         return null;
     }
 
-    peekMax(): PriorityNode | null {
+    peekMax(): Node | null {
         if (this._size === 0)
             return null;
         return { value: this.values[0], index: this.indices[0] };
     }
 
-    peekMin(): PriorityNode | null {
+    peekMin(): Node | null {
         if (this._size === 0)
             return null;
         const lastIdx = this._size - 1;
         return { value: this.values[lastIdx], index: this.indices[lastIdx] };
     }
 
-    extractMin(): PriorityNode | null {
+    extractMin(): Node | null {
         if (this._size === 0)
             return null;
         const lastIdx = this._size - 1;
@@ -88,7 +85,7 @@ export class SmallPriorityList2 {
         return false;
     }
 
-    insert(value: number, index: number): PriorityNode | null {
+    insert(value: number, index: number): Node | null {
         if (this._size === this.capacity && value >= this.values[0])
             return null;
 
