@@ -57,7 +57,7 @@ export class DividerList {
         this._size = 1;
     }
 
-    /** Number of explicit certificates. */
+    /** Number of explicit values. */
     get size(): number {
         return this._size - 1;
     }
@@ -96,7 +96,7 @@ export class DividerList {
     }
 
     /**
-     * Returns the smallest explicit certificate.
+     * Returns the smallest explicit value.
      */
     peekMin(): Node | null {
         if (this._size <= 1)
@@ -110,7 +110,7 @@ export class DividerList {
     }
 
     /**
-     * Removes and returns the smallest explicit certificate. O(1).
+     * Removes and returns the smallest explicit value. O(1).
      */
     extractMin(): Node | null {
         if (this._size <= 1)
@@ -127,7 +127,7 @@ export class DividerList {
     }
 
     /**
-     * Removes an explicit certificate by index. O(n).
+     * Removes an explicit value by index. O(n).
      */
     deleteByIndex(index: number): boolean {
         const values = this.values;
@@ -149,7 +149,7 @@ export class DividerList {
     }
 
     /**
-     * Offers a new explicit certificate. O(n).
+     * Offers a new explicit value. O(n).
      * @returns value from `DividerList_OfferResult` based on resulting changes.
      */
     offer(value: number, index: number): DividerList_OfferResult {
@@ -159,7 +159,7 @@ export class DividerList {
         if (value >= values[0])
             return DividerList_OfferResult.Ignored;
 
-        // Find insertion position among explicit certificates.
+        // Find insertion position among explicit values.
         let pos = 1;
         while (pos < this._size && value < values[pos])
             pos++;
@@ -178,8 +178,8 @@ export class DividerList {
 
         // The explicit list is full.
         //
-        // Promote the largest explicit certificate to become the new
-        // divider, then insert the new explicit certificate.
+        // Promote the largest explicit value to become the new
+        // divider, then insert the new explicit value.
         if (pos > 1) {
             values.copyWithin(0, 1, pos);
             indices.copyWithin(0, 1, pos);

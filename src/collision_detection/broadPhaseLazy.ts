@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { DividerList, DividerList_OfferResult } from "./data_structures/dividerList";
+import { SortedList } from "./data_structures/sortedList";
 
 export interface CollisionPair {
     i: number;
@@ -13,76 +13,55 @@ export class MovingSphere {
     buildPosition: THREE.Vector3;
     /** Pairs tracked explicitly. */
     active: Set<number>;
-    /** Explicit pair certificates. Each entry stores (beta,index). */
-    certificates: DividerList;
-    obj?: THREE.Object3D;
 
-    constructor(position: THREE.Vector3, radius: number, M: number) {
+    divider: number;
+    obj?: THREE.Object3D;
+    mMargin: number;        // number of extra objects on top of mBase
+
+    constructor(position: THREE.Vector3, radius: number, mMargin: number) {
         this.position = position;
         this.radius = radius;
         this.buildPosition = new THREE.Vector3();
         this.active = new Set();
-        this.certificates = new DividerList(M);
+
+        this.divider = Infinity;
+        this.mMargin = mMargin;
     }
 }
 
-
 /**
- * Broad phase collision algorithm. Becomes slow if objects move very fast but 
- * more efficient when objects move slow. Can be used for continuous collision detection. 
- * Tunable with capacity of certificates that can be set per object.
+ * Denote 
  * 
- * Notation.
+ *      d_i = divider_i
  * 
- *      p_i      = current position
- *      pHat_i   = build position
+ * Invariant:
  * 
- * Each object i partitions the other objects into
- * 
- *      active_i
- *      explicit_i
- *      dormant_i
- * 
- * where the dormant set is not explicitly represented.
- * 
- * For every pair (i,j) that is not active from either side define
- * 
- *      beta_ij =
- *          explicit certificate(i,j)    if j is explicit for i
- *          divider_i                    if j is dormant for i
- * 
- * Thus every non-active pair has a well-defined beta value from the
- * perspective of each endpoint.
- * 
- * Main invariant.
  * Geometric form:
  * 
  *      If j is not active for i and i is not active for j, then
  *          B(q_i,r_i) and B(q_j,r_j)
  *      are disjoint for every
- *          q_i in B(pHat_i, beta_ij) and
- *          q_j in B(pHat_j, beta_ji).
+ *          q_i in B(pHat_i, d_i) and
+ *          q_j in B(pHat_j, d_j).
  * 
  * Equivalent algebraic form:
  * 
- *      beta_ij + beta_ji <= |pHat_i - pHat_j| - r_i - r_j
+ *      d_i + d_j <= |pHat_i - pHat_j| - r_i - r_j
  * 
- * The maintained invariants are:
- * 
- * - active and explicit sets are disjoint.
- * - Every explicit certificate is smaller than the divider.
- * - The budget invariant above holds.
- * 
- * The algorithm is designed so that these invariants hold after
- * initialization and after every update.
+ * TODO Need to rethink this, might not be correct!
+ *  
  */
-export class CertificateBroadPhase {
+export class CertificateBroadPhaseLazy {
     objects: MovingSphere[];
     rebuildSet: Set<number>;
+
+    static mBase = 10;          // belongs in MovingSphere but here just for simplicity
+    sharedSortList: SortedList; // list of capacity mBase+1 shared for ball initialization
 
     constructor(objects: MovingSphere[]) {
         this.objects = objects;
         this.rebuildSet = new Set();
+        this.sharedSortList = new SortedList(CertificateBroadPhaseLazy.mBase + 1);
 
         for (let i = 0; i < objects.length; i++)
             this.build(i, false);
@@ -98,7 +77,7 @@ export class CertificateBroadPhase {
         this.rebuildSet.delete(i);
         a.buildPosition.copy(a.position);
         a.active.clear();
-        a.certificates.clear();
+        this.sharedSortList.clear();
 
         for (let j = 0; j < this.objects.length; j++) {
             if (i === j)
@@ -114,37 +93,32 @@ export class CertificateBroadPhase {
             if (beta < 0)
                 a.active.add(j);
             else
-                a.certificates.offer(beta, j);
+                this.sharedSortList.insert(beta, j);
         }
+        // Instantly add to the closest objects to active tracking:
+        for (let j = 1; j < this.sharedSortList.size; j++)
+            a.active.add(this.sharedSortList._indices[j]);
+        a.divider = this.sharedSortList._values[0];
 
         if (!propagateChanges)
             return;
 
         for (let j = 0; j < this.objects.length; j++) {
-            if (i === j)
+            if (i === j || a.active.has(j))
                 continue;
 
             const b = this.objects[j];
             const buildDistance = a.position.distanceTo(b.buildPosition);
-            const currentDistance = a.position.distanceTo(b.position);
 
-            // Largest beta preserving the budget invariant
-            const beta = buildDistance - (currentDistance + a.radius + b.radius) / 2;
+            // Invariant requires:
+            // beta + a.divider <= buildDistance - a.radius - b.radius
+            const beta = buildDistance - a.radius - b.radius - a.divider;
 
-            b.certificates.deleteByIndex(i);
-
-            if (beta < 0) {
+            if (beta < b.divider) {
                 b.active.add(i);
                 continue;
             }
             b.active.delete(i);
-
-            const result = b.certificates.offer(beta, i);
-            if (result === DividerList_OfferResult.DividerChanged) {
-                const displacement = b.position.distanceTo(b.buildPosition);
-                if (displacement > b.certificates.divider)
-                    this.rebuildSet.add(j);
-            }
         }
     }
 
@@ -153,22 +127,21 @@ export class CertificateBroadPhase {
             const a = this.objects[i];
 
             const displacement = a.position.distanceTo(a.buildPosition);
-            if (displacement > a.certificates.divider) {
+            if (displacement > a.divider) {
                 this.rebuildSet.add(i);
                 continue;
             }
 
-            // Move expired certificates to active
-            while (true) {
-                const certificate = a.certificates.peekMin();
-                if (!certificate)
-                    break;
-                if (displacement <= certificate.value)
-                    break;
+            // Count false positives:
 
-                a.certificates.extractMin();
-                a.active.add(certificate.index);
+            let falsePositives = 0;
+            for (const j of a.active) {
+                const b = this.objects[j];
+                if (a.position.distanceTo(b.position) >= a.radius + b.radius)
+                    falsePositives++;
             }
+            if (falsePositives > CertificateBroadPhaseLazy.mBase + a.mMargin)
+                this.rebuildSet.add(i);
         }
 
         while (this.rebuildSet.size > 0) {
@@ -182,25 +155,6 @@ export class CertificateBroadPhase {
         const eps = 1e-8;
         for (let i = 0; i < this.objects.length; i++) {
             const a = this.objects[i];
-
-            // active and certificates must be disjoint
-            for (const cert of a.certificates) {
-                if (a.active.has(cert.index)) {
-                    console.error("Invariant failed: active/certificate overlap", { i, j: cert.index });
-                    return false;
-                }
-
-                if (cert.value > a.certificates.divider + eps) {
-                    console.error("Invariant failed: certificate exceeds divider", {
-                        i,
-                        j: cert.index,
-                        certificate: cert.value,
-                        divider: a.certificates.divider
-                    });
-                    return false;
-                }
-            }
-
             for (let j = 0; j < this.objects.length; j++) {
                 if (i === j)
                     continue;
@@ -208,17 +162,16 @@ export class CertificateBroadPhase {
                 if (a.active.has(j) || b.active.has(i))
                     continue;
 
-                const buildClearance = a.buildPosition.distanceTo(b.buildPosition) - a.radius - b.radius;
-                const beta_ij = a.certificates.findByIndex(j)?.value ?? a.certificates.divider;
-                const beta_ji = b.certificates.findByIndex(i)?.value ?? b.certificates.divider;
+                const buildDistance = a.buildPosition.distanceTo(b.buildPosition);
+                const buildClearance = buildDistance - a.radius - b.radius;
 
-                if (beta_ij + beta_ji > buildClearance + eps) {
+                if (a.divider + b.divider > buildClearance + eps) {
                     console.error("Invariant failed: budget", {
                         i,
                         j,
-                        beta_ij,
-                        beta_ji,
-                        buildClearance
+                        divider_i: a.divider,
+                        divider_j: b.divider,
+                        buildClearance,
                     });
                     return false;
                 }

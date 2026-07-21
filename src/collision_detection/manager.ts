@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { MovingSphere, CertificateBroadPhase } from './broadPhase';
+import { MovingSphere, CertificateBroadPhaseLazy } from './broadPhaseLazy';
 import { runBenchmark } from './data_structures/benchmark';
 import { SeededRandom } from './seededRandom';
 
@@ -23,7 +23,7 @@ export class RenderManager {
     camera!: THREE.Camera;
 
     spheres: MovingSphere[] = [];
-    detector!: CertificateBroadPhase;
+    detector!: CertificateBroadPhaseLazy;
 
     seededRandom: SeededRandom;
 
@@ -122,12 +122,13 @@ export class RenderManager {
         const ambientLight = new THREE.AmbientLight(0xffffff, 1);
         this.scene.add(ambientLight);
 
-        const n = 100;
-        const M_LOW = 1;
+        const n = 200;
+        const M_LOW = 10;
         const M_HIGH = 20;
+        const R = 0.15;
 
         for (let k = 0; k < n; k++) {
-            const r = 0.25 * (this.seededRandom.next() + 1);
+            const r = R * (this.seededRandom.next() + 1);
             const m = this.seededRandom.nextInt(M_LOW, M_HIGH);
             const mSphere = new MovingSphere(this.gaussian3().multiplyScalar(2), r, m);
 
@@ -140,7 +141,7 @@ export class RenderManager {
             this.spheres.push(mSphere);
             this.scene.add(sphere);
         }
-        this.detector = new CertificateBroadPhase(this.spheres);
+        this.detector = new CertificateBroadPhaseLazy(this.spheres);
     }
 
     /**
