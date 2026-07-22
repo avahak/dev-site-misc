@@ -16,27 +16,36 @@ export class MovingSphere {
 
     divider: number;
     obj?: THREE.Object3D;
-    mMargin: number;        // number of extra objects on top of mBase
+    /** Maximum number of allowed false positives before object is rebuild */
+    maxFalsePositives: number;  // -1 means don't use
 
-    constructor(position: THREE.Vector3, radius: number, mMargin: number) {
+    constructor(position: THREE.Vector3, radius: number, maxFalsePositives: number) {
         this.position = position;
         this.radius = radius;
         this.buildPosition = new THREE.Vector3();
         this.active = new Set();
 
         this.divider = Infinity;
-        this.mMargin = mMargin;
+        this.maxFalsePositives = maxFalsePositives;
     }
 }
 
 /**
+ * Broad phase collision algorithm. Inefficient if objects move fast and efficient 
+ * when objects move slow. Can be used for continuous collision detection. 
+ * Tunable with capacity of certificates that can be set per object. Depends only
+ * on distances only so directly generalizes to AABB:s (with max-norm distance), 
+ * \R^n (with n>3), or general metric spaces.
+ * 
  * Denote 
  * 
- *      d_i = divider_i
+ *      d_i      = divider_i
+ *      p_i      = current position
+ *      pHat_i   = build position
  * 
- * Invariant:
+ * Invariants
  * 
- * Geometric form:
+ * a) Geometric form:
  * 
  *      If j is not active for i and i is not active for j, then
  *          B(q_i,r_i) and B(q_j,r_j)
@@ -44,39 +53,42 @@ export class MovingSphere {
  *          q_i in B(pHat_i, d_i) and
  *          q_j in B(pHat_j, d_j).
  * 
- * Equivalent algebraic form:
+ * a') Equivalent algebraic/budget form:
  * 
- *      d_i + d_j <= |pHat_i - pHat_j| - r_i - r_j
+ *      If j is not active for i and i is not active for j, then
+ *          d_i + d_j <= |pHat_i - pHat_j| - r_i - r_j
  * 
- * TODO Need to rethink this, might not be correct!
- *  
+ * b) Single ownership for active pairs: for every i, j: 
+ * 
+ *      i cannot be active for j if j is active for i.
+ * 
  */
 export class CertificateBroadPhaseLazy {
     objects: MovingSphere[];
     rebuildSet: Set<number>;
 
-    static mBase = 10;          // belongs in MovingSphere but here just for simplicity
-    sharedSortList: SortedList; // list of capacity mBase+1 shared for ball initialization
+    /** A parameter to for divider choosing heuristic */
+    mBase: number;
+    sharedSortList: SortedList; // temporary work array
 
-    constructor(objects: MovingSphere[]) {
+    constructor(objects: MovingSphere[], mBase: number) {
         this.objects = objects;
         this.rebuildSet = new Set();
-        this.sharedSortList = new SortedList(CertificateBroadPhaseLazy.mBase + 1);
+        this.mBase = mBase;
+        this.sharedSortList = new SortedList(this.mBase + 1);
 
         for (let i = 0; i < objects.length; i++)
-            this.build(i, false);
+            this.updateTrustRegionHeuristic(i);
+        for (let i = 0; i < objects.length; i++)
+            this.updateActive(i);
     }
 
-    /**
-     * Rebuild object i from scratch. If `propagateChanges` is true, adjust the 
-     * corresponding certificates stored by every other object so that the budget 
-     * invariant is preserved.
-     */
-    build(i: number, propagateChanges: boolean): void {
+    private orderStatisticDividerHeuristic(i: number): void {
+        // NOTE: Choosing a.divider like this is only one heuristic and requires using
+        // costly sorting during each rebuild.
+        // Are there better choices? Fixed radius? Adaptive?
         const a = this.objects[i];
-        this.rebuildSet.delete(i);
         a.buildPosition.copy(a.position);
-        a.active.clear();
         this.sharedSortList.clear();
 
         for (let j = 0; j < this.objects.length; j++) {
@@ -85,43 +97,59 @@ export class CertificateBroadPhaseLazy {
             const b = this.objects[j];
 
             // NOTE: There is leeway in how we choose beta. Here we choose to use half of 
-            // the current clearance. If another beta_{ij} was chosen, the corresponding 
-            // beta_{ji} would have to be adjusted accordingly to preserve the invariant.
+            // the current clearance. 
             const distance = a.position.distanceTo(b.position);
             const beta = (distance - a.radius - b.radius) / 2;
 
-            if (beta < 0)
-                a.active.add(j);
-            else
+            if (beta >= 0)
                 this.sharedSortList.insert(beta, j);
         }
-        // Instantly add to the closest objects to active tracking:
-        for (let j = 1; j < this.sharedSortList.size; j++)
-            a.active.add(this.sharedSortList._indices[j]);
+        // Now a.divider is the (this.mBase+1):th smallest positive half-clearance:
         a.divider = this.sharedSortList._values[0];
+    }
 
-        if (!propagateChanges)
-            return;
+    private fixedDividerHeuristic(i: number): void {
+        const a = this.objects[i];
+        a.buildPosition.copy(a.position);
+        a.divider = 0.1 + a.radius;
+    }
+
+    private updateTrustRegionHeuristic(i: number): void {
+        // this.orderStatisticDividerHeuristic(i);
+        this.fixedDividerHeuristic(i);
+    }
+
+    /**
+     * Enforces invariant to hold by adding to active if invarint requires it.
+     * NOTE: We have chosen to add to b.active instead of a.active, but this could 
+     *       be written either way.
+     */
+    private updateActive(i: number): void {
+        const a = this.objects[i];
+        a.active.clear();
 
         for (let j = 0; j < this.objects.length; j++) {
-            if (i === j || a.active.has(j))
+            if (i === j)
                 continue;
-
             const b = this.objects[j];
-            const buildDistance = a.position.distanceTo(b.buildPosition);
+            const buildDistance = a.buildPosition.distanceTo(b.buildPosition);
 
-            // Invariant requires:
-            // beta + a.divider <= buildDistance - a.radius - b.radius
+            // Invariant requires: 
+            // Since a.active is empty, either
+            //      * b.active has to include i, or 
+            //      * b.divider <= buildDistance - a.radius - b.radius - a.divider.
             const beta = buildDistance - a.radius - b.radius - a.divider;
-
-            if (beta < b.divider) {
+            if (beta < b.divider)
                 b.active.add(i);
-                continue;
-            }
-            b.active.delete(i);
+            else
+                b.active.delete(i);
         }
     }
 
+
+    /**
+     * Needs to be called before collision detection every frame.
+     */
     update(): void {
         for (let i = 0; i < this.objects.length; i++) {
             const a = this.objects[i];
@@ -133,20 +161,24 @@ export class CertificateBroadPhaseLazy {
             }
 
             // Count false positives:
-
-            let falsePositives = 0;
-            for (const j of a.active) {
-                const b = this.objects[j];
-                if (a.position.distanceTo(b.position) >= a.radius + b.radius)
-                    falsePositives++;
+            // NOTE: This could be done every once in a while, not constantly
+            if (a.maxFalsePositives !== -1) {
+                let falsePositives = 0;
+                for (const j of a.active) {
+                    const b = this.objects[j];
+                    if (a.position.distanceTo(b.position) >= a.radius + b.radius)
+                        falsePositives++;
+                }
+                if (falsePositives > a.maxFalsePositives)
+                    this.rebuildSet.add(i);
             }
-            if (falsePositives > CertificateBroadPhaseLazy.mBase + a.mMargin)
-                this.rebuildSet.add(i);
         }
 
         while (this.rebuildSet.size > 0) {
             const [i] = this.rebuildSet;
-            this.build(i, true);
+            this.updateTrustRegionHeuristic(i);
+            this.updateActive(i);
+            this.rebuildSet.delete(i);
         }
     }
 
@@ -155,10 +187,16 @@ export class CertificateBroadPhaseLazy {
         const eps = 1e-8;
         for (let i = 0; i < this.objects.length; i++) {
             const a = this.objects[i];
+            if (a.active.has(i))
+                console.error("Object tracks itself in active", { i });
+
             for (let j = 0; j < this.objects.length; j++) {
+                const b = this.objects[j];
+                if (a.active.has(j) && b.active.has(i))
+                    console.error("Duplicate active", { i, j });
+
                 if (i === j)
                     continue;
-                const b = this.objects[j];
                 if (a.active.has(j) || b.active.has(i))
                     continue;
 
@@ -185,11 +223,7 @@ export class CertificateBroadPhaseLazy {
         for (let i = 0; i < this.objects.length; i++) {
             const a = this.objects[i];
             for (const j of a.active) {
-                if (j === i)
-                    continue;
                 const b = this.objects[j];
-                if (j < i && b.active.has(i))
-                    continue;       // duplicate
                 if (a.position.distanceTo(b.position) < a.radius + b.radius)
                     count++;
             }
@@ -216,11 +250,7 @@ export class CertificateBroadPhaseLazy {
         for (let i = 0; i < this.objects.length; i++) {
             const a = this.objects[i];
             for (const j of a.active) {
-                if (j === i)
-                    continue;
                 const b = this.objects[j];
-                if (j < i && b.active.has(i))
-                    continue;       // duplicate
                 if (a.position.distanceTo(b.position) <= a.radius + b.radius) {
                     const i0 = Math.min(i, j);
                     const j0 = Math.max(i, j);

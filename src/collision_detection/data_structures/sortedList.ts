@@ -1,12 +1,13 @@
-// TypedArray version
-// TODO rethink duplicate checking, does not work fully here. Maybe remove completely.
-
 export interface Node {
     value: number;
     index: number;
 }
 
 
+/**
+ * Sorted list of fixed size, TypedArray version.
+ * Handling duplicates is left to the user and is not checked here.
+ */
 export class SortedList {
     readonly capacity: number;
     _size: number;
@@ -121,14 +122,6 @@ export class SortedList {
         // If full and value is larger than largest element, do nothing
         if (this._size === this.capacity && value >= this._values[0])
             return null;
-
-        // If the index already exists, remove it first to avoid duplicates.
-        // for (let i = 0; i < this._size; i++) {
-        //     if (this._indices[i] === index) {
-        //         this.deleteByIndex(index);
-        //         break;
-        //     }
-        // }
 
         // Find insertion position
         let pos = 0;

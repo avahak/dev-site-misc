@@ -7,14 +7,15 @@ import { CertificateBroadPhaseLazy, MovingSphere } from './broadPhaseLazy';
 
 const N = 2000;
 const M = 10;
+const MAX_FP = 30;
 const R = 0.1;
 const TIMESTEP = 0.001;
 const MAX_LINKS = 100000; // Upper bound for active link visualization
-const SAMPLE_COUNT = 30;
+const SAMPLE_COUNT = 50;
 
 // Opacity settings for the special regions B(buildPosition, divider)
-const HORIZON_PROM_OPACITY = 0.3;
-const HORIZON_DIM_OPACITY = 0.025;
+const HORIZON_PROM_OPACITY = 0.2;
+const HORIZON_DIM_OPACITY = 0.03;
 
 export class RenderManager {
     container: HTMLDivElement;
@@ -58,6 +59,7 @@ export class RenderManager {
     guiState = {
         animate: true,
         linkMode: 'Sampled', // Modes: 'None', 'Selected', 'Sampled', 'All'
+        validate: false,
     };
 
     simulationTime = 0;
@@ -124,6 +126,7 @@ export class RenderManager {
         this.gui = new GUI();
         this.gui.add(this.guiState, 'animate').name("Animate");
         this.gui.add(this.guiState, 'linkMode', ['None', 'Selected', 'Sampled', 'All']).name("Link Mode");
+        this.gui.add(this.guiState, 'validate').name("Validate");
     }
 
     createTextElement(container: HTMLElement) {
@@ -211,13 +214,13 @@ export class RenderManager {
         for (let i = 0; i < N; i++) {
             const pos = new THREE.Vector3((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, 0);
             const radius = R * (0.25 + Math.random() * 0.75);
-            const ball = new MovingSphere(pos, radius, M);
+            const ball = new MovingSphere(pos, radius, MAX_FP);
 
             this.balls.push(ball);
             this.colors.push(new THREE.Color().setHSL(i / N, 0.8, 0.5));
         }
 
-        this.detector = new CertificateBroadPhaseLazy(this.balls);
+        this.detector = new CertificateBroadPhaseLazy(this.balls, M);
     }
 
     setupInteraction() {
@@ -455,7 +458,7 @@ export class RenderManager {
 
         const textParts = [
             `n=${N}`,
-            `M=${M}`,
+            `MAX_FP=${MAX_FP}`,
             `detector: ${(1000 / this.detectorTime).toFixed(2)} fps`,
             `brute force: ${(1000 / this.bfTime).toFixed(2)} fps`,
             `count=${count}`,
@@ -463,6 +466,8 @@ export class RenderManager {
         ];
         this.textElement.innerHTML = textParts.join("\n");
 
+        if (this.guiState.validate)
+            this.detector.validateInvariants();
         if (count !== countBF)
             throw Error("Counts don't match.");
 

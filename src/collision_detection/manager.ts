@@ -123,14 +123,15 @@ export class RenderManager {
         this.scene.add(ambientLight);
 
         const n = 200;
-        const M_LOW = 10;
-        const M_HIGH = 20;
+        const M = 10;
+        const MAX_FP_LOW = 1;
+        const MAX_FP_HIGH = 15;
         const R = 0.15;
 
         for (let k = 0; k < n; k++) {
             const r = R * (this.seededRandom.next() + 1);
-            const m = this.seededRandom.nextInt(M_LOW, M_HIGH);
-            const mSphere = new MovingSphere(this.gaussian3().multiplyScalar(2), r, m);
+            const maxFp = this.seededRandom.nextInt(MAX_FP_LOW, MAX_FP_HIGH);
+            const mSphere = new MovingSphere(this.gaussian3().multiplyScalar(2), r, maxFp);
 
             const geometry = new THREE.SphereGeometry(mSphere.radius);
             const color = new THREE.Color().setHSL(this.seededRandom.next(), 1, 0.5);
@@ -141,7 +142,7 @@ export class RenderManager {
             this.spheres.push(mSphere);
             this.scene.add(sphere);
         }
-        this.detector = new CertificateBroadPhaseLazy(this.spheres);
+        this.detector = new CertificateBroadPhaseLazy(this.spheres, M);
     }
 
     /**

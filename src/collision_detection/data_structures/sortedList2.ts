@@ -1,11 +1,13 @@
-// array version
-
 export interface Node {
     value: number;
     index: number;
 }
 
 
+/**
+ * Sorted list of fixed size, JS array version.
+ * Handling duplicates is left to the user and is not checked here.
+ */
 export class SortedList2 {
     readonly capacity: number;
     private _size: number;

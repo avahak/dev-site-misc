@@ -33,6 +33,7 @@ export const enum DividerList_OfferResult {
  *     is either explicit or at least the divider.
  *
  * The divider may decrease over time but never increase.
+ * Handling duplicates is left to the user and is not checked here.
  */
 export class DividerList {
     /** Physical capacity including the divider slot. */
@@ -85,7 +86,7 @@ export class DividerList {
     }
 
     /**
-     * O(n).
+     * Finds first node with given index. O(n).
      */
     findByIndex(index: number): Node | null {
         for (let i = 1; i < this._size; i++) {
@@ -127,7 +128,7 @@ export class DividerList {
     }
 
     /**
-     * Removes an explicit value by index. O(n).
+     * Removes an explicit value by index. The first node found with given index is used. O(n).
      */
     deleteByIndex(index: number): boolean {
         const values = this.values;
