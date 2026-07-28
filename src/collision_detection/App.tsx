@@ -3,7 +3,8 @@ import { Box, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
 // import { RenderManager } from './manager';
-import { RenderManager } from './visualization';
+// import { RenderManager } from './visualization';
+import { RenderManager } from './hierarchical/test';
 
 const SceneComponent: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);

@@ -32,10 +32,9 @@ export class MovingSphere {
 
 /**
  * Broad phase collision algorithm. Inefficient if objects move fast and efficient 
- * when objects move slow. Can be used for continuous collision detection. 
- * Tunable with capacity of certificates that can be set per object. Depends only
- * on distances only so directly generalizes to AABB:s (with max-norm distance), 
- * \R^n (with n>3), or general metric spaces.
+ * when objects move very slow. Tunable with updateTrustRegion heuristic.
+ * Depends only on distances only so directly generalizes to AABB:s 
+ * (with max-norm distance), \R^n (with n>3), or general metric spaces.
  * 
  * Denote 
  * 
@@ -69,7 +68,7 @@ export class CertificateBroadPhaseLazy {
 
     /** A parameter to for divider choosing heuristic */
     mBase: number;
-    sharedSortList: SortedList; // temporary work array
+    sharedSortList: SortedList; // temporary work array of fixed size
 
     constructor(objects: MovingSphere[], mBase: number) {
         this.objects = objects;
@@ -78,7 +77,7 @@ export class CertificateBroadPhaseLazy {
         this.sharedSortList = new SortedList(this.mBase + 1);
 
         for (let i = 0; i < objects.length; i++)
-            this.updateTrustRegionHeuristic(i);
+            this.updateTrustRegion(i);
         for (let i = 0; i < objects.length; i++)
             this.updateActive(i);
     }
@@ -111,10 +110,10 @@ export class CertificateBroadPhaseLazy {
     private fixedDividerHeuristic(i: number): void {
         const a = this.objects[i];
         a.buildPosition.copy(a.position);
-        a.divider = 0.1 + a.radius;
+        a.divider = 0.1 + 2.5 * a.radius;
     }
 
-    private updateTrustRegionHeuristic(i: number): void {
+    private updateTrustRegion(i: number): void {
         // this.orderStatisticDividerHeuristic(i);
         this.fixedDividerHeuristic(i);
     }
@@ -174,9 +173,10 @@ export class CertificateBroadPhaseLazy {
             }
         }
 
+        // Rebuild flagged objects
         while (this.rebuildSet.size > 0) {
             const [i] = this.rebuildSet;
-            this.updateTrustRegionHeuristic(i);
+            this.updateTrustRegion(i);
             this.updateActive(i);
             this.rebuildSet.delete(i);
         }

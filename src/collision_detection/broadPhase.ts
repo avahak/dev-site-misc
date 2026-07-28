@@ -28,11 +28,12 @@ export class MovingSphere {
 
 
 /**
- * Broad phase collision algorithm. Inefficient if objects move fast and efficient 
- * when objects move slow. Can be used for continuous collision detection. 
- * Tunable with capacity of certificates that can be set per object. Depends only
- * on distances only so directly generalizes to AABB:s (with max-norm distance), 
- * \R^n (with n>3), or general metric spaces.
+ * Inefficient, bookkeeping certificates just to avoid adding one to active is inefficient.
+ * 
+ * Broad phase collision algorithm. Inefficient if objects move fast. 
+ * Tunable with capacity of certificates that can be set
+ * per object. Depends only on distances only so directly generalizes to AABB:s 
+ * (with max-norm distance), \R^n (with n>3), or general metric spaces.
  * 
  * Notation.
  * 
