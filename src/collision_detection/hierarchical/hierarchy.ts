@@ -35,7 +35,7 @@ and every stored object must be fully contained in its parent region. A region m
 not be empty: each region has at least one stored object or at least one child region. 
 The parent of a level-(k) region is either a level-((k+1)) region or the root if (k = k_0).
 
-Note that every region is an exact bounding ball for its entire subtree and all objects
+Note that every region is a bounding ball for its entire subtree and all objects
 stored within that subtree.
 
 When a new region must be created, its center is chosen to be the center of the child 
@@ -128,7 +128,6 @@ and movement updates.
 */
 
 import * as THREE from 'three';
-
 
 export class SphereObject {
     public center: THREE.Vector3;
@@ -319,9 +318,6 @@ export class LooseSphericalHierarchy {
         }
 
         if (H instanceof Region) {
-            // Optimization opportunity: The squared distance check requires exact distance 
-            // for containment: dist + r1 <= r2. Alternatively, check distSq <= (r2 - r1)^2 
-            // where r2 >= r1. This avoids Math.sqrt() entirely.
             if (this.fullyContains(H.center, H.radius, obj.center, obj.radius)) {
                 return;
             }
@@ -419,6 +415,18 @@ export class LooseSphericalHierarchy {
 
 
 
+    /**
+     * Finds all intersecting object pairs using a recursive traversal of the hierarchy.
+     * The traversal is expressed through three mutually recursive routines operating on
+     * a region, an object-region pair, and a region-region pair, respectively.
+     *
+     * Region processing handles collisions within a subtree, object-region processing
+     * compares one object against an entire subtree, and region-region processing
+     * compares two sibling subtrees. Whenever an object or subtree cannot intersect a
+     * region, that branch of the recursion is discarded.
+     *
+     * The method returns the list of intersecting pairs produced by this traversal.
+     */
     public findCollisions(): [number, number][] {
         const collisions: [number, number][] = [];
 
@@ -648,13 +656,19 @@ export class LooseSphericalHierarchy {
         return collisions;
     }
 
+
+
+    // -----------------------------------------
+    // Just for DEBUGGING!!! Do not use these for actual implementation.
+    // -----------------------------------------
+
     /**
      * Brute-force collision detection.
      *
      * Returns every unordered intersecting pair exactly once.
      * If (id1, id2) is included, then (id2, id1) is not.
      */
-    public static findCollisionsBruteForce(objects: SphereObject[]): [number, number][] {
+    public static debug_findCollisionsBruteForce(objects: SphereObject[]): [number, number][] {
         const collisions: [number, number][] = [];
 
         for (let i = 0; i < objects.length; i++) {
@@ -673,23 +687,17 @@ export class LooseSphericalHierarchy {
         return collisions;
     }
 
-
-
-
-    // -----------------------------------------
-    // Just for DEBUGGING!!! Do not use these for actual implementation.
-    // -----------------------------------------
-
-    DEBUG_collectRegions(node: Region | Root, regions: Region[]): Region[] {
+    debug_collectRegions(node: Region | Root, regions: Region[]): Region[] {
         if (node instanceof Region)
             regions.push(node);
         for (const child of node.children)
-            this.DEBUG_collectRegions(child, regions);
+            this.debug_collectRegions(child, regions);
         return regions;
     }
-    DEBUG_countRegionsByLevel(): Map<number, number> {
+
+    debug_countRegionsByLevel(): Map<number, number> {
         const regions: Region[] = [];
-        this.DEBUG_collectRegions(this.root, regions);
+        this.debug_collectRegions(this.root, regions);
 
         const levelCounts = new Map<number, number>();
         for (const region of regions) {

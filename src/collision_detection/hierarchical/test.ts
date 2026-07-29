@@ -419,10 +419,10 @@ export class RenderManager {
     }
 
     // Exponential moving average for timings
-    measureTime<T>(name: string, execute: () => T, addedTime: number = 0): T {
+    measureTime<T>(name: string, execute: () => T, addedTimeMs: number = 0): T {
         const start = performance.now();
         const result = execute();
-        const dt = performance.now() - start + addedTime;
+        const dt = performance.now() - start + addedTimeMs;
 
         const current = this.timings[name] === undefined ? 0 : this.timings[name];
         const deviation = Math.abs(dt - current);
@@ -446,29 +446,29 @@ export class RenderManager {
         }
 
         // Update hierarchy 
-        const start = performance.now();
+        const startTime = performance.now();
         for (let i = 0; i < this.objects.length; i++) {
             const obj = this.objects[i];
             this.hierarchy.update(obj);
         }
-        const dt = performance.now() - start;
+        const updateDt = performance.now() - startTime;
 
         // Count statistics for text overlay
         const allRegions = this.collectRegions(this.hierarchy.root, []);
-        const levelCounts = this.hierarchy.DEBUG_countRegionsByLevel();
+        const levelCounts = this.hierarchy.debug_countRegionsByLevel();
         const levelCountString = formatLevelCounts(levelCounts);
 
         const collisionsBF = this.measureTime('bruteForce', () => {
-            return LooseSphericalHierarchy.findCollisionsBruteForce(this.objects);
+            return LooseSphericalHierarchy.debug_findCollisionsBruteForce(this.objects);
         }, 0);
 
         const collisionsQ = this.measureTime('query', () => {
             return this.hierarchy.findCollisionsByQuery().map((v) => v[0] * N + v[1]);
-        }, dt);
+        }, updateDt);
 
         const collisionsR = this.measureTime('recursion', () => {
             return this.hierarchy.findCollisions().map((v) => v[0] * N + v[1]);
-        }, dt);
+        }, updateDt);
 
         if (this.guiState.validate) {
             // Check count only:
