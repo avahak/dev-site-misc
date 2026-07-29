@@ -1,15 +1,15 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SphereObject, Root, Region, LooseSphericalHierarchy } from './hierarchy';
+import { SphereObject, Root, Region, LooseSphericalHierarchy } from './tree';
 
-const N = 2000;
-const R = 0.15;
+const N = 10000;
+const R = 0.1;
 const TIMESTEP = 0.01;
 const MAX_REGIONS = 50000;
 
-const K0 = 3;
-const A = 2.5;
+const K_MAX = 3;
+const MARGIN_RATIO = 2.5;
 const SCALING_FACTOR = 2.5;
 
 const REGION_OPACITY = 0.1;
@@ -224,7 +224,7 @@ export class RenderManager {
         }
 
         // Initialize hierarchy
-        this.hierarchy = new LooseSphericalHierarchy(K0, A, SCALING_FACTOR);
+        this.hierarchy = new LooseSphericalHierarchy(K_MAX, MARGIN_RATIO, SCALING_FACTOR);
 
         // Build initial tree
         for (const obj of this.objects)
@@ -467,13 +467,21 @@ export class RenderManager {
         }, updateDt);
 
         const collisionsR = this.measureTime('recursion', () => {
+            return this.hierarchy.findCollisionsRecursive().map((v) => v[0] * N + v[1]);
+        }, updateDt);
+
+        const collisionsN = this.measureTime('neighbors', () => {
             return this.hierarchy.findCollisions().map((v) => v[0] * N + v[1]);
         }, updateDt);
 
         if (this.guiState.validate) {
             // Check count only:
-            if (collisionsQ.length !== 2 * collisionsBF.length || collisionsR.length !== collisionsBF.length)
-                throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Query: ${collisionsQ.length}, Recursive: ${collisionsR.length}`);
+            if (collisionsQ.length !== 2 * collisionsBF.length)
+                throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Query: ${collisionsQ.length}`);
+            if (collisionsR.length !== collisionsBF.length)
+                throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Recursive: ${collisionsR.length}`);
+            if (collisionsN.length !== 2 * collisionsBF.length)
+                throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Neighbors: ${collisionsN.length}`);
             // Check that all collisions were found:
             for (let [id1, id2] of collisionsBF) {
                 const pair1 = id1 * N + id2;
@@ -482,17 +490,25 @@ export class RenderManager {
                 const indexQ2 = collisionsQ.indexOf(pair2);
                 const indexR1 = collisionsR.indexOf(pair1);
                 const indexR2 = collisionsR.indexOf(pair2);
+                const indexN1 = collisionsN.indexOf(pair1);
+                const indexN2 = collisionsN.indexOf(pair2);
                 if (indexQ1 === -1 || indexQ2 === -1)
                     throw Error(`Collision missing in Q`);
                 if (indexR1 === -1 && indexR2 === -1)
                     throw Error(`Collision missing in R`);
+                if (indexN1 === -1 || indexN2 === -1)
+                    throw Error(`Collision missing in N`);
             }
+
+            // Check neighbors:
+            this.hierarchy.debug_validateNeighbors();
         }
 
         const collisionsTextParts = [
             `\tBF: ${(1000 / this.timings.bruteForce).toFixed(2)} fps`,
             `\tQuery: ${(1000 / this.timings.query).toFixed(2)} fps (${(this.timings.bruteForce / this.timings.query).toFixed(2)} x)`,
             `\tRecursion: ${(1000 / this.timings.recursion).toFixed(2)} fps (${(this.timings.bruteForce / this.timings.recursion).toFixed(2)} x)`,
+            `\tNeighbors: ${(1000 / this.timings.neighbors).toFixed(2)} fps (${(this.timings.bruteForce / this.timings.neighbors).toFixed(2)} x)`,
         ];
 
         const collisionsText = collisionsTextParts.join("\n");
