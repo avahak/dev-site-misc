@@ -3,13 +3,13 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SphereObject, Root, Region, LooseSphericalHierarchy } from './hierarchy';
 
-const N = 1000;
-const R = 0.1;
+const N = 2000;
+const R = 0.15;
 const TIMESTEP = 0.01;
-const MAX_REGIONS = 100000;
+const MAX_REGIONS = 50000;
 
-const A = 3;
 const K0 = 3;
+const A = 2.5;
 const SCALING_FACTOR = 2.5;
 
 const REGION_OPACITY = 0.1;
@@ -59,9 +59,12 @@ export class RenderManager {
         animate: true,
         showRegions: true,
         showObjects: true,
+        validate: false,
     };
 
     simulationTime = 0;
+
+    timings: Record<string, number> = {};
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -124,6 +127,7 @@ export class RenderManager {
         this.gui.add(this.guiState, 'animate').name("Animate");
         this.gui.add(this.guiState, 'showObjects').name("Show Objects");
         this.gui.add(this.guiState, 'showRegions').name("Show Regions");
+        this.gui.add(this.guiState, 'validate').name("Validate");
     }
 
     createTextElement(container: HTMLElement) {
@@ -214,13 +218,13 @@ export class RenderManager {
                 0
             );
             const radius = R * (0.3 + Math.random());
-            const obj = new SphereObject(pos, radius);
+            const obj = new SphereObject(pos, radius, i);
             this.objects.push(obj);
             this.objectColors.push(new THREE.Color().setHSL(i / N, 0.8, 0.5));
         }
 
         // Initialize hierarchy
-        this.hierarchy = new LooseSphericalHierarchy(A, K0, SCALING_FACTOR);
+        this.hierarchy = new LooseSphericalHierarchy(K0, A, SCALING_FACTOR);
 
         // Build initial tree
         for (const obj of this.objects)
@@ -412,12 +416,21 @@ export class RenderManager {
             obj.center.x = xAmp * Math.sin(time * freqX + i * 1.37);
             obj.center.y = yAmp * Math.cos(time * freqY + i * 2.51);
         }
+    }
 
-        // Update hierarchy
-        for (let i = 0; i < this.objects.length; i++) {
-            const obj = this.objects[i];
-            this.hierarchy.update(obj);
-        }
+    // Exponential moving average for timings
+    measureTime<T>(name: string, execute: () => T, addedTime: number = 0): T {
+        const start = performance.now();
+        const result = execute();
+        const dt = performance.now() - start + addedTime;
+
+        const current = this.timings[name] === undefined ? 0 : this.timings[name];
+        const deviation = Math.abs(dt - current);
+        const normalizedDeviation = Math.min(deviation / (current || 1), 1);
+        const alpha = 0.01 + 0.04 * normalizedDeviation;
+        this.timings[name] = (1 - alpha) * current + alpha * dt;
+
+        return result;
     }
 
     animate() {
@@ -427,15 +440,63 @@ export class RenderManager {
     }
 
     render() {
-        this.simulationTime += TIMESTEP;
         if (this.guiState.animate) {
+            this.simulationTime += TIMESTEP;
             this.animateObjectPositions(this.simulationTime);
         }
+
+        // Update hierarchy 
+        const start = performance.now();
+        for (let i = 0; i < this.objects.length; i++) {
+            const obj = this.objects[i];
+            this.hierarchy.update(obj);
+        }
+        const dt = performance.now() - start;
 
         // Count statistics for text overlay
         const allRegions = this.collectRegions(this.hierarchy.root, []);
         const levelCounts = this.hierarchy.DEBUG_countRegionsByLevel();
         const levelCountString = formatLevelCounts(levelCounts);
+
+        const collisionsBF = this.measureTime('bruteForce', () => {
+            return LooseSphericalHierarchy.findCollisionsBruteForce(this.objects);
+        }, 0);
+
+        const collisionsQ = this.measureTime('query', () => {
+            return this.hierarchy.findCollisionsByQuery().map((v) => v[0] * N + v[1]);
+        }, dt);
+
+        const collisionsR = this.measureTime('recursion', () => {
+            return this.hierarchy.findCollisions().map((v) => v[0] * N + v[1]);
+        }, dt);
+
+        if (this.guiState.validate) {
+            // Check count only:
+            if (collisionsQ.length !== 2 * collisionsBF.length || collisionsR.length !== collisionsBF.length)
+                throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Query: ${collisionsQ.length}, Recursive: ${collisionsR.length}`);
+            // Check that all collisions were found:
+            for (let [id1, id2] of collisionsBF) {
+                const pair1 = id1 * N + id2;
+                const pair2 = id2 * N + id1;
+                const indexQ1 = collisionsQ.indexOf(pair1);
+                const indexQ2 = collisionsQ.indexOf(pair2);
+                const indexR1 = collisionsR.indexOf(pair1);
+                const indexR2 = collisionsR.indexOf(pair2);
+                if (indexQ1 === -1 || indexQ2 === -1)
+                    throw Error(`Collision missing in Q`);
+                if (indexR1 === -1 && indexR2 === -1)
+                    throw Error(`Collision missing in R`);
+            }
+        }
+
+        const collisionsTextParts = [
+            `\tBF: ${(1000 / this.timings.bruteForce).toFixed(2)} fps`,
+            `\tQuery: ${(1000 / this.timings.query).toFixed(2)} fps (${(this.timings.bruteForce / this.timings.query).toFixed(2)} x)`,
+            `\tRecursion: ${(1000 / this.timings.recursion).toFixed(2)} fps (${(this.timings.bruteForce / this.timings.recursion).toFixed(2)} x)`,
+        ];
+
+        const collisionsText = collisionsTextParts.join("\n");
+
 
         const textParts = [
             `Objects: ${this.objects.length}`,
@@ -445,6 +506,7 @@ export class RenderManager {
             this.selectedObjectIndex !== null ?
                 `Selected: Object ${this.selectedObjectIndex}` :
                 'Click to select object',
+            `Collisions: ${collisionsBF.length},\n${collisionsText}`,
         ];
         this.textElement.innerHTML = textParts.join("\n");
 

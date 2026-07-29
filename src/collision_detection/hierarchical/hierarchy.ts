@@ -1,10 +1,9 @@
 /*
 - mostly implemented by AI
 - Set vs array for objects, children? These are very small so likely Set is inefficient
+*/
 
----
-
-
+/*
 ## Loose spherical hierarchy for moving objects
 
 Let S>1 be a scaling factor.
@@ -35,6 +34,9 @@ or directly in the root, and stores a reference to that node. Every child region
 and every stored object must be fully contained in its parent region. A region must 
 not be empty: each region has at least one stored object or at least one child region. 
 The parent of a level-(k) region is either a level-((k+1)) region or the root if (k = k_0).
+
+Note that every region is an exact bounding ball for its entire subtree and all objects
+stored within that subtree.
 
 When a new region must be created, its center is chosen to be the center of the child 
 it will contain.
@@ -132,10 +134,12 @@ export class SphereObject {
     public center: THREE.Vector3;
     public radius: number;
     public parentNode: Region | Root | null = null;
+    public readonly id: number;
 
-    constructor(center: THREE.Vector3, radius: number) {
+    constructor(center: THREE.Vector3, radius: number, id: number) {
         this.center = center.clone();
         this.radius = radius;
+        this.id = id;
     }
 }
 
@@ -165,7 +169,7 @@ export class LooseSphericalHierarchy {
     public k0: number;
     public scalingFactor: number;
 
-    constructor(a: number, k0: number, scalingFactor: number = 2) {
+    constructor(k0: number, a: number, scalingFactor: number = 2) {
         if (a <= 1 || scalingFactor <= 1)
             throw Error("Invalid parameter.");
         this.a = a;
@@ -409,9 +413,272 @@ export class LooseSphericalHierarchy {
 
 
 
+    // -----------------------------------------
+    // Collision testing (recursive, all in one)
+    // -----------------------------------------
 
-    // ------
+
+
+    public findCollisions(): [number, number][] {
+        const collisions: [number, number][] = [];
+
+        // Root objects against each other
+        for (let i = 0; i < this.root.objects.length; i++) {
+            for (let j = i + 1; j < this.root.objects.length; j++) {
+                if (this.intersects(
+                    this.root.objects[i].center, this.root.objects[i].radius,
+                    this.root.objects[j].center, this.root.objects[j].radius
+                )) {
+                    collisions.push([this.root.objects[i].id, this.root.objects[j].id]);
+                }
+            }
+        }
+
+        // Root objects against top-level regions
+        for (const obj of this.root.objects) {
+            for (const child of this.root.children) {
+                this.processObjectRegion(obj, child, collisions);
+            }
+        }
+
+        // Within each top-level subtree
+        for (const child of this.root.children) {
+            this.processRegion(child, collisions);
+        }
+
+        // Between different top-level subtrees
+        for (let i = 0; i < this.root.children.length; i++) {
+            for (let j = i + 1; j < this.root.children.length; j++) {
+                this.processRegionPair(
+                    this.root.children[i],
+                    this.root.children[j],
+                    collisions
+                );
+            }
+        }
+
+        return collisions;
+    }
+
+    private processRegion(region: Region, collisions: [number, number][]): void {
+
+        // Objects stored directly in this region.
+        for (let i = 0; i < region.objects.length; i++) {
+            for (let j = i + 1; j < region.objects.length; j++) {
+                if (this.intersects(
+                    region.objects[i].center, region.objects[i].radius,
+                    region.objects[j].center, region.objects[j].radius
+                )) {
+                    collisions.push([region.objects[i].id, region.objects[j].id]);
+                }
+            }
+        }
+
+        // Objects vs descendants.
+        for (const obj of region.objects) {
+            for (const child of region.children) {
+                this.processObjectRegion(obj, child, collisions);
+            }
+        }
+
+        // Between child subtrees.
+        for (let i = 0; i < region.children.length; i++) {
+            for (let j = i + 1; j < region.children.length; j++) {
+                this.processRegionPair(
+                    region.children[i],
+                    region.children[j],
+                    collisions
+                );
+            }
+        }
+
+        // Recurse into children.
+        for (const child of region.children) {
+            this.processRegion(child, collisions);
+        }
+    }
+
+    private processRegionPair(a: Region, b: Region, collisions: [number, number][]): void {
+        if (!this.intersects(a.center, a.radius, b.center, b.radius))
+            return;
+
+        // Direct objects.
+        for (const objA of a.objects) {
+            for (const objB of b.objects) {
+                if (this.intersects(
+                    objA.center, objA.radius,
+                    objB.center, objB.radius
+                )) {
+                    collisions.push([objA.id, objB.id]);
+                }
+            }
+        }
+
+        // Objects in A vs descendants of B.
+        for (const objA of a.objects) {
+            for (const childB of b.children) {
+                this.processObjectRegion(objA, childB, collisions);
+            }
+        }
+
+        // Objects in B vs descendants of A.
+        for (const objB of b.objects) {
+            for (const childA of a.children) {
+                this.processObjectRegion(objB, childA, collisions);
+            }
+        }
+
+        // Descendants vs descendants.
+        for (const childA of a.children) {
+            for (const childB of b.children) {
+                this.processRegionPair(childA, childB, collisions);
+            }
+        }
+    }
+
+    private processObjectRegion(
+        obj: SphereObject,
+        region: Region,
+        collisions: [number, number][]
+    ): void {
+        if (!this.intersects(obj.center, obj.radius, region.center, region.radius))
+            return;
+
+        for (const other of region.objects) {
+            if (this.intersects(
+                obj.center, obj.radius,
+                other.center, other.radius
+            )) {
+                collisions.push([obj.id, other.id]);
+            }
+        }
+
+        for (const child of region.children) {
+            this.processObjectRegion(obj, child, collisions);
+        }
+    }
+
+
+    // -----------------------------------------
+    // Trivial collision counting using intersection query for each object
+    // -----------------------------------------
+
+    /**
+     * Counts intersecting object pairs by querying the tree once for every object.
+     *
+     * Each unordered pair is reported twice: once when querying from each object.
+     * Self-pairs are skipped.
+     */
+    public findCollisionsByQuery(): [number, number][] {
+        const collisions: [number, number][] = [];
+
+        const processRegion = (region: Region) => {
+            for (const obj of region.objects) {
+
+                // Test against root objects
+                for (const other of this.root.objects) {
+                    if (this.intersects(
+                        obj.center, obj.radius,
+                        other.center, other.radius
+                    )) {
+                        collisions.push([obj.id, other.id]);
+                    }
+                }
+
+                // Query all intersecting regions
+                const regions = this.intersectionQuery(obj.center, obj.radius, 0, false);
+
+                for (const candidate of regions) {
+                    for (const other of candidate.objects) {
+
+                        if (other === obj)
+                            continue;
+
+                        if (this.intersects(
+                            obj.center, obj.radius,
+                            other.center, other.radius
+                        )) {
+                            collisions.push([obj.id, other.id]);
+                        }
+                    }
+                }
+            }
+
+            for (const child of region.children) {
+                processRegion(child);
+            }
+        };
+
+        // Root objects
+        for (const obj of this.root.objects) {
+
+            // Root vs root
+            for (const other of this.root.objects) {
+                if (other === obj)
+                    continue;
+
+                if (this.intersects(
+                    obj.center, obj.radius,
+                    other.center, other.radius
+                )) {
+                    collisions.push([obj.id, other.id]);
+                }
+            }
+
+            // Root vs tree
+            const regions = this.intersectionQuery(obj.center, obj.radius, 0, false);
+
+            for (const region of regions) {
+                for (const other of region.objects) {
+                    if (this.intersects(
+                        obj.center, obj.radius,
+                        other.center, other.radius
+                    )) {
+                        collisions.push([obj.id, other.id]);
+                    }
+                }
+            }
+        }
+
+        // Objects stored in regions
+        for (const child of this.root.children) {
+            processRegion(child);
+        }
+
+        return collisions;
+    }
+
+    /**
+     * Brute-force collision detection.
+     *
+     * Returns every unordered intersecting pair exactly once.
+     * If (id1, id2) is included, then (id2, id1) is not.
+     */
+    public static findCollisionsBruteForce(objects: SphereObject[]): [number, number][] {
+        const collisions: [number, number][] = [];
+
+        for (let i = 0; i < objects.length; i++) {
+            const obj1 = objects[i];
+
+            for (let j = i + 1; j < objects.length; j++) {
+                const obj2 = objects[j];
+
+                const radiusSum = obj1.radius + obj2.radius;
+                if (obj1.center.distanceToSquared(obj2.center) <= radiusSum * radiusSum) {
+                    collisions.push([obj1.id, obj2.id]);
+                }
+            }
+        }
+
+        return collisions;
+    }
+
+
+
+
+    // -----------------------------------------
     // Just for DEBUGGING!!! Do not use these for actual implementation.
+    // -----------------------------------------
 
     DEBUG_collectRegions(node: Region | Root, regions: Region[]): Region[] {
         if (node instanceof Region)
