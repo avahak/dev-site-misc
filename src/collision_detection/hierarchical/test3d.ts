@@ -157,13 +157,14 @@ export class RenderManager {
     dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 
     guiState = {
-        objectCount: 1000,
+        objectCount: 500,
         objectSize: 0,
         timeScale: 1,
         motionMode: 'Orbits',
         showRegions: true,
         showObjects: true,
         validate: false,
+        stop: false,
     };
 
     simulationTime: number = 0;
@@ -245,6 +246,7 @@ export class RenderManager {
         this.gui.add(this.guiState, 'showObjects').name("Show Objects");
         this.gui.add(this.guiState, 'showRegions').name("Show Regions");
         this.gui.add(this.guiState, 'validate').name("Validate");
+        this.gui.add(this.guiState, 'stop').name("Stop");
     }
 
     createTextElement(container: HTMLElement) {
@@ -665,6 +667,8 @@ export class RenderManager {
     }
 
     animate() {
+        if (this.guiState.stop)
+            return;
         this.controls.update();
         this.handleResize();
         this.render();
@@ -754,7 +758,7 @@ export class RenderManager {
             this.selectedObjectIndex !== null ?
                 `Selected: Object ${this.selectedObjectIndex}` :
                 'Click to select object',
-            `Collisions: ${collisionsBF.length},`,
+            `Collisions: ${collisionsBF.length}`,
             ``,
             `${collisionsText}`,
         ];

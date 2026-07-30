@@ -1,5 +1,7 @@
 /*
 - mostly implemented by AI
+- + Consider storing `this.populatedRegions: Region[]` in the tree so that this does 
+not have to be recomputed every frame.
 - Set vs array for objects, children? These are very small so likely Set is inefficient
 */
 

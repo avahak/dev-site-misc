@@ -1,57 +1,67 @@
 ## Loose spherical hierarchy for broad-phase collision detection
 
-Let $S>1$ be a scaling factor.
+Let $(X,d)$ be a metric space. For two balls $B_1=B(p_1,r_1)$ and $B_2=B(p_2,r_2)$ define
 
-The structure stores a set of objects represented by balls $O = B(c,r)$ with a fixed radius $r$ and a time-varying center $c$. The tree indexes them using a hierarchy of spherical regions. Every non-root node is a region $R = B(q, S^k)$, where $k \in \mathbb{Z}$ is the level of the region. The root is not geometric; it acts only as the top-level organizer. Regions of level $k_{\rm max}$ are the only children of the root, and there are no regions above level $k_{\rm max}$.
+$$\text{$B_1$ overlaps $B_2$ if $d(p_1,p_2)\le r_1+r_2$,}$$
 
-The algorithm only requires distance metric, no specific coordinate system. The underlying implementation must provide containment and intersection tests for balls.
+and
 
-A fixed parameter $M > 1$ controls looseness. For an object $O = B(c,r)$, its admissible level is the unique integer $k$ such that
+$$\text{$B_1$ encloses $B_2$ if $d(p_1,p_2)+r_2\le r_1$.}$$ 
 
-$$S^{k-1} \le Mr < S^k.$$
+If $B_1$ and $B_2$ do not overlap, then $B_1\cap B_2=\emptyset$. Likewise, if $B_1$ encloses $B_2$, then $B_2\subset B_1$. The converses do not hold in every metric space. Note that overlap is symmetric and enclosure is transitive.
 
-If $Mr \ge S^{k_{\rm max}}$, the object is too large for any region and is stored directly under the root.
+Objects and regions in the algorithm are balls, specified by their centers and radii. Throughout the algorithm, overlap and enclosure are understood in the sense defined above.
+
+Let $S>1$ be a constant scaling factor.
+
+The structure is a tree that stores a set of objects represented by balls $O = B(c,r)$. Each object has a fixed radius $r>0$, time-varying center $c\in X$, and an associated fixed margin $\rho\ge 0$. The structure indexes them using a hierarchy of spherical regions. Every non-root node is a region $R = B(q, S^k)$, where $k \in \mathbb{Z}$ is the level of the region. The root is not geometric; it acts only as the top-level organizer. Regions of level $k_{\rm max}$ are the only children of the root, and there are no regions above level $k_{\rm max}$.
+
+For an object $O = B(c,r)$, its admissible level is the unique integer $k$ such that
+
+$$S^{k-1} \le r+\rho < S^k.$$
+
+If $r+\rho \ge S^{k_{\rm max}}$, the object cannot be enclosed by any region and is stored directly under the root.
 
 ### Invariants
 
 The tree satisfies the following invariants:
 
-* **Geometry:** Every non-root node is a region whose radius is exactly $S^k$ for its level $k$. When a new region is created, its center is identical to the center of the child it will contain.
-* **Containment:** Every object is stored in exactly one region (or the root) and maintains a reference to that node. Every child region and stored object is fully contained by its parent region. Therefore every region is a bounding ball for every region and object in its subtree.
+* **Geometry:** Every non-root node is a region whose radius is exactly $S^k$ for its level $k$. When a new region is created, its center is equal to the center of the child it will contain.
+* **Enclosure:** Every object is stored in exactly one region (or the root) and maintains a reference to that node. Every parent region encloses each of its child regions and stored objects. Consequently, every region encloses every descendant region and every object stored in its subtree.
 * **Topology:** The parent of a level-$k$ region is either a level-$(k+1)$ region, or the root if $k = k_{\rm max}$.
 * **Pruning:** Every region must contain at least one stored object or at least one child region.
-* **Population:** A region is *populated* if it stores at least one object. Every populated region maintains a neighbor list containing exactly the populated regions that intersect it, excluding itself. Neighbor lists are symmetric: if region $A$ lists region $B$, then region $B$ lists region $A$. Every unpopulated region maintains an empty neighbor list.
+* **Population:** A region is *populated* if it stores at least one object. Every populated region maintains a neighbor list containing exactly the populated regions that overlap it, excluding itself. Neighbor lists are symmetric: if region $A$ lists region $B$, then region $B$ lists region $A$. Every unpopulated region maintains an empty neighbor list.
 
-Whenever a region becomes populated, initialize its neighbor list by finding every intersecting populated region and symmetrically updating all neighbor lists. Whenever a region becomes unpopulated, remove it from the neighbor lists of all its neighbors and clear its own neighbor list.
+Whenever a region becomes populated, initialize its neighbor list by finding every overlapping populated region and updating all neighbor lists symmetrically. Whenever a region becomes unpopulated, remove it from the neighbor lists of all its neighbors and clear its own neighbor list.
 
-### Intersection query
+### Overlap query
 
-An intersection query takes three inputs: a query ball $B$, a minimum level $k_{\rm min}$, and a boolean flag `group_by_level`.
+An overlap query takes three inputs: a query ball $B$, a minimum level $k_{\rm min}$, and a boolean flag `group_by_level`.
 
-The output is every region in the tree that intersects $B$ and whose level is at least $k_{\rm min}$. If `group_by_level = true`, the result is returned as a map from level to a list of matching regions.
+The output is every region in the tree that overlaps $B$ and whose level is at least $k_{\rm min}$. If `group_by_level = true`, the result is returned as a map from level to a list of matching regions.
 
-The query is performed top-down, starting from the root's children. For each visited region, test for intersection with $B$. If the region intersects $B$ and its level is at least $k_{\rm min}$, include it in the output. Recurse only into children that intersect $B$. If a region's level is less than $k_{\rm min}$, it is not reported and its subtree is not traversed.
+The query traverses the tree top-down, starting from the root's children. For each visited region, test for overlap with $B$. If the region overlaps $B$ and its level is at least $k_{\rm min}$, include it in the output. Recurse only into children that overlap $B$. If a region's level is less than $k_{\rm min}$, it is not reported and its subtree is not traversed.
 
-### Containment query
+### Enclosure query
 
-A containment query takes the same inputs as an intersection query.
+An enclosure query takes the same inputs as an overlap query.
 
-The output is every region in the tree that fully contains $B$ and whose level is at least $k_{\rm min}$. If `group_by_level = true`, the result is returned as a map from level to a list of matching regions.
+The output is every region in the tree that encloses $B$ and whose level is at least $k_{\rm min}$. If `group_by_level = true`, the result is returned as a map from level to a list of matching regions.
 
-The query is performed analogously to the intersection query, replacing intersection tests with containment tests and descending only into child regions that fully contain $B$.
+The enclosure query traverses the tree analogously to the overlap query, replacing overlap tests with enclosure tests and descending only into child regions that enclose $B$.
 
-*(Note: Intersection and containment queries return regions, not objects.)*
+*(Note: Overlap and enclosure queries return regions, not objects.)*
 
 ### Insertion
 
 To insert an object $O = B(c,r)$:
 
 1. Compute its admissible level $k$.
-2. If $Mr \ge S^{k_{\rm max}}$, store $O$ directly under the root and terminate.
-3. Otherwise, perform a containment query with query ball $O$, minimum level $k$, and `group_by_level = true`.
-4. **Target Resolution:** Search the returned regions at level $k$ for any that contain $O$. If one or more exist, select the region whose center is closest to $c$, store $O$ there, and if the region was previously unpopulated, populate it. Terminate.
-5. **Region Creation:** If no suitable level-$k$ region exists, create a new region $R_k = B(c,S^k)$. Store $O$ in $R_k$, populate $R_k$, and connect it upward.
-6. **Connecting Upward:** Let $j := k$. Search the query results at level $j+1$ for a region that fully contains $R_j$.
+2. If $r+\rho \ge S^{k_{\rm max}}$, store $O$ directly under the root and terminate.
+3. Otherwise, perform an enclosure query with query ball $O$, minimum level $k$, and `group_by_level = true`.
+4. **Existing region:** Search the returned regions at level $k$ for any that enclose $O$. If one or more exist, select the region whose center is closest to $c$, store $O$ there, and if the region was previously unpopulated, populate it. Terminate.
+5. **Create new region:** If no suitable level-$k$ region exists, create a new region $R_k = B(c,S^k)$. Store $O$ in $R_k$, populate $R_k$, and connect it upward.
+6. **Connect upward:** Let $j := k$. Search the query results at level $j+1$ for a region that encloses $R_j$.
    * If one exists, select the one whose center is closest to $R_j$, assign it as the parent of $R_j$, and terminate.
    * If none exist and $j+1 \le k_{\rm max}$, create a new region $R_{j+1} = B(c,S^{j+1})$, make $R_j$ its child, set $j := j+1$, and repeat this step.
    * If $j = k_{\rm max}$ is reached without finding a parent, attach $R_{k_{\rm max}}$ directly to the root.
@@ -62,24 +72,38 @@ This procedure always reuses an existing valid region when possible and otherwis
 
 To delete an object $O$:
 
-1. Remove $O$ from its storage node.
+1. Remove $O$ from its parent node.
 2. If the node is a region and this removal transitions it to unpopulated, unpopulate it.
-3. If the node is now entirely empty (no stored objects and no child regions), remove it from its parent.
+3. If the node is now empty (no stored objects and no child regions), remove it from its parent.
 4. Apply the emptiness test iteratively to the parent, removing empty ancestors until a non-empty region or the root is reached.
 
 ### Updating after object movement
 
-Let object $O$ move to a new center while keeping the same radius. Let $H$ be its current storage node.
+Suppose that object $O$ has moved to a new center while keeping the same radius. Let $H$ be its current parent node.
 
-1. If $H$ is the root, or if $O$ is still fully contained in $H$, no structural changes are required. Terminate.
+1. If $H$ is the root, or if $O$ is still enclosed in $H$, no structural changes are required. Terminate.
 2. Otherwise, remove $O$ from $H$. If $H$ transitions to unpopulated, unpopulate it.
-3. Insert $O$ using the standard insertion procedure.
-4. Clean up the old path: if $H$ is now entirely empty, remove it from its parent. Apply this iteratively upward, deleting empty ancestors until a non-empty region or the root is reached.
+3. Insert $O$ back into the tree using the insertion procedure.
+4. Clean up the old path: if $H$ is now empty, remove it from its parent. Apply this iteratively upward, deleting empty ancestors until a non-empty region or the root is reached.
 
 *Note: Reinsertion strictly precedes pruning so that any valid ancestors of $H$ remain available for reuse during the insertion phase.*
 
-## Notes on Behavior
+## Collision detection
 
-The object radius never changes during updates, so the admissible level of an object is determined entirely by its radius and does not need to be recomputed. The update operation is therefore a localized relocation: preserve the current storage node when possible, otherwise move the object to the smallest valid existing region or create only the minimum new structure needed to restore the invariants.
+The tree accelerates broad-phase collision detection by exploiting the neighbor lists of populated regions. Objects stored under the root are compared separately.
 
-Neighbor lists depend only on populated regions and their bounding balls. They are unaffected by changes to the tree topology and are updated only when a region transitions between populated and unpopulated.
+1. Test every pair of objects stored directly under the root.
+2. For each root object, test it against every object stored in a populated region that overlaps it.
+3. For every populated region:
+   * Test every pair of objects stored in that region.
+   * For every neighboring populated region, test every object in one region against every object in the other.
+
+Since neighbor lists are symmetric, each pair of neighboring regions must be processed only once.
+
+Each candidate pair is then subjected to an exact overlap test between the two objects. The procedure reports every overlapping pair exactly once.
+
+## Notes on behavior
+
+The object radius and margin are assumed to remain fixed, so the admissible level of an object does not need to be recomputed. The update operation is therefore a localized relocation: preserve the current parent node when possible, otherwise move the object to an existing region or create only the minimum new structure needed to restore the invariants.
+
+Neighbor lists depend only on populated regions. They are unaffected by changes to the tree topology and are updated only when a region transitions between populated and unpopulated.
