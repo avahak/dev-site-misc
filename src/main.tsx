@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { createTheme, ThemeProvider } from '@mui/material';
 import CssBaseline from '@mui/material/CssBaseline';
 import { AppRouter } from './AppRouter.tsx';
+import "katex/dist/katex.min.css";
 
 const darkTheme = createTheme({
     palette: {

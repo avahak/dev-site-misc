@@ -3,7 +3,7 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { SphereObject, Root, Region, LooseSphericalHierarchy } from './tree';
 
-const N = 10000;
+const N = 2000;
 const R = 0.1;
 const TIMESTEP = 0.01;
 const MAX_REGIONS = 50000;
@@ -480,7 +480,7 @@ export class RenderManager {
                 throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Query: ${collisionsQ.length}`);
             if (collisionsR.length !== collisionsBF.length)
                 throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Recursive: ${collisionsR.length}`);
-            if (collisionsN.length !== 2 * collisionsBF.length)
+            if (collisionsN.length !== collisionsBF.length)
                 throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Neighbors: ${collisionsN.length}`);
             // Check that all collisions were found:
             for (let [id1, id2] of collisionsBF) {
@@ -496,7 +496,7 @@ export class RenderManager {
                     throw Error(`Collision missing in Q`);
                 if (indexR1 === -1 && indexR2 === -1)
                     throw Error(`Collision missing in R`);
-                if (indexN1 === -1 || indexN2 === -1)
+                if (indexN1 === -1 && indexN2 === -1)
                     throw Error(`Collision missing in N`);
             }
 

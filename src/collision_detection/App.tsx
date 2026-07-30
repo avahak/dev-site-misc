@@ -2,9 +2,15 @@ import React, { useEffect, useRef } from 'react';
 import { Box, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
+import Markdown from 'react-markdown';
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+
 // import { RenderManager } from './manager';
 // import { RenderManager } from './visualization';
-import { RenderManager } from './hierarchical/test';
+// import { RenderManager } from './hierarchical/test2d';
+import { RenderManager } from './hierarchical/test3d';
+import treeMd from "./hierarchical/tree.md?raw";
 
 const SceneComponent: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -26,6 +32,9 @@ const SceneComponent: React.FC = () => {
 const App: React.FC = () => {
     return (
         <Container maxWidth="xl">
+            <MUILink component={RouterLink} to="/" variant="body1" color="primary">
+                Back
+            </MUILink>
             <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                 <Typography variant="h2">
                     Collision detection
@@ -34,9 +43,12 @@ const App: React.FC = () => {
             <Box sx={{ position: "relative", width: "100%", height: "600px" }}>
                 <SceneComponent />
             </Box>
-            <MUILink component={RouterLink} to="/" variant="body1" color="primary">
-                Back
-            </MUILink>
+            <Markdown
+                remarkPlugins={[remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+            >
+                {treeMd}
+            </Markdown>
         </Container>
     );
 };

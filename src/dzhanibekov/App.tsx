@@ -1,22 +1,10 @@
 import React, { Suspense } from 'react';
 import { Box, Container, Typography } from '@mui/material';
-import { MathJaxContext, MathJax } from 'better-react-mathjax';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
+import { InlineMath, BlockMath } from "react-katex";
 const ThreeScene = React.lazy(() => import('./ThreeScene'));
 
-const config = {
-    tex: {
-        inlineMath: [
-            ["$", "$"],
-            ["\\(", "\\)"]
-        ],
-        displayMath: [
-            ["$$", "$$"],
-            ["\\[", "\\]"]
-        ]
-    }
-};
 
 const App: React.FC = () => {
     return (
@@ -38,24 +26,24 @@ const App: React.FC = () => {
                 </Typography>
             </Box>
             <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
-                <MathJaxContext version={3} config={config}>
-                    <Typography>
-                        <MathJax hideUntilTypeset="first">
-                            {`
-                            Equation for the rotation $q \\in \\mathbb{H}$ corresponding to matrix $R$:
+                <Typography>
+                    <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
+                        <Typography component="div">
+                            The rotation is represented by the unit quaternion{" "}
+                            <InlineMath math="q \in \mathbb{H}" />{" "}
+                            with corresponding rotation matrix {" "}<InlineMath math="R" /> and
+                        </Typography>
+                    </Box>
 
-                            $$\\omega = R I_0^{-1} R^t I_0 \\omega_0,$$
+                    <BlockMath math="\omega = R I_0^{-1} R^{T} I_0 \omega_0," />
 
-                            $$q'(t) = \\frac{1}{2} \\omega * q(t).$$
-                            `}
-                        </MathJax>
-                    </Typography>
-                </MathJaxContext>
+                    <BlockMath math="\dot q = \frac12\,\omega \otimes q." />
+                </Typography>
             </Box>
             <MUILink component={RouterLink} to="/" variant="body1" color="primary">
                 Back
             </MUILink>
-        </Container>
+        </Container >
     );
 };
 
