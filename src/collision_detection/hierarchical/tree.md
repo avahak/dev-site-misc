@@ -14,25 +14,35 @@ Objects and regions in the algorithm are balls, specified by their centers and r
 
 Let $S>1$ be a constant scaling factor.
 
-The structure is a tree that stores a set of objects represented by balls $O = B(c,r)$. Each object has a fixed radius $r>0$, time-varying center $c\in X$, and an associated fixed margin $\rho\ge 0$. The structure indexes them using a hierarchy of spherical regions. Every non-root node is a region $R = B(q, S^k)$, where $k \in \mathbb{Z}$ is the level of the region. The root is not geometric; it acts only as the top-level organizer. Regions of level $k_{\rm max}$ are the only children of the root, and there are no regions above level $k_{\rm max}$.
+The structure is a tree that stores a set of objects represented by balls $O = B(c,r)$. Each object has a fixed radius $r>0$, time-varying center $c\in X$, and an associated fixed margin $\rho\ge 0$. The structure indexes them using a hierarchy of spherical regions.
 
-For an object $O = B(c,r)$, its admissible level is the unique integer $k$ such that
+Every non-root node is a region $R=B(q,S^k)$, where $q\in X$ is the center and $k\in\mathbb Z$ is the level of the region. The root is not geometric; it acts only as the top-level organizer. Regions of level $k_{\rm max}$ are the only children of the root, and there are no regions above level $k_{\rm max}$.
 
-$$S^{k-1} \le r+\rho < S^k.$$
+For an object $O=B(c,r)$, its admissible level is the unique integer $k$ such that
 
-If $r+\rho \ge S^{k_{\rm max}}$, the object cannot be enclosed by any region and is stored directly under the root.
+$$S^{k-1}\le r+\rho<S^k.$$
+
+If $r+\rho\ge S^{k_{\rm max}}$, the object cannot be enclosed by any region and is stored directly under the root.
+
+Whenever a new region is created, its center is initialized to the center of the child (object or region) that it is created to contain.
+
+A region is *populated* if it stores at least one object. Every region maintains a neighbor list. Whenever a region becomes populated, initialize its neighbor list by finding every overlapping populated region and updating all neighbor lists symmetrically. Whenever a region becomes unpopulated, remove it from the neighbor lists of all its neighbors and clear its own neighbor list.
 
 ### Invariants
 
-The tree satisfies the following invariants:
+The tree satisfies the following invariants and its operations preserve them.
 
-* **Geometry:** Every non-root node is a region whose radius is exactly $S^k$ for its level $k$. When a new region is created, its center is equal to the center of the child it will contain.
-* **Enclosure:** Every object is stored in exactly one region (or the root) and maintains a reference to that node. Every parent region encloses each of its child regions and stored objects. Consequently, every region encloses every descendant region and every object stored in its subtree.
-* **Topology:** The parent of a level-$k$ region is either a level-$(k+1)$ region, or the root if $k = k_{\rm max}$.
-* **Pruning:** Every region must contain at least one stored object or at least one child region.
-* **Population:** A region is *populated* if it stores at least one object. Every populated region maintains a neighbor list containing exactly the populated regions that overlap it, excluding itself. Neighbor lists are symmetric: if region $A$ lists region $B$, then region $B$ lists region $A$. Every unpopulated region maintains an empty neighbor list.
+* **Object storage:** Every object is stored in exactly one region whose level is equal to its admissible level, or directly under the root. Every object maintains a reference to its parent node.
 
-Whenever a region becomes populated, initialize its neighbor list by finding every overlapping populated region and updating all neighbor lists symmetrically. Whenever a region becomes unpopulated, remove it from the neighbor lists of all its neighbors and clear its own neighbor list.
+* **Enclosure:** Every parent region encloses each of its child regions and stored objects. 
+
+* **Topology:** The parent of a level-$k$ region is either a level-$(k+1)$ region, or the root if $k=k_{\rm max}$.
+
+* **Pruning:** Every region contains at least one stored object or at least one child region.
+
+* **Neighbors:** The neighbor list of every populated region contains exactly the populated regions that overlap it, excluding itself. The neighbor list of every unpopulated region is empty.
+
+Note that the enclosure invariant implies that every region encloses every descendant region and every object stored in its subtree.
 
 ### Overlap query
 
@@ -102,11 +112,13 @@ Since neighbor lists are symmetric, each pair of neighboring regions must be pro
 
 Each candidate pair is then subjected to an exact overlap test between the two objects. The procedure reports every overlapping pair exactly once.
 
-## Notes and miscellaneous
+## Notes
 
 The object radius and margin are assumed to remain fixed, so the admissible level of an object does not need to be recomputed. The update operation is therefore a localized relocation: preserve the current parent node when possible, otherwise move the object to an existing region or create only the minimum new structure needed to restore the invariants.
 
 Neighbor lists depend only on populated regions. They are unaffected by changes to the tree topology and are updated only when a region transitions between populated and unpopulated.
+
+## Bounding occupancy
 
 **Lemma (Child separation).**  
 Assume there exists a constant $C>0$ such that every object satisfies $\rho\ge Cr$. Let

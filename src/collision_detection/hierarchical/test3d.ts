@@ -164,7 +164,7 @@ export class RenderManager {
         showRegions: true,
         showObjects: true,
         validate: false,
-        stop: true,
+        stop: false,
     };
 
     simulationTime: number = 0;
