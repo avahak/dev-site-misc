@@ -2,13 +2,13 @@
 
 Let $(X,d)$ be a metric space. For two balls $B_1=B(p_1,r_1)$ and $B_2=B(p_2,r_2)$ define
 
-$$\text{$B_1$ overlaps $B_2$ if $d(p_1,p_2)\le r_1+r_2$,}$$
+$$\text{$B_1$ overlaps $B_2$ if $d(p_1,p_2) < r_1+r_2$,}$$
 
 and
 
 $$\text{$B_1$ encloses $B_2$ if $d(p_1,p_2)+r_2\le r_1$.}$$ 
 
-If $B_1$ and $B_2$ do not overlap, then $B_1\cap B_2=\emptyset$. Likewise, if $B_1$ encloses $B_2$, then $B_2\subset B_1$. The converses do not hold in every metric space. Note that overlap is symmetric and enclosure is transitive.
+If $B_1$ and $B_2$ do not overlap, then $B_1\cap B_2=\emptyset$. Likewise, if $B_1$ encloses $B_2$, then $B_2\subset B_1$. These predicates are defined by simple distance computations and agree with the usual notions of intersection and containment in $\R^n$ and many other metric spaces. Note that overlap is symmetric and enclosure is transitive.
 
 Objects and regions in the algorithm are balls, specified by their centers and radii. Throughout the algorithm, overlap and enclosure are understood in the sense defined above.
 
@@ -93,17 +93,81 @@ Suppose that object $O$ has moved to a new center while keeping the same radius.
 The tree accelerates broad-phase collision detection by exploiting the neighbor lists of populated regions. Objects stored under the root are compared separately.
 
 1. Test every pair of objects stored directly under the root.
-2. For each root object, test it against every object stored in a populated region that overlaps it.
+2. For each root object, test it against every object stored directly in a populated region that overlaps it.
 3. For every populated region:
    * Test every pair of objects stored in that region.
-   * For every neighboring populated region, test every object in one region against every object in the other.
+   * For every neighboring populated region, test every object stored directly in one region against every object stored directly in the other.
 
 Since neighbor lists are symmetric, each pair of neighboring regions must be processed only once.
 
 Each candidate pair is then subjected to an exact overlap test between the two objects. The procedure reports every overlapping pair exactly once.
 
-## Notes on behavior
+## Notes and miscellaneous
 
 The object radius and margin are assumed to remain fixed, so the admissible level of an object does not need to be recomputed. The update operation is therefore a localized relocation: preserve the current parent node when possible, otherwise move the object to an existing region or create only the minimum new structure needed to restore the invariants.
 
 Neighbor lists depend only on populated regions. They are unaffected by changes to the tree topology and are updated only when a region transitions between populated and unpopulated.
+
+**Lemma (Child separation).**  
+Assume there exists a constant $C>0$ such that every object satisfies $\rho\ge Cr$. Let
+
+$$\alpha=\min\!\left\{1-\frac1S,\frac{C}{1+C}\right\}.$$
+
+Then the centers of the level-$k$ children of any level-$(k+1)$ region are $\alpha S^k$-separated.
+
+**Proof.**  
+Let $A$ be a level-$(k+1)$ region, and let $B=B(b,S^k)$ and $B'=B(b',S^k)$ be two distinct level-$k$ children of $A$. Assume $B$ was created after $B'$.
+
+When $B$ was created, it was initialized with a single child $D$, whose center became the center of $B$. Thus $b$ is the center of $D$. Since $B'$ already existed and was not selected as the parent of $D$, the region $B'$ did not enclose $D$.
+
+If $D$ is a level-$(k-1)$ region, then $D=B(b,S^{k-1})$, so
+
+$$d(b,b')+S^{k-1}>S^k,$$
+
+which implies
+
+$$d(b,b')>\left(1-\frac1S\right)S^k\ge\alpha S^k.$$
+
+If instead $D$ is an object of radius $r$, then
+
+$$d(b,b')+r>S^k.$$
+
+Since the object is admissible at level $k$,
+
+$$r+\rho<S^k.$$
+
+Together with the assumption $\rho\ge Cr$, this gives
+
+$$(1+C)r\le r+\rho<S^k,$$
+
+and therefore
+
+$$r<\frac{S^k}{1+C}.$$
+
+Substituting into the previous inequality yields
+
+$$d(b,b')>S^k-r>S^k-\frac{S^k}{1+C}=\frac{C}{1+C}S^k\ge\alpha S^k.$$
+
+Thus in either case,
+
+$$d(b,b')>\alpha S^k,$$
+
+so the centers of the level-$k$ children of $A$ are $\alpha S^k$-separated. $\square$
+
+**Theorem (Bounded number of children).**  
+Assume $(X,d)$ is a doubling metric space with doubling dimension $d$. Assume further that there exists a constant $C>0$ such that every object satisfies $\rho\ge Cr$. Then every level-$(k+1)$ region has at most
+
+$$N=O\!\left(\left(\frac{S-1}{\alpha}\right)^d\right)$$
+
+level-$k$ children, where
+
+$$\alpha=\min\!\left\{1-\frac1S,\frac{C}{1+C}\right\}.$$
+
+In particular, the number of children of a region is bounded by a constant depending only on $S$, $C$, and the doubling dimension of $(X,d)$.
+
+**Proof.**  
+By the previous lemma, the centers of the level-$k$ children are $\alpha S^k$-separated. Since every child region is enclosed by its parent, all child centers lie within distance $S^{k+1}-S^k=(S-1)S^k$ of the parent center. A standard packing bound for doubling metric spaces therefore implies that the number of such centers is at most
+
+$$O\!\left(\left(\frac{(S-1)S^k}{\alpha S^k}\right)^d\right) = O\!\left(\left(\frac{S-1}{\alpha}\right)^d\right).$$
+
+This bound is independent of $k$. $\square$

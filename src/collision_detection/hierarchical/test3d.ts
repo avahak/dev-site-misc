@@ -1,4 +1,4 @@
-// AI-code here
+// includes AI-code 
 
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
@@ -7,8 +7,8 @@ import { SphereObject, Root, Region, LooseSphericalHierarchy } from './tree';
 
 // Tree initialization
 const K_MAX = 4;
-const MARGIN_RATIO = 3;
 const SCALING_FACTOR = 2.5;
+const margin = (r: number) => 2.5 * r + 0.1;
 
 // Opacity
 const REGION_OPACITY = 0.005;
@@ -164,7 +164,7 @@ export class RenderManager {
         showRegions: true,
         showObjects: true,
         validate: false,
-        stop: false,
+        stop: true,
     };
 
     simulationTime: number = 0;
@@ -325,7 +325,7 @@ export class RenderManager {
                 (Math.random() - 0.5) * 8
             );
             const radius = Math.pow(1.5, this.guiState.objectSize) * 0.2 * (0.3 + Math.random());
-            const obj = new SphereObject(pos, radius, i);
+            const obj = new SphereObject(pos, radius, margin(radius), i);
             this.objects.push(obj);
             this.objectColors.push(new THREE.Color().setHSL(i / count, 0.8, 0.5));
 
@@ -349,7 +349,7 @@ export class RenderManager {
             this.orbitParams.push({ u, v, a, b, omega, phase });
         }
 
-        this.hierarchy = new LooseSphericalHierarchy(K_MAX, MARGIN_RATIO, SCALING_FACTOR);
+        this.hierarchy = new LooseSphericalHierarchy(K_MAX, SCALING_FACTOR);
 
         for (const obj of this.objects)
             this.hierarchy.insert(obj);

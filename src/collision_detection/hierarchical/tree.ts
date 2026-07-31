@@ -1,7 +1,5 @@
 /*
-- mostly implemented by AI
-- + Consider storing `this.populatedRegions: Region[]` in the tree so that this does 
-not have to be recomputed every frame.
+- includes AI code
 - Set vs array for objects, children? These are very small so likely Set is inefficient
 */
 
@@ -11,12 +9,14 @@ import * as THREE from 'three';
 export class SphereObject {
     public center: THREE.Vector3;
     public radius: number;
+    public margin: number;
     public parentNode: Region | Root | null = null;
     public readonly id: number;
 
-    constructor(center: THREE.Vector3, radius: number, id: number) {
+    constructor(center: THREE.Vector3, radius: number, margin: number, id: number) {
         this.center = center.clone();
         this.radius = radius;
+        this.margin = margin;
         this.id = id;
     }
 }
@@ -38,7 +38,7 @@ export class Region {
     public parentNode: Region | Root | null = null;
 
     // Valid only while this region is populated.
-    // Contains every populated region intersecting this region, excluding itself.
+    // Contains every populated region overlapping this region, excluding itself.
     public neighbors: Region[] = [];
 
     constructor(center: THREE.Vector3, level: number, scalingFactor: number) {
@@ -54,38 +54,36 @@ export class Region {
  */
 export class LooseSphericalHierarchy {
     public root: Root;
-    /** Minimum allwed parent region radius to object radius */
-    public marginRatio: number;
     /** Maximum region level */
     public maxLevel: number;
     /** Ratio of radii between parent region and the region */
     public scalingFactor: number;
+    public populatedRegions: Region[] = [];     // Just an optimization
 
-    constructor(maxLevel: number, marginRatio: number, scalingFactor: number = 2) {
-        if (marginRatio <= 1 || scalingFactor <= 1)
-            throw Error("Invalid parameter.");
-        this.marginRatio = marginRatio;
+    constructor(maxLevel: number, scalingFactor: number = 2) {
+        if (scalingFactor <= 1)
+            throw Error("Invalid scalingFactor.");
         this.maxLevel = maxLevel;
         this.scalingFactor = scalingFactor;
         this.root = new Root();
     }
 
     // Overloads for the query method based on the `groupByLevel` flag
-    public intersectionQuery(
+    public overlapQuery(
         queryCenter: THREE.Vector3,
         queryRadius: number,
         groupByLevel: true,
         minLevel?: number
     ): Map<number, Region[]>;
 
-    public intersectionQuery(
+    public overlapQuery(
         queryCenter: THREE.Vector3,
         queryRadius: number,
         groupByLevel: false,
         minLevel?: number
     ): Region[];
 
-    public intersectionQuery(
+    public overlapQuery(
         queryCenter: THREE.Vector3,
         queryRadius: number,
         groupByLevel: boolean,
@@ -102,7 +100,7 @@ export class LooseSphericalHierarchy {
                 if (region.level < minLevel)
                     continue;
 
-                if (this.intersects(queryCenter, queryRadius, region.center, region.radius)) {
+                if (this.overlaps(queryCenter, queryRadius, region.center, region.radius)) {
                     if (groupByLevel) {
                         let levelArr = resultsMap.get(region.level);
                         if (!levelArr) {
@@ -125,21 +123,21 @@ export class LooseSphericalHierarchy {
     }
 
     // Overloads for the query method based on the `groupByLevel` flag
-    public containmentQuery(
+    public enclosureQuery(
         queryCenter: THREE.Vector3,
         queryRadius: number,
         groupByLevel: true,
         minLevel?: number
     ): Map<number, Region[]>;
 
-    public containmentQuery(
+    public enclosureQuery(
         queryCenter: THREE.Vector3,
         queryRadius: number,
         groupByLevel: false,
         minLevel?: number
     ): Region[];
 
-    public containmentQuery(
+    public enclosureQuery(
         queryCenter: THREE.Vector3,
         queryRadius: number,
         groupByLevel: boolean,
@@ -156,7 +154,7 @@ export class LooseSphericalHierarchy {
                 if (region.level < minLevel)
                     continue;
 
-                if (this.fullyContains(region.center, region.radius, queryCenter, queryRadius)) {
+                if (this.encloses(region.center, region.radius, queryCenter, queryRadius)) {
                     if (groupByLevel) {
                         let levelArr = resultsMap.get(region.level);
                         if (!levelArr) {
@@ -180,23 +178,23 @@ export class LooseSphericalHierarchy {
 
     public insert(obj: SphereObject): void {
         // Calculate the admissible level k
-        // S^(k-1) <= a * r < S^k  =>  k = floor(log_S(a * r)) + 1
-        const mr = this.marginRatio * obj.radius;
-        const k = Math.floor(Math.log(mr) / Math.log(this.scalingFactor)) + 1;
+        // S^(k-1) <= r + margin < S^k  =>  k = floor(log_S(r + margin)) + 1
+        const rm = obj.radius + obj.margin;
+        const k = Math.floor(Math.log(rm) / Math.log(this.scalingFactor)) + 1;
 
         // If too large for any region, store directly in root
-        if (mr >= Math.pow(this.scalingFactor, this.maxLevel)) {
+        if (rm >= Math.pow(this.scalingFactor, this.maxLevel)) {
             this.root.objects.push(obj);
             obj.parentNode = this.root;
             return;
         }
 
         // Query the tree for potential parent regions
-        const queryResults = this.containmentQuery(obj.center, -obj.radius, true, k);
+        const queryResults = this.enclosureQuery(obj.center, -obj.radius, true, k);
         const levelKRegions = queryResults.get(k) || [];
 
-        // Attempt to find an existing level-k region that fully contains the object
-        const bestRegion = this.findBestContainingRegion(levelKRegions, obj.center, obj.radius);
+        // Attempt to find an existing level-k region that encloses the object
+        const bestRegion = this.findBestEnclosingRegion(levelKRegions, obj.center, obj.radius);
 
         if (bestRegion) {
             const wasEmpty = bestRegion.objects.length === 0;
@@ -230,7 +228,7 @@ export class LooseSphericalHierarchy {
             }
 
             const levelJPlus1Regions = queryResults.get(j + 1) || [];
-            const bestParent = this.findBestContainingRegion(
+            const bestParent = this.findBestEnclosingRegion(
                 levelJPlus1Regions,
                 currentRegion.center,
                 currentRegion.radius
@@ -281,7 +279,7 @@ export class LooseSphericalHierarchy {
         }
 
         if (H instanceof Region) {
-            if (this.fullyContains(H.center, H.radius, obj.center, obj.radius)) {
+            if (this.encloses(H.center, H.radius, obj.center, obj.radius)) {
                 return;
             }
 
@@ -305,19 +303,14 @@ export class LooseSphericalHierarchy {
     /**
      * Called whenever a region changes from unpopulated to populated.
      * The region builds its neighbor list and simultaneously inserts itself
-     * into the neighbor lists of all intersecting populated regions.
+     * into the neighbor lists of all overlapping populated regions.
      */
     private populate(region: Region): void {
-        const intersecting = this.intersectionQuery(
-            region.center,
-            region.radius,
-            false
-        );
+        this.populatedRegions.push(region);
 
-        // A populated region is always its own neighbor
-        // region.neighbors.push(region);
+        const overlapping = this.overlapQuery(region.center, region.radius, false);
 
-        for (const other of intersecting) {
+        for (const other of overlapping) {
             if (other === region)
                 continue;
 
@@ -338,6 +331,8 @@ export class LooseSphericalHierarchy {
      * Removes all symmetric neighbor links before the region is pruned or reused.
      */
     private unpopulate(region: Region): void {
+        this.removeFromArray(this.populatedRegions, region);
+
         for (const other of region.neighbors) {
             if (other === region)
                 continue;
@@ -370,14 +365,14 @@ export class LooseSphericalHierarchy {
     }
 
     /**
-     * Finds region that contains the target and minimizes distance between centers.
+     * Finds region that encloses the target and minimizes distance between centers.
      */
-    private findBestContainingRegion(regions: Region[], targetCenter: THREE.Vector3, targetRadius: number): Region | null {
+    private findBestEnclosingRegion(regions: Region[], targetCenter: THREE.Vector3, targetRadius: number): Region | null {
         let bestRegion: Region | null = null;
         let bestDistSq = Infinity;
 
         for (const region of regions) {
-            if (this.fullyContains(region.center, region.radius, targetCenter, targetRadius)) {
+            if (this.encloses(region.center, region.radius, targetCenter, targetRadius)) {
                 const distSq = region.center.distanceToSquared(targetCenter);
                 if (distSq < bestDistSq) {
                     bestRegion = region;
@@ -389,17 +384,16 @@ export class LooseSphericalHierarchy {
         return bestRegion;
     }
 
-    private fullyContains(parentCenter: THREE.Vector3, parentRadius: number, childCenter: THREE.Vector3, childRadius: number): boolean {
-        // A parent fully contains a child if the distance between their centers + the child's radius <= parent's radius.
+    private encloses(parentCenter: THREE.Vector3, parentRadius: number, childCenter: THREE.Vector3, childRadius: number): boolean {
         const distSq = parentCenter.distanceToSquared(childCenter);
         const radiusSum = parentRadius - childRadius;
         return distSq <= radiusSum * radiusSum;
     }
 
-    private intersects(center1: THREE.Vector3, r1: number, center2: THREE.Vector3, r2: number): boolean {
+    private overlaps(center1: THREE.Vector3, r1: number, center2: THREE.Vector3, r2: number): boolean {
         const distSq = center1.distanceToSquared(center2);
         const radiusSum = r1 + r2;
-        return distSq <= radiusSum * radiusSum;
+        return distSq < radiusSum * radiusSum;
     }
 
     private removeFromArray<T>(array: T[], item: T): void {
@@ -431,18 +425,6 @@ export class LooseSphericalHierarchy {
             }
         };
 
-        // 1. Collect all populated regions
-        const populatedRegions: Region[] = [];
-        const collectPopulated = (regions: Region[]) => {
-            for (const r of regions) {
-                if (r.objects.length > 0) {
-                    populatedRegions.push(r);
-                }
-                collectPopulated(r.children);
-            }
-        };
-        collectPopulated(this.root.children);
-
         // 2. Root objects vs Root objects
         const rootObjects = this.root.objects;
         for (let i = 0; i < rootObjects.length; i++) {
@@ -451,10 +433,10 @@ export class LooseSphericalHierarchy {
             }
         }
 
-        // 3. Root objects vs objects in intersecting populated regions
+        // 3. Root objects vs objects in overlapping populated regions
         for (const rObj of rootObjects) {
-            for (const popReg of populatedRegions) {
-                if (this.intersects(rObj.center, rObj.radius, popReg.center, popReg.radius)) {
+            for (const popReg of this.populatedRegions) {
+                if (this.overlaps(rObj.center, rObj.radius, popReg.center, popReg.radius)) {
                     for (const pObj of popReg.objects) {
                         testAndPush(rObj, pObj);
                     }
@@ -463,7 +445,7 @@ export class LooseSphericalHierarchy {
         }
 
         // 4. Populated Regions
-        for (const region of populatedRegions) {
+        for (const region of this.populatedRegions) {
             // 4a. Intra-region collisions
             const regObjects = region.objects;
             for (let i = 0; i < regObjects.length; i++) {
@@ -496,16 +478,16 @@ export class LooseSphericalHierarchy {
 
 
     /**
-     * Finds all intersecting object pairs using a recursive traversal of the hierarchy.
+     * Finds all overlapping object pairs using a recursive traversal of the hierarchy.
      * The traversal is expressed through three mutually recursive routines operating on
      * a region, an object-region pair, and a region-region pair, respectively.
      *
      * Region processing handles collisions within a subtree, object-region processing
      * compares one object against an entire subtree, and region-region processing
-     * compares two sibling subtrees. Whenever an object or subtree cannot intersect a
+     * compares two sibling subtrees. Whenever an object or subtree cannot ooverlap a
      * region, that branch of the recursion is discarded.
      *
-     * The method returns the list of intersecting pairs produced by this traversal.
+     * The method returns the list of overlapping pairs produced by this traversal.
      */
     public findCollisionsRecursive(): [number, number][] {
         const collisions: [number, number][] = [];
@@ -513,7 +495,7 @@ export class LooseSphericalHierarchy {
         // Root objects against each other
         for (let i = 0; i < this.root.objects.length; i++) {
             for (let j = i + 1; j < this.root.objects.length; j++) {
-                if (this.intersects(
+                if (this.overlaps(
                     this.root.objects[i].center, this.root.objects[i].radius,
                     this.root.objects[j].center, this.root.objects[j].radius
                 )) {
@@ -553,7 +535,7 @@ export class LooseSphericalHierarchy {
         // Objects stored directly in this region.
         for (let i = 0; i < region.objects.length; i++) {
             for (let j = i + 1; j < region.objects.length; j++) {
-                if (this.intersects(
+                if (this.overlaps(
                     region.objects[i].center, region.objects[i].radius,
                     region.objects[j].center, region.objects[j].radius
                 )) {
@@ -587,13 +569,13 @@ export class LooseSphericalHierarchy {
     }
 
     private processRegionPair(a: Region, b: Region, collisions: [number, number][]): void {
-        if (!this.intersects(a.center, a.radius, b.center, b.radius))
+        if (!this.overlaps(a.center, a.radius, b.center, b.radius))
             return;
 
         // Direct objects.
         for (const objA of a.objects) {
             for (const objB of b.objects) {
-                if (this.intersects(
+                if (this.overlaps(
                     objA.center, objA.radius,
                     objB.center, objB.radius
                 )) {
@@ -629,11 +611,11 @@ export class LooseSphericalHierarchy {
         region: Region,
         collisions: [number, number][]
     ): void {
-        if (!this.intersects(obj.center, obj.radius, region.center, region.radius))
+        if (!this.overlaps(obj.center, obj.radius, region.center, region.radius))
             return;
 
         for (const other of region.objects) {
-            if (this.intersects(
+            if (this.overlaps(
                 obj.center, obj.radius,
                 other.center, other.radius
             )) {
@@ -648,11 +630,11 @@ export class LooseSphericalHierarchy {
 
 
     // -----------------------------------------
-    // Trivial collision counting using intersection query for each object
+    // Trivial collision counting using overlap query for each object
     // -----------------------------------------
 
     /**
-     * Counts intersecting object pairs by querying the tree once for every object.
+     * Counts overlapping object pairs by querying the tree once for every object.
      *
      * Each unordered pair is reported twice: once when querying from each object.
      * Self-pairs are skipped.
@@ -665,7 +647,7 @@ export class LooseSphericalHierarchy {
 
                 // Test against root objects
                 for (const other of this.root.objects) {
-                    if (this.intersects(
+                    if (this.overlaps(
                         obj.center, obj.radius,
                         other.center, other.radius
                     )) {
@@ -673,8 +655,8 @@ export class LooseSphericalHierarchy {
                     }
                 }
 
-                // Query all intersecting regions
-                const regions = this.intersectionQuery(obj.center, obj.radius, false);
+                // Query all overlapping regions
+                const regions = this.overlapQuery(obj.center, obj.radius, false);
 
                 for (const candidate of regions) {
                     for (const other of candidate.objects) {
@@ -682,7 +664,7 @@ export class LooseSphericalHierarchy {
                         if (other === obj)
                             continue;
 
-                        if (this.intersects(
+                        if (this.overlaps(
                             obj.center, obj.radius,
                             other.center, other.radius
                         )) {
@@ -705,7 +687,7 @@ export class LooseSphericalHierarchy {
                 if (other === obj)
                     continue;
 
-                if (this.intersects(
+                if (this.overlaps(
                     obj.center, obj.radius,
                     other.center, other.radius
                 )) {
@@ -714,11 +696,11 @@ export class LooseSphericalHierarchy {
             }
 
             // Root vs tree
-            const regions = this.intersectionQuery(obj.center, obj.radius, false);
+            const regions = this.overlapQuery(obj.center, obj.radius, false);
 
             for (const region of regions) {
                 for (const other of region.objects) {
-                    if (this.intersects(
+                    if (this.overlaps(
                         obj.center, obj.radius,
                         other.center, other.radius
                     )) {
@@ -745,7 +727,7 @@ export class LooseSphericalHierarchy {
     /**
      * Brute-force collision detection.
      *
-     * Returns every unordered intersecting pair exactly once.
+     * Returns every unordered overlapping pair exactly once.
      * If (id1, id2) is included, then (id2, id1) is not.
      */
     public static debug_findCollisionsBruteForce(objects: SphereObject[]): [number, number][] {
@@ -792,7 +774,7 @@ export class LooseSphericalHierarchy {
      * 
      * - Every unpopulated regions neighbors list is empty.
      * - Every populated regions neighbors list contains exactly all the populated 
-     * regions that intersect it other than itself.
+     * regions that overlap it other than itself.
      */
     public debug_validateNeighbors(): void {
         // Collect all regions in the tree (excluding the root)
@@ -816,7 +798,7 @@ export class LooseSphericalHierarchy {
             }
         }
 
-        // 2. Local sanity checks per populated region: purity, duplicates, self-references, and intersection
+        // 2. Local sanity checks per populated region: purity, duplicates, self-references, and overlap
         for (const r of populatedRegions) {
             const seen = new Set<Region>();
 
@@ -832,8 +814,8 @@ export class LooseSphericalHierarchy {
                 }
                 seen.add(neighbor);
 
-                if (!this.intersects(r.center, r.radius, neighbor.center, neighbor.radius)) {
-                    throw new Error("Validation failed: Region has a neighbor that it does not geometrically intersect.");
+                if (!this.overlaps(r.center, r.radius, neighbor.center, neighbor.radius)) {
+                    throw new Error("Validation failed: Region has a neighbor that it does not overlap.");
                 }
             }
         }
@@ -848,15 +830,15 @@ export class LooseSphericalHierarchy {
                 const r1HasR2 = r1.neighbors.includes(r2);
                 const r2HasR1 = r2.neighbors.includes(r1);
 
-                if (this.intersects(r1.center, r1.radius, r2.center, r2.radius)) {
+                if (this.overlaps(r1.center, r1.radius, r2.center, r2.radius)) {
                     // Both must list each other (Symmetry)
                     if (!r1HasR2 || !r2HasR1) {
-                        throw new Error("Validation failed: Intersecting populated region pair is missing from one or both neighbor lists.");
+                        throw new Error("Validation failed: overlapping populated region pair is missing from one or both neighbor lists.");
                     }
                 } else {
                     // Neither must list the other
                     if (r1HasR2 || r2HasR1) {
-                        throw new Error("Validation failed: Non-intersecting region pair found in neighbor list.");
+                        throw new Error("Validation failed: Non-overlapping region pair found in neighbor list.");
                     }
                 }
             }
