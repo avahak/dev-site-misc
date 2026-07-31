@@ -1,7 +1,14 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SphereObject, Root, Region, LooseSphericalHierarchy } from './tree';
+import { SphereObject, Root, Region, LooseSphericalHierarchy, SpatialAdapter } from './tree';
+import { LooseSphericalHierarchyValidator } from './validator';
+import { LooseSphericalHierarchyStatistics } from './statistics';
+
+const adapterEll2: SpatialAdapter<THREE.Vector2> = {
+    distance: (a: THREE.Vector2, b: THREE.Vector2) => a.distanceTo(b),
+    clone: (point: THREE.Vector2) => point.clone(),
+};
 
 const N = 2000;
 const R = 0.1;
@@ -36,8 +43,10 @@ export class RenderManager {
     textElement!: HTMLDivElement;
 
     // Hierarchy state
-    hierarchy!: LooseSphericalHierarchy;
-    objects: SphereObject[] = [];
+    hierarchy!: LooseSphericalHierarchy<THREE.Vector2>;
+    hierarchyValidator!: LooseSphericalHierarchyValidator<THREE.Vector2>;
+    hierarchyStatistics!: LooseSphericalHierarchyStatistics<THREE.Vector2>;
+    objects: SphereObject<THREE.Vector2>[] = [];
     objectColors: THREE.Color[] = [];
     selectedObjectIndex: number | null = null;
 
@@ -212,19 +221,20 @@ export class RenderManager {
         this.objectColors = [];
 
         for (let i = 0; i < N; i++) {
-            const pos = new THREE.Vector3(
+            const pos = new THREE.Vector2(
                 (Math.random() - 0.5) * 8,
                 (Math.random() - 0.5) * 8,
-                0
             );
             const radius = R * (0.3 + Math.random());
-            const obj = new SphereObject(pos, radius, i);
+            const obj = new SphereObject(pos, radius, MARGIN_RATIO * radius, i);
             this.objects.push(obj);
             this.objectColors.push(new THREE.Color().setHSL(i / N, 0.8, 0.5));
         }
 
         // Initialize hierarchy
-        this.hierarchy = new LooseSphericalHierarchy(K_MAX, MARGIN_RATIO, SCALING_FACTOR);
+        this.hierarchy = new LooseSphericalHierarchy(adapterEll2, K_MAX, SCALING_FACTOR);
+        this.hierarchyValidator = new LooseSphericalHierarchyValidator(this.hierarchy);
+        this.hierarchyStatistics = new LooseSphericalHierarchyStatistics(this.hierarchy);
 
         // Build initial tree
         for (const obj of this.objects)
@@ -314,7 +324,7 @@ export class RenderManager {
         });
     }
 
-    collectRegions(node: Region | Root, regions: Region[]): Region[] {
+    collectRegions(node: Region<THREE.Vector2> | Root<THREE.Vector2>, regions: Region<THREE.Vector2>[]): Region<THREE.Vector2>[] {
         if (node instanceof Region) {
             regions.push(node);
         }
@@ -455,19 +465,19 @@ export class RenderManager {
 
         // Count statistics for text overlay
         const allRegions = this.collectRegions(this.hierarchy.root, []);
-        const levelCounts = this.hierarchy.debug_countRegionsByLevel();
+        const levelCounts = this.hierarchyStatistics.countRegionsByLevel();
         const levelCountString = formatLevelCounts(levelCounts);
 
         const collisionsBF = this.measureTime('bruteForce', () => {
-            return LooseSphericalHierarchy.debug_findCollisionsBruteForce(this.objects);
+            return this.hierarchyValidator.findCollisionsBruteForce(this.objects);
         }, 0);
 
         const collisionsQ = this.measureTime('query', () => {
-            return this.hierarchy.findCollisionsByQuery().map((v) => v[0] * N + v[1]);
+            return this.hierarchyValidator.findCollisionsByQuery().map((v) => v[0] * N + v[1]);
         }, updateDt);
 
         const collisionsR = this.measureTime('recursion', () => {
-            return this.hierarchy.findCollisionsRecursive().map((v) => v[0] * N + v[1]);
+            return this.hierarchyValidator.findCollisionsRecursive().map((v) => v[0] * N + v[1]);
         }, updateDt);
 
         const collisionsN = this.measureTime('neighbors', () => {
@@ -501,7 +511,7 @@ export class RenderManager {
             }
 
             // Check neighbors:
-            this.hierarchy.debug_validateNeighbors();
+            this.hierarchyValidator.validateInvariants();
         }
 
         const collisionsTextParts = [

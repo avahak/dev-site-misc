@@ -3,12 +3,29 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SphereObject, Root, Region, LooseSphericalHierarchy } from './tree';
+import { SphereObject, Root, Region, LooseSphericalHierarchy, SpatialAdapter } from './tree';
+import { LooseSphericalHierarchyValidator } from './validator';
+import { LooseSphericalHierarchyStatistics } from './statistics';
+
+const adapterEll2: SpatialAdapter<THREE.Vector3> = {
+    distance: (a: THREE.Vector3, b: THREE.Vector3) => a.distanceTo(b),
+    clone: (point: THREE.Vector3) => point.clone(),
+};
+const adapterEll1: SpatialAdapter<THREE.Vector3> = {
+    distance: (a: THREE.Vector3, b: THREE.Vector3) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.z - b.z),
+    clone: (point: THREE.Vector3) => point.clone(),
+};
+const adapterEllInfinity: SpatialAdapter<THREE.Vector3> = {
+    distance: (a: THREE.Vector3, b: THREE.Vector3) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y), Math.abs(a.z - b.z)),
+    clone: (point: THREE.Vector3) => point.clone(),
+};
+
 
 // Tree initialization
 const K_MAX = 4;
 const SCALING_FACTOR = 2.5;
-const margin = (r: number) => 2.5 * r + 0.1;
+const margin = (r: number) => 2.5 * r + 0.2;
+const adapter = adapterEll2;      // Note: only \ell^2 distance is correctly visualized
 
 // Opacity
 const REGION_OPACITY = 0.005;
@@ -138,8 +155,10 @@ export class RenderManager {
     camera!: THREE.PerspectiveCamera;
     textElement!: HTMLDivElement;
 
-    hierarchy!: LooseSphericalHierarchy;
-    objects: SphereObject[] = [];
+    hierarchy!: LooseSphericalHierarchy<THREE.Vector3>;
+    hierarchyValidator!: LooseSphericalHierarchyValidator<THREE.Vector3>;
+    hierarchyStatistics!: LooseSphericalHierarchyStatistics<THREE.Vector3>;
+    objects: SphereObject<THREE.Vector3>[] = [];
     objectColors: THREE.Color[] = [];
     orbitParams: OrbitParam[] = [];
     selectedObjectIndex: number | null = null;
@@ -325,7 +344,7 @@ export class RenderManager {
                 (Math.random() - 0.5) * 8
             );
             const radius = Math.pow(1.5, this.guiState.objectSize) * 0.2 * (0.3 + Math.random());
-            const obj = new SphereObject(pos, radius, margin(radius), i);
+            const obj = new SphereObject(pos.clone(), radius, margin(radius), i);
             this.objects.push(obj);
             this.objectColors.push(new THREE.Color().setHSL(i / count, 0.8, 0.5));
 
@@ -349,7 +368,9 @@ export class RenderManager {
             this.orbitParams.push({ u, v, a, b, omega, phase });
         }
 
-        this.hierarchy = new LooseSphericalHierarchy(K_MAX, SCALING_FACTOR);
+        this.hierarchy = new LooseSphericalHierarchy(adapter, K_MAX, SCALING_FACTOR);
+        this.hierarchyValidator = new LooseSphericalHierarchyValidator(this.hierarchy);
+        this.hierarchyStatistics = new LooseSphericalHierarchyStatistics(this.hierarchy);
 
         for (const obj of this.objects)
             this.hierarchy.insert(obj);
@@ -514,16 +535,6 @@ export class RenderManager {
         });
     }
 
-    collectRegions(node: Region | Root, regions: Region[]): Region[] {
-        if (node instanceof Region) {
-            regions.push(node);
-        }
-        for (const child of node.children) {
-            this.collectRegions(child, regions);
-        }
-        return regions;
-    }
-
     updateVisuals() {
         const dummy = new THREE.Object3D();
 
@@ -547,17 +558,17 @@ export class RenderManager {
         }
 
         if (this.guiState.showRegions) {
-            const allRegions = this.collectRegions(this.hierarchy.root, []);
+            const allRegions = this.hierarchyValidator.collectRegions(this.hierarchy.root, []);
             let regionCount = 0;
             let selectedRegionCount = 0;
 
-            const ancestorMap = new Map<Region, number>();
+            const ancestorMap = new Map<Region<THREE.Vector3>, number>();
             if (this.selectedObjectIndex !== null) {
                 const selectedObj = this.objects[this.selectedObjectIndex];
 
                 for (const region of allRegions) {
                     if (region.objects.includes(selectedObj)) {
-                        let curr: Region | Root | null = region;
+                        let curr: Region<THREE.Vector3> | Root<THREE.Vector3> | null = region;
                         let depth = 0;
                         while (curr && curr instanceof Region) {
                             if (!ancestorMap.has(curr)) {
@@ -691,22 +702,22 @@ export class RenderManager {
         }
         const updateDt = performance.now() - startTime;
 
-        const allRegions = this.collectRegions(this.hierarchy.root, []);
-        const levelCounts = this.hierarchy.debug_countRegionsByLevel();
+        const allRegions = this.hierarchyValidator.collectRegions(this.hierarchy.root, []);
+        const levelCounts = this.hierarchyStatistics.countRegionsByLevel();
         const levelCountString = formatLevelCounts(levelCounts);
 
         const count = this.objects.length;
 
         const collisionsBF = this.measureTime('bruteForce', () => {
-            return LooseSphericalHierarchy.debug_findCollisionsBruteForce(this.objects);
+            return this.hierarchyValidator.findCollisionsBruteForce(this.objects);
         }, 0);
 
         const collisionsQ = this.measureTime('query', () => {
-            return this.hierarchy.findCollisionsByQuery().map((v) => v[0] * count + v[1]);
+            return this.hierarchyValidator.findCollisionsByQuery().map((v) => v[0] * count + v[1]);
         }, updateDt);
 
         const collisionsR = this.measureTime('recursion', () => {
-            return this.hierarchy.findCollisionsRecursive().map((v) => v[0] * count + v[1]);
+            return this.hierarchyValidator.findCollisionsRecursive().map((v) => v[0] * count + v[1]);
         }, updateDt);
 
         const collisionsN = this.measureTime('neighbors', () => {
@@ -738,7 +749,7 @@ export class RenderManager {
                     throw Error(`Collision missing in N`);
             }
 
-            this.hierarchy.debug_validateNeighbors();
+            this.hierarchyValidator.validateInvariants();
         }
 
         const collisionsTextParts = [
