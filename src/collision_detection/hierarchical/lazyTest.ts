@@ -3,10 +3,8 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SphereObject, Root, Region, LooseSphericalHierarchy, SpatialAdapter } from './tree';
-import { LooseSphericalHierarchyValidator } from './validator';
-import { LooseSphericalHierarchyStatistics } from './statistics';
-import { VisualizationState } from './types';
+import { SphereObject, SpatialAdapter, LazyTree, RegionNode, Root } from './lazyTree';
+import { LazyVisualizationState } from './types';
 
 const adapterEll2: SpatialAdapter<THREE.Vector3> = {
     distance: (a: THREE.Vector3, b: THREE.Vector3) => a.distanceTo(b),
@@ -21,12 +19,18 @@ const adapterEllInfinity: SpatialAdapter<THREE.Vector3> = {
     clone: (point: THREE.Vector3) => point.clone(),
 };
 
-
 // Tree initialization
-const K_MAX = 4;
-const SCALING_FACTOR = 2.5;
-const margin = (r: number) => 2.5 * r + 0.02;
-const adapter = adapterEll2;      // Note: only \ell^2 distance is correctly visualized
+const S = 3;
+const margin = (r: number) => S * r + 0.001;
+const T_COLLAPSE = 100;
+
+const TREE_PARAMS = {
+    maxLevel: 3,
+    S: S,
+    adapter: adapterEll2,      // Note: only \ell^2 distance is correctly visualized
+    tCollapse: T_COLLAPSE,
+    tSplit: 25 * T_COLLAPSE,
+}
 
 // Opacity
 const REGION_OPACITY = 0.005;
@@ -158,17 +162,15 @@ export class RenderManager {
     scene!: THREE.Scene;
     camera!: THREE.PerspectiveCamera;
 
-    hierarchy!: LooseSphericalHierarchy<THREE.Vector3>;
-    hierarchyValidator!: LooseSphericalHierarchyValidator<THREE.Vector3>;
-    hierarchyStatistics!: LooseSphericalHierarchyStatistics<THREE.Vector3>;
+    tree!: LazyTree<THREE.Vector3>;
     objects: SphereObject<THREE.Vector3>[] = [];
     objectColors: THREE.Color[] = [];
     orbitParams: OrbitParam[] = [];
     selectedObjectIndex: number | null = null;
 
-    public onStateUpdate?: (state: VisualizationState) => void;
+    public onStateUpdate?: (state: LazyVisualizationState) => void;
     lastUIUpdateTime: number = 0;
-    visualizationState?: VisualizationState;
+    lazyVisualizationState?: LazyVisualizationState;
 
     sphereGeom!: THREE.SphereGeometry;
     objectMeshes: THREE.Mesh[] = [];
@@ -276,10 +278,10 @@ export class RenderManager {
     }
 
     private updateReactUI() {
-        if (!this.onStateUpdate || !this.visualizationState)
+        if (!this.onStateUpdate || !this.lazyVisualizationState)
             return;
 
-        this.onStateUpdate(this.visualizationState);
+        this.onStateUpdate(this.lazyVisualizationState);
     }
 
     setupCamera() {
@@ -336,6 +338,8 @@ export class RenderManager {
 
         const count = this.guiState.objectCount;
 
+        this.tree = new LazyTree(TREE_PARAMS);
+
         for (let i = 0; i < count; i++) {
             const pos = new THREE.Vector3(
                 (Math.random() - 0.5) * 8,
@@ -343,7 +347,7 @@ export class RenderManager {
                 (Math.random() - 0.5) * 8
             );
             const radius = Math.pow(1.5, this.guiState.objectSize) * 0.2 * (0.3 + Math.random());
-            const obj = new SphereObject(pos.clone(), radius, margin(radius), i);
+            const obj = this.tree.createObject(pos, radius, margin(radius), i);
             this.objects.push(obj);
             this.objectColors.push(new THREE.Color().setHSL(i / count, 0.8, 0.5));
 
@@ -367,12 +371,8 @@ export class RenderManager {
             this.orbitParams.push({ u, v, a, b, omega, phase });
         }
 
-        this.hierarchy = new LooseSphericalHierarchy(adapter, K_MAX, SCALING_FACTOR);
-        this.hierarchyValidator = new LooseSphericalHierarchyValidator(this.hierarchy);
-        this.hierarchyStatistics = new LooseSphericalHierarchyStatistics(this.hierarchy);
-
         for (const obj of this.objects)
-            this.hierarchy.insert(obj);
+            this.tree.insert(obj);
     }
 
     rebuildObjects(): void {
@@ -499,7 +499,7 @@ export class RenderManager {
                     const obj = this.objects[this.dragState];
                     obj.center.copy(target);
 
-                    this.hierarchy.update(obj);
+                    this.tree.updateObject(obj);
                 }
             }
         };
@@ -557,24 +557,22 @@ export class RenderManager {
         }
 
         if (this.guiState.showRegions) {
-            const allRegions = this.hierarchyValidator.collectRegions(this.hierarchy.root, []);
+            const allRegions = this.tree.collectRegions(this.tree.root, []);
             let regionCount = 0;
             let selectedRegionCount = 0;
 
-            const ancestorMap = new Map<Region<THREE.Vector3>, number>();
+            const ancestorMap = new Map<RegionNode<THREE.Vector3>, number>();
             if (this.selectedObjectIndex !== null) {
                 const selectedObj = this.objects[this.selectedObjectIndex];
 
                 for (const region of allRegions) {
-                    if (region.objects.includes(selectedObj)) {
-                        let curr: Region<THREE.Vector3> | Root<THREE.Vector3> | null = region;
-                        let depth = 0;
-                        while (curr && curr instanceof Region) {
+                    if (region.native.indexOf(selectedObj) !== -1 || region.deferred.indexOf(selectedObj) !== -1) {
+                        let curr: RegionNode<THREE.Vector3> | Root<THREE.Vector3> | null = region;
+                        while (curr && curr instanceof RegionNode) {
                             if (!ancestorMap.has(curr)) {
-                                ancestorMap.set(curr, depth);
+                                ancestorMap.set(curr, curr.level);
                             }
                             curr = curr.parentNode;
-                            depth++;
                         }
                     }
                 }
@@ -616,11 +614,13 @@ export class RenderManager {
 
             this.regionMesh.count = regionCount;
             this.regionMesh.instanceMatrix.needsUpdate = true;
-            if (this.regionMesh.instanceColor) this.regionMesh.instanceColor.needsUpdate = true;
+            if (this.regionMesh.instanceColor)
+                this.regionMesh.instanceColor.needsUpdate = true;
 
             this.selectedRegionMesh.count = selectedRegionCount;
             this.selectedRegionMesh.instanceMatrix.needsUpdate = true;
-            if (this.selectedRegionMesh.instanceColor) this.selectedRegionMesh.instanceColor.needsUpdate = true;
+            if (this.selectedRegionMesh.instanceColor)
+                this.selectedRegionMesh.instanceColor.needsUpdate = true;
 
             this.regionMesh.visible = true;
             this.selectedRegionMesh.visible = true;
@@ -702,94 +702,78 @@ export class RenderManager {
 
         const startTime = performance.now();
         this.measureTime('updates', () => {
-            this.hierarchy.updateAll(this.objects);
+            for (const obj of this.objects)
+                this.tree.updateObject(obj);
+            // this.tree.balance();
         });
         const updateDt = performance.now() - startTime;
 
         const count = this.objects.length;
 
+        if (this.guiState.validate) {
+            this.tree.validate(this.objects);
+        }
+
         const collisionsBF = this.measureTime('bruteForce', () => {
-            return this.hierarchyValidator.findCollisionsBruteForce(this.objects);
+            return this.tree.findCollisionsBruteForce(this.objects);
         }, 0);
 
-        const collisionsQ = this.measureTime('query', () => {
-            return this.hierarchyValidator.findCollisionsByQuery().map((v) => v[0] * count + v[1]);
-        }, updateDt);
-
-        // const overlapCountStart = this.hierarchy.DEBUG_overlapCount;
         const collisionsR = this.measureTime('recursion', () => {
-            return this.hierarchyValidator.findCollisionsRecursive().map((v) => v[0] * count + v[1]);
-        }, updateDt);
-        // this.timings["overlaps"] = this.hierarchy.DEBUG_overlapCount - overlapCountStart;
-
-        const collisionsN = this.measureTime('neighbors', () => {
-            return this.hierarchy.findCollisions().map((v) => v[0] * count + v[1]);
+            return this.tree.processCollisionFrame(true);
         }, updateDt);
 
-        // const collisionsI = this.measureTime('iteration', () => {
-        //     return this.hierarchy.findCollisionsIterative().map((v) => v[0] * count + v[1]);
-        // }, updateDt);
+        // if (this.guiState.validate) {
+        //     if (collisionsQ.length !== 2 * collisionsBF.length)
+        //         throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Query: ${collisionsQ.length}`);
+        //     if (collisionsR.length !== collisionsBF.length)
+        //         throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Recursive: ${collisionsR.length}`);
 
-        if (this.guiState.validate) {
-            if (collisionsQ.length !== 2 * collisionsBF.length)
-                throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Query: ${collisionsQ.length}`);
-            if (collisionsR.length !== collisionsBF.length)
-                throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Recursive: ${collisionsR.length}`);
-            if (collisionsN.length !== collisionsBF.length)
-                throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Neighbors: ${collisionsN.length}`);
-            // if (collisionsI.length !== collisionsBF.length)
-            //     throw Error(`Collision count mismatch. BF: ${collisionsBF.length}, Iterative: ${collisionsI.length}`);
+        //     for (let [id1, id2] of collisionsBF) {
+        //         const pair1 = id1 * count + id2;
+        //         const pair2 = id2 * count + id1;
+        //         const indexQ1 = collisionsQ.indexOf(pair1);
+        //         const indexQ2 = collisionsQ.indexOf(pair2);
+        //         const indexR1 = collisionsR.indexOf(pair1);
+        //         const indexR2 = collisionsR.indexOf(pair2);
+        //         const indexN1 = collisionsN.indexOf(pair1);
+        //         const indexN2 = collisionsN.indexOf(pair2);
+        //         const indexI1 = collisionsI.indexOf(pair1);
+        //         const indexI2 = collisionsI.indexOf(pair2);
+        //         if (indexQ1 === -1 || indexQ2 === -1)
+        //             throw Error(`Collision missing in Q`);
+        //         if (indexR1 === -1 && indexR2 === -1)
+        //             throw Error(`Collision missing in R`);
+        //         if (indexN1 === -1 && indexN2 === -1)
+        //             throw Error(`Collision missing in N`);
+        //         if (indexI1 === -1 && indexI2 === -1)
+        //             throw Error(`Collision missing in I`);
+        //     }
 
-            for (let [id1, id2] of collisionsBF) {
-                const pair1 = id1 * count + id2;
-                const pair2 = id2 * count + id1;
-                const indexQ1 = collisionsQ.indexOf(pair1);
-                const indexQ2 = collisionsQ.indexOf(pair2);
-                const indexR1 = collisionsR.indexOf(pair1);
-                const indexR2 = collisionsR.indexOf(pair2);
-                const indexN1 = collisionsN.indexOf(pair1);
-                const indexN2 = collisionsN.indexOf(pair2);
-                // const indexI1 = collisionsI.indexOf(pair1);
-                // const indexI2 = collisionsI.indexOf(pair2);
-                if (indexQ1 === -1 || indexQ2 === -1)
-                    throw Error(`Collision missing in Q`);
-                if (indexR1 === -1 && indexR2 === -1)
-                    throw Error(`Collision missing in R`);
-                if (indexN1 === -1 && indexN2 === -1)
-                    throw Error(`Collision missing in N`);
-                // if (indexI1 === -1 && indexI2 === -1)
-                //     throw Error(`Collision missing in I`);
-            }
-
-            this.hierarchyValidator.validateInvariants();
-        }
+        //     this.hierarchyValidator.validateInvariants();
+        // }
 
         const collisionsTextParts = [
             `Brute force: ${(1000 / this.timings.bruteForce).toFixed(2)} fps`,
-            `Query: ${(1000 / this.timings.query).toFixed(2)} fps (${(this.timings.bruteForce / this.timings.query).toFixed(2)} x)`,
             `Recursion: ${(1000 / this.timings.recursion).toFixed(2)} fps (${(this.timings.bruteForce / this.timings.recursion).toFixed(2)} x)`,
-            `Neighbors: ${(1000 / this.timings.neighbors).toFixed(2)} fps (${(this.timings.bruteForce / this.timings.neighbors).toFixed(2)} x)`,
-            // `Iteration: ${(1000 / this.timings.iteration).toFixed(2)} fps (${(this.timings.bruteForce / this.timings.iteration).toFixed(2)} x)`,
             `Updates only: ${(1000 / this.timings.updates).toFixed(2)} fps`,
-            // `Overlaps: ${this.timings.overlaps.toFixed(0)}`,
         ];
 
         const collisionsText = collisionsTextParts.join("\n");
 
         // slow
-        const treeSnapshot = this.hierarchyStatistics.takeSnapshot();
+        // const treeSnapshot = this.hierarchyStatistics.takeSnapshot();
 
-        this.visualizationState = {
+        this.lazyVisualizationState = {
             objectsCount: this.objects.length,
-            totalRegions: treeSnapshot.totalRegions,
-            maxLevel: this.hierarchy.maxLevel,
-            scalingFactor: this.hierarchy.scalingFactor,
-            regionsByLevelString: getMapString(treeSnapshot.regionsByLevel),
-            objectsByLevelString: getMapString(treeSnapshot.objectsByLevel),
+            totalRegions: this.tree.collectRegions(this.tree.root, []).length, //treeSnapshot.totalRegions,
+            maxLevel: this.tree.params.maxLevel,
+            scalingFactor: this.tree.params.S,
+            regionsByLevelString: "-", // getMapString(treeSnapshot.regionsByLevel),
+            objectsByLevelString: "-", // getMapString(treeSnapshot.objectsByLevel),
             selectedObjectIndex: this.selectedObjectIndex,
-            collisionsCount: collisionsBF.length,
+            collisionsCount: collisionsR.length,
             collisionsText: collisionsText,
-            treeStats: treeSnapshot,
+            // treeStats: treeSnapshot,
         };
 
         this.updateVisuals();

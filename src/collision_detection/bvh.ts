@@ -1,5 +1,5 @@
-// Mostly AI code
-// heuristic: margin = maxVelocity * 3 ?
+// Placeholder AI code for reference
+
 
 const MARGIN = 0.1;
 

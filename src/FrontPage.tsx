@@ -56,6 +56,11 @@ const FrontPage = () => {
                                 Solid textures (clipping)
                             </MUILink>
                         </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/hyperbolic" variant="body1" color="primary">
+                                Hyperbolic space
+                            </MUILink>
+                        </li>
                     </ul>
                 </Box>
                 <Box sx={{ p: 2 }}>
@@ -86,9 +91,29 @@ const FrontPage = () => {
                             </MUILink>
                         </li>
                         <li>
-                            <MUILink component={RouterLink} to="/collision_detection" variant="body1" color="primary">
-                                Collision detection
+                            <MUILink component={RouterLink} to="/documents" variant="body1" color="primary">
+                                Documents
                             </MUILink>
+                        </li>
+                        <li>
+                            <Typography>Collision detection</Typography>
+                            <ul>
+                                <li>
+                                    <MUILink component={RouterLink} to="/collision_detection" variant="body1" color="primary">
+                                        Visualization
+                                    </MUILink>
+                                </li>
+                                <li>
+                                    <MUILink component={RouterLink} to="/collision_detection_lazy" variant="body1" color="primary">
+                                        Lazy visualization
+                                    </MUILink>
+                                </li>
+                                <li>
+                                    <MUILink component={RouterLink} to="/collision_detection_churn" variant="body1" color="primary">
+                                        Churn
+                                    </MUILink>
+                                </li>
+                            </ul>
                         </li>
                         <li>
                             <MUILink component={RouterLink} to="/webgl_tools_text" variant="body1" color="primary">

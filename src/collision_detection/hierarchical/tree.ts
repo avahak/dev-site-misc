@@ -1,6 +1,6 @@
 /*
-- includes AI code
-- Set vs array for objects, children? These are very small so likely Set is inefficient
+- includes AI implemented code
+- Set vs arrays: objects, children arrays are very small. Neighbors is large but not huge.  
 */
 
 export interface SpatialAdapter<T> {
@@ -60,7 +60,7 @@ export class LooseSphericalHierarchy<T> {
     public maxLevel: number;
     /** Ratio of radii between parent region and the region */
     public scalingFactor: number;
-    public populatedRegions: Region<T>[] = [];     // Just an optimization
+    public populatedRegions: Set<Region<T>> = new Set();     // Just an optimization
 
     constructor(adapter: SpatialAdapter<T>, maxLevel: number, scalingFactor: number = 2) {
         if (scalingFactor <= 1)
@@ -228,9 +228,7 @@ export class LooseSphericalHierarchy<T> {
 
             const levelJPlus1Regions = queryResults.get(j + 1) || [];
             const bestParent = this.findBestEnclosingRegion(
-                levelJPlus1Regions,
-                currentRegion.center,
-                currentRegion.radius
+                levelJPlus1Regions, currentRegion.center, currentRegion.radius
             );
 
             if (bestParent) {
@@ -260,9 +258,8 @@ export class LooseSphericalHierarchy<T> {
             this.removeFromArray(node.objects, obj);
 
             // Transition from populated to unpopulated before tree pruning
-            if (node.objects.length === 0) {
+            if (node.objects.length === 0)
                 this.unpopulate(node);
-            }
 
             this.prune(node);
         }
@@ -272,29 +269,60 @@ export class LooseSphericalHierarchy<T> {
     public update(obj: SphereObject<T>): void {
         const H = obj.parentNode;
 
-        // If stored in the root, it's always valid. Just update position.
-        if (H instanceof Root) {
-            return;
-        }
-
         if (H instanceof Region) {
-            if (this.encloses(H.center, H.radius, obj.center, obj.radius)) {
+            if (this.encloses(H.center, H.radius, obj.center, obj.radius))
                 return;
-            }
 
             // Remove from current region, but DO NOT prune yet
             this.removeFromArray(H.objects, obj);
 
-            if (H.objects.length === 0) {
+            if (H.objects.length === 0)
                 this.unpopulate(H);
-            }
 
-            // Reinsert
             this.insert(obj);
 
             // Clean up the old path now that insertion is complete and might have reused nodes
             this.prune(H);
         }
+    }
+
+    /**
+     * Updates all given objects.
+     */
+    public updateAll(objects: SphereObject<T>[]): void {
+        for (const obj of objects)
+            this.update(obj);
+    }
+
+    /**
+     * Updates all given objects.
+     * NOTE! Do not use, slower than individual insertion (probably not enough added reuse).
+     */
+    public _updateAll(objects: SphereObject<T>[]): void {
+        const toPrune = [];
+
+        // Remove any objects that are no longer enclosed by their parent
+        for (const obj of objects) {
+            const H = obj.parentNode;
+            if (H instanceof Region) {
+                if (this.encloses(H.center, H.radius, obj.center, obj.radius))
+                    continue;
+
+                this.removeFromArray(H.objects, obj);
+                if (H.objects.length === 0) {
+                    this.unpopulate(H);
+                    toPrune.push(H);
+                }
+
+                this.insert(obj);
+            }
+        }
+
+        // Clean up the old paths now that insertion is complete and might have reused nodes
+        for (const region of toPrune)
+            this.prune(region);
+
+        // console.log(toPrune.length);
     }
 
     // --- Private Helper Methods ---
@@ -305,7 +333,7 @@ export class LooseSphericalHierarchy<T> {
      * into the neighbor lists of all overlapping populated regions.
      */
     private populate(region: Region<T>): void {
-        this.populatedRegions.push(region);
+        this.populatedRegions.add(region);
 
         const overlapping = this.overlapQuery(region.center, region.radius, false);
 
@@ -330,7 +358,7 @@ export class LooseSphericalHierarchy<T> {
      * Removes all symmetric neighbor links before the region is pruned or reused.
      */
     private unpopulate(region: Region<T>): void {
-        this.removeFromArray(this.populatedRegions, region);
+        this.populatedRegions.delete(region);
 
         for (const other of region.neighbors) {
             if (other === region)
@@ -394,7 +422,7 @@ export class LooseSphericalHierarchy<T> {
     }
 
     public removeFromArray<T>(array: T[], item: T): void {
-        const index = array.indexOf(item);      // TODO rethink?
+        const index = array.indexOf(item);
         if (index > -1) {
             const lastIndex = array.length - 1;
 

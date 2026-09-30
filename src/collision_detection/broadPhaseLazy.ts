@@ -1,3 +1,5 @@
+// Not indended for use, just for curiosity.
+
 import * as THREE from "three";
 import { SortedList } from "./data_structures/sortedList";
 
@@ -33,8 +35,7 @@ export class MovingSphere {
 /**
  * Broad phase collision algorithm. Inefficient if objects move fast and efficient 
  * when objects move very slow. Tunable with updateTrustRegion heuristic.
- * Depends only on distances only so directly generalizes to AABB:s 
- * (with max-norm distance), \R^n (with n>3), or general metric spaces.
+ * Depends only on distances only.
  * 
  * Denote 
  * 

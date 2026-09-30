@@ -15,6 +15,10 @@ const SolidApp = React.lazy(() => import('./solid/App.tsx'));
 const WebGPUParticlesApp = React.lazy(() => import('./webgpu_particles/App.tsx'));
 const WebGPUMeshParticleApp = React.lazy(() => import('./webgpu_mesh_particle/App.tsx'));
 const CollisionDetectionApp = React.lazy(() => import('./collision_detection/App.tsx'));
+const CollisionDetectionLazyApp = React.lazy(() => import('./collision_detection/LazyApp.tsx'));
+const CollisionDetectionChurnApp = React.lazy(() => import('./collision_detection/ChurnApp.tsx'));
+const DocumentsApp = React.lazy(() => import('./documents/App.tsx'));
+const HyperbolicApp = React.lazy(() => import('./hyperbolic/App.tsx'));
 import { FrontPage } from './FrontPage.tsx';
 
 
@@ -54,6 +58,10 @@ const AppRouter = () => {
                     <Route path="/webgpu_particles" element={<WebGPUParticlesApp />} />
                     <Route path="/webgpu_mesh_particle" element={<WebGPUMeshParticleApp />} />
                     <Route path="/collision_detection" element={<CollisionDetectionApp />} />
+                    <Route path="/collision_detection_lazy" element={<CollisionDetectionLazyApp />} />
+                    <Route path="/collision_detection_churn" element={<CollisionDetectionChurnApp />} />
+                    <Route path="/documents" element={<DocumentsApp />} />
+                    <Route path="/hyperbolic" element={<HyperbolicApp />} />
                     <Route path="/" element={<FrontPage />} />
                 </Routes>
             </Suspense>

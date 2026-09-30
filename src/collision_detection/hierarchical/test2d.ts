@@ -465,8 +465,8 @@ export class RenderManager {
 
         // Count statistics for text overlay
         const allRegions = this.collectRegions(this.hierarchy.root, []);
-        const levelCounts = this.hierarchyStatistics.countRegionsByLevel();
-        const levelCountString = formatLevelCounts(levelCounts);
+        // const levelCounts = this.hierarchyStatistics.countRegionsByLevel();
+        // const levelCountString = formatLevelCounts(levelCounts);
 
         const collisionsBF = this.measureTime('bruteForce', () => {
             return this.hierarchyValidator.findCollisionsBruteForce(this.objects);
@@ -526,7 +526,7 @@ export class RenderManager {
 
         const textParts = [
             `Objects: ${this.objects.length}`,
-            `Levels: ${levelCountString}`,
+            // `Levels: ${levelCountString}`,
             `Total regions: ${allRegions.length}`,
             `Scaling Factor: ${this.hierarchy.scalingFactor.toFixed(2)}`,
             this.selectedObjectIndex !== null ?

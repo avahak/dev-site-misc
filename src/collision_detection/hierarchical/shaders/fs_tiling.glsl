@@ -1,0 +1,432 @@
+precision highp float;
+
+uniform float u_time;
+uniform float u_shift;
+uniform vec3 u_n1;
+uniform vec3 u_n2;
+uniform vec3 u_n3;
+
+varying vec2 v_uv;
+
+const float PI = 3.1415926535898;
+
+
+////////////////////////////////
+/**
+ * Source for hash-functions below:
+ * uint-shader-hash, David Hoskins (MMqd), 
+ * https://github.com/MMqd/uint-shader-hash
+ *
+ * Source for simplex noise: 
+ * Noise for GLSL 1.20, Copyright (C) 2011 Ashima Arts. 
+ * (MIT license https://github.com/stegu/webgl-noise/blob/master/LICENSE)
+ * https://github.com/stegu/webgl-noise 
+ */
+
+
+vec2 octEncode(vec3 n) {
+    // Encodes unit vec3 vector to vec2
+    n /= (abs(n.x) + abs(n.y) + abs(n.z));
+    vec2 p = n.xy;
+    if (n.z < 0.0) {
+        vec2 signP = step(0.0, p) * 2.0 - 1.0;
+        p = (1.0 - abs(p.yx)) * signP;
+    }
+    return p * 0.5 + 0.5;
+}
+
+vec3 octDecode(vec2 e) {
+    // Decoder for octEncode, recovers the original unit vector
+    vec2 p = e * 2.0 - 1.0;
+    vec3 n = vec3(p, 1.0 - abs(p.x) - abs(p.y));
+    if (n.z < 0.0) {
+        vec2 signP = step(0.0, n.xy) * 2.0 - 1.0;
+        n.xy = (1.0 - abs(n.yx)) * signP;
+    }
+    return normalize(n);
+}
+
+// From uint-shader-hash:
+
+
+const uint MAGIC_NUMBERS[7] = uint[7](
+    0x21f0aaadu, 0x7feb352du, 0x846ca68bu,
+    0xd168aaadu, 0xaf723597u, 0x9e485565u, 0xef1d6b47u
+);
+
+highp uint fixZero(highp float f) {
+    return floatBitsToUint(f + uintBitsToFloat(0x00800000u));
+}
+
+highp uint hashUint(highp uint h, highp uint magic) {
+    h++; h ^= h >> 16u; h *= magic; return h;
+}
+
+highp float uintTo01Float(highp uint h) {
+    return uintBitsToFloat((h >> 9u) | floatBitsToUint(1.0)) - 1.0;
+}
+
+vec2 uvec2To01Vec2(uvec2 h) {
+    return vec2(uintTo01Float(h.x), uintTo01Float(h.y));
+}
+
+vec3 uvec3To01Vec3(uvec3 h) {
+    return vec3(uintTo01Float(h.x), uintTo01Float(h.y), uintTo01Float(h.z));
+}
+
+vec4 uvec4To01Vec4(uvec4 h) {
+    return vec4(uintTo01Float(h.x), uintTo01Float(h.y), uintTo01Float(h.z), uintTo01Float(h.w));
+}
+
+uvec2 uintHashVec2ToVec2(highp vec2 f) {
+    uint fx = fixZero(f.x), fy = fixZero(f.y);
+    highp uint h = 2u;
+    h = hashUint(h + fx, MAGIC_NUMBERS[0]);
+    h = hashUint(h + fy, MAGIC_NUMBERS[1]);
+    return uvec2(
+        hashUint(h, MAGIC_NUMBERS[0]),
+        hashUint(h, MAGIC_NUMBERS[1])
+    );
+}
+
+uvec3 uintHashVec3ToVec3(highp vec3 f) {
+    uint fx = fixZero(f.x), fy = fixZero(f.y), fz = fixZero(f.z);
+    highp uint h = 3u;
+    h = hashUint(h + fx, MAGIC_NUMBERS[0]);
+    h = hashUint(h + fy, MAGIC_NUMBERS[1]);
+    h = hashUint(h + fz, MAGIC_NUMBERS[2]);
+    return uvec3(
+        hashUint(h, MAGIC_NUMBERS[0]),
+        hashUint(h, MAGIC_NUMBERS[1]),
+        hashUint(h, MAGIC_NUMBERS[2])
+    );
+}
+
+uvec4 uintHashVec4ToVec4(highp vec4 f) {
+    uint fx = fixZero(f.x), fy = fixZero(f.y), fz = fixZero(f.z), fw = fixZero(f.w);
+    highp uint h = 4u;
+    h = hashUint(h + fx, MAGIC_NUMBERS[0]);
+    h = hashUint(h + fy, MAGIC_NUMBERS[1]);
+    h = hashUint(h + fz, MAGIC_NUMBERS[2]);
+    h = hashUint(h + fw, MAGIC_NUMBERS[3]);
+    return uvec4(
+        hashUint(h, MAGIC_NUMBERS[0]),
+        hashUint(h, MAGIC_NUMBERS[1]),
+        hashUint(h, MAGIC_NUMBERS[2]),
+        hashUint(h, MAGIC_NUMBERS[3])
+    );
+}
+
+float hash(highp float f) {
+    highp uint fx = fixZero(f);
+    highp uint h = 1u; 
+    h = hashUint(h + fx, MAGIC_NUMBERS[0]);
+    return uintTo01Float(h);
+}
+
+vec2 hash22(highp vec2 f) {
+    return uvec2To01Vec2(uintHashVec2ToVec2(f));
+}
+
+vec3 hash33(highp vec3 f) {
+    return uvec3To01Vec3(uintHashVec3ToVec3(f));
+}
+
+vec4 hash44(highp vec4 f) {
+    return uvec4To01Vec4(uintHashVec4ToVec4(f));
+}
+
+
+// From webgl-noise:
+
+
+vec3 mod289(vec3 x) {
+    return x - floor(x * (1.0 / 289.0)) * 289.0;
+}
+
+vec2 mod289(vec2 x) {
+    return x - floor(x * (1.0 / 289.0)) * 289.0;
+}
+
+vec4 mod289(vec4 x) {
+    return x - floor(x * (1.0 / 289.0)) * 289.0;
+}
+
+vec3 permute(vec3 x) {
+    return mod289(((x*34.0)+10.0)*x);
+}
+
+vec4 permute(vec4 x) {
+    return mod289(((x*34.0)+10.0)*x);
+}
+
+vec4 taylorInvSqrt(vec4 r) {
+    return 1.79284291400159 - 0.85373472095314 * r;
+}
+
+float snoise(vec2 v) {
+    const vec4 C = vec4(0.211324865405187,      // (3.0-sqrt(3.0))/6.0
+                        0.366025403784439,      // 0.5*(sqrt(3.0)-1.0)
+                        -0.577350269189626,     // -1.0 + 2.0 * C.x
+                        0.024390243902439);     // 1.0 / 41.0
+    // First corner
+    vec2 i  = floor(v + dot(v, C.yy) );
+    vec2 x0 = v -   i + dot(i, C.xx);
+
+    // Other corners
+    vec2 i1;
+    //i1.x = step( x0.y, x0.x ); // x0.x > x0.y ? 1.0 : 0.0
+    //i1.y = 1.0 - i1.x;
+    i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    // x0 = x0 - 0.0 + 0.0 * C.xx ;
+    // x1 = x0 - i1 + 1.0 * C.xx ;
+    // x2 = x0 - 1.0 + 2.0 * C.xx ;
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+
+    // Permutations
+    i = mod289(i); // Avoid truncation effects in permutation
+    vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0 ))
+            + i.x + vec3(0.0, i1.x, 1.0 ));
+
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+    m = m*m ;
+    m = m*m ;
+
+    // Gradients: 41 points uniformly over a line, mapped onto a diamond.
+    // The ring size 17*17 = 289 is close to a multiple of 41 (41*7 = 287)
+
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+
+    // Normalise gradients implicitly by scaling m
+    // Approximation of: m *= inversesqrt( a0*a0 + h*h );
+    m *= 1.79284291400159 - 0.85373472095314 * ( a0*a0 + h*h );
+
+    // Compute final noise value at P
+    vec3 g;
+    g.x  = a0.x  * x0.x  + h.x  * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+}
+
+float snoise(vec3 v) { 
+    const vec2  C = vec2(1.0/6.0, 1.0/3.0) ;
+    const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);
+
+    // First corner
+    vec3 i  = floor(v + dot(v, C.yyy) );
+    vec3 x0 =   v - i + dot(i, C.xxx) ;
+
+    // Other corners
+    vec3 g = step(x0.yzx, x0.xyz);
+    vec3 l = 1.0 - g;
+    vec3 i1 = min( g.xyz, l.zxy );
+    vec3 i2 = max( g.xyz, l.zxy );
+
+    //   x0 = x0 - 0.0 + 0.0 * C.xxx;
+    //   x1 = x0 - i1  + 1.0 * C.xxx;
+    //   x2 = x0 - i2  + 2.0 * C.xxx;
+    //   x3 = x0 - 1.0 + 3.0 * C.xxx;
+    vec3 x1 = x0 - i1 + C.xxx;
+    vec3 x2 = x0 - i2 + C.yyy; // 2.0*C.x = 1/3 = C.y
+    vec3 x3 = x0 - D.yyy;      // -1.0+3.0*C.x = -0.5 = -D.y
+
+    // Permutations
+    i = mod289(i); 
+    vec4 p = permute( permute( permute( 
+                i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+            + i.y + vec4(0.0, i1.y, i2.y, 1.0 )) 
+            + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+
+    // Gradients: 7x7 points over a square, mapped onto an octahedron.
+    // The ring size 17*17 = 289 is close to a multiple of 49 (49*6 = 294)
+    float n_ = 0.142857142857; // 1.0/7.0
+    vec3  ns = n_ * D.wyz - D.xzx;
+
+    vec4 j = p - 49.0 * floor(p * ns.z * ns.z);  //  mod(p,7*7)
+
+    vec4 x_ = floor(j * ns.z);
+    vec4 y_ = floor(j - 7.0 * x_ );    // mod(j,N)
+
+    vec4 x = x_ *ns.x + ns.yyyy;
+    vec4 y = y_ *ns.x + ns.yyyy;
+    vec4 h = 1.0 - abs(x) - abs(y);
+
+    vec4 b0 = vec4( x.xy, y.xy );
+    vec4 b1 = vec4( x.zw, y.zw );
+
+    //vec4 s0 = vec4(lessThan(b0,0.0))*2.0 - 1.0;
+    //vec4 s1 = vec4(lessThan(b1,0.0))*2.0 - 1.0;
+    vec4 s0 = floor(b0)*2.0 + 1.0;
+    vec4 s1 = floor(b1)*2.0 + 1.0;
+    vec4 sh = -step(h, vec4(0.0));
+
+    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+
+    vec3 p0 = vec3(a0.xy,h.x);
+    vec3 p1 = vec3(a0.zw,h.y);
+    vec3 p2 = vec3(a1.xy,h.z);
+    vec3 p3 = vec3(a1.zw,h.w);
+
+    //Normalise gradients
+    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+    p0 *= norm.x;
+    p1 *= norm.y;
+    p2 *= norm.z;
+    p3 *= norm.w;
+
+    // Mix final noise value
+    vec4 m = max(0.5 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+    m = m * m;
+    return 105.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), 
+                                    dot(p2,x2), dot(p3,x3) ) );
+}
+
+// End of code from webgl-noise.
+
+// Value noise
+vec3 vnoise33(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+
+    vec3 c000 = hash33(i);
+    vec3 c001 = hash33(i + vec3(0,0,1));
+    vec3 c010 = hash33(i + vec3(0,1,0));
+    vec3 c011 = hash33(i + vec3(0,1,1));
+    vec3 c100 = hash33(i + vec3(1,0,0));
+    vec3 c101 = hash33(i + vec3(1,0,1));
+    vec3 c110 = hash33(i + vec3(1,1,0));
+    vec3 c111 = hash33(i + vec3(1,1,1));
+
+    // vec3 u = f * f * (3.0 - 2.0 * f);
+    vec3 u = f*f*f*(f*(f*6.0 - 15.0) + 10.0);
+
+    vec3 cx00 = mix(c000, c100, u.x);
+    vec3 cx01 = mix(c001, c101, u.x);
+    vec3 cx10 = mix(c010, c110, u.x);
+    vec3 cx11 = mix(c011, c111, u.x);
+
+    vec3 cxy0 = mix(cx00, cx10, u.y);
+    vec3 cxy1 = mix(cx01, cx11, u.y);
+
+    return mix(cxy0, cxy1, u.z);
+}
+
+// Fractional Brownian Noise based on value noise
+vec3 fbm33(vec3 p, float H) {
+    const int OCTAVES = 6;
+    float G = exp2(-H);
+    float f = 1.0;
+    float a = 1.0;
+    vec3 sum = vec3(0.0);
+    vec3 q = p;
+
+    for (int k = 0; k < OCTAVES; k++) {
+        sum += a * vnoise33(q * f);
+        q = 2.0*q + vec3(37.1, 61.7, 12.4);
+        f *= 2.0;
+        a *= G;
+    }
+    return sum;
+}
+////////////////////////////////
+
+
+void main() {
+    vec2 z = v_uv;
+    float r2 = dot(z, z);
+    
+    if (r2 >= 1.0) 
+        discard;
+
+    // 1. Apply Hyperbolic Translation (Inverse Camera Transform)
+    float v = u_shift;
+    float c = 1.0 + z.x * v;
+    float d = z.y * v;
+    float denom = c * c + d * d;
+
+    vec2 zw;
+    zw.x = ((z.x + v) * c + z.y * d) / denom;
+    zw.y = (z.y * c - (z.x + v) * d) / denom;
+
+    float zw_r2 = dot(zw, zw);
+
+    // 2. Convert from Poincaré disk to Minkowski Hyperboloid R^{2,1}
+    float den = 1.0 - zw_r2;
+    vec3 p = vec3(2.0 * zw.x / den, 2.0 * zw.y / den, (1.0 + zw_r2) / den);
+    // p += 0.5*(fbm33(p, 2.0) - vec3(1.0));
+    // r^2 = z^2 - 1, z>0
+    // p.z = sqrt(p.x*p.x + p.y*p.y + 1.0);
+
+    // 4. Space Folding (Kaleidoscope Algorithm)
+    ivec3 parity = ivec3(0, 0, 0);
+
+    for (int i = 0; i < 100; i++) {
+        bool folded = false;
+        
+        float d1 = p.x * u_n1.x + p.y * u_n1.y - p.z * u_n1.z;
+        if (d1 < 0.0) { 
+            p -= 2.0 * d1 * u_n1; 
+            parity.x++; 
+            folded = true; 
+        }
+
+        float d2 = p.x * u_n2.x + p.y * u_n2.y - p.z * u_n2.z;
+        if (d2 < 0.0) { 
+            p -= 2.0 * d2 * u_n2; 
+            parity.y++; 
+            folded = true; 
+        }
+
+        float d3 = p.x * u_n3.x + p.y * u_n3.y - p.z * u_n3.z;
+        if (d3 < 0.0) { 
+            p -= 2.0 * d3 * u_n3; 
+            parity.z++; 
+            folded = true; 
+        }
+
+        if (!folded) break;
+    }
+
+    int paritySum = parity.x + parity.y + parity.z;
+    vec3 col = (paritySum % 2 == 0) ? vec3(0.5, 0.5, 0.7) : vec3(0.2, 0.2, 0.4);
+    // vec3 col = vec3(0.4, 0.4, 0.4);
+    // if (parity.x % 2 == 1)
+    //     col += vec3(0.1, 0.0, 0.0);
+    // if (parity.y % 2 == 1)
+    //     col += vec3(0.0, 0.1, 0.0);
+    // if (parity.z % 2 == 1)
+    //     col += vec3(0.0, 0.0, 0.6);
+
+    float d1 = p.x * u_n1.x + p.y * u_n1.y - p.z * u_n1.z;
+    float d2 = p.x * u_n2.x + p.y * u_n2.y - p.z * u_n2.z;
+    float d3 = p.x * u_n3.x + p.y * u_n3.y - p.z * u_n3.z;
+    // col *= 0.25+0.75*(1.0-smoothstep(0.1, 0.925, d1));
+    // col *= 0.25+0.75*(1.0-smoothstep(0.1, 0.925, d2));
+    // col *= 0.25+0.75*(1.0-smoothstep(0.1, 0.925, d3));
+    float LINE_WIDTH = 0.5;
+    // col += vec3(0.2*(1.0-smoothstep(0.0, LINE_WIDTH, d1)), 0.0, 0.0);
+    // col += vec3(0.0, 0.2*(1.0-smoothstep(0.0, LINE_WIDTH, d2)), 0.0);
+    // col += vec3(0.0, 0.0, 0.5*(1.0-smoothstep(0.0, LINE_WIDTH, d3)));
+    vec3 dv = vec3(d1, d2, d3);
+    // dv += 3.0*(fbm33(0.5*vec3(5.0*d1+0.0001*u_time, 0.0*0.25*d2+0.0*0.0002*u_time, 0.0*0.1*d3+0.0*0.0003*u_time), 1.0) - vec3(1.0));
+    vec3 adv = abs(dv);
+    // if (adv.x < LINE_WIDTH && adv.x < adv.y && adv.x < adv.z)
+    //     col = vec3(0.3, 0.0, 0.0);
+    // if (adv.y < LINE_WIDTH && adv.y < adv.x && adv.y < adv.z)
+    //     col = vec3(0.0, 0.3, 0.0);
+    // if (adv.z < LINE_WIDTH && adv.z < adv.x && adv.z < adv.y)
+    //     col = vec3(0.0, 0.0, 0.5);
+    float t = 0.161 + 0.0*0.00001*u_time;
+    col = 2.0*fbm33(2.0*vec3(d1+t, 0.5*d2+t, 0.2*d3+t), 1.0);
+    // col += vec3(0.0, 0.0, 5.0*(1.0-smoothstep(0.0, 0.1, abs(d3))));
+
+    col = 0.5*col+0.5*vec3(0.1, 0.1, 0.2);
+    col = 0.2*col;
+
+    gl_FragColor = vec4(col, 1.0);
+}

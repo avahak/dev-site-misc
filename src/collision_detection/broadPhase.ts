@@ -1,3 +1,5 @@
+// Very inefficient! Just for curiosity.
+
 import * as THREE from "three";
 import { DividerList, DividerList_OfferResult } from "./data_structures/dividerList";
 
@@ -28,12 +30,13 @@ export class MovingSphere {
 
 
 /**
+ * Inefficient!
+ * 
  * Inefficient, bookkeeping certificates just to avoid adding one to active is inefficient.
  * 
  * Broad phase collision algorithm. Inefficient if objects move fast. 
  * Tunable with capacity of certificates that can be set
- * per object. Depends only on distances only so directly generalizes to AABB:s 
- * (with max-norm distance), \R^n (with n>3), or general metric spaces.
+ * per object. Depends only on distances only.
  * 
  * Notation.
  * 
