@@ -1,4 +1,4 @@
-import{a as e,n as t,t as n}from"./jsx-runtime-Bg_NI1en.js";import{t as r}from"./Box-CXy275Mv.js";import{a as i,i as a,r as o,t as s}from"./index-BFn30FR2.js";import{$t as c,Dr as l,Gr as u,Lt as d,Qt as f,Rt as p,Wr as m,_ as h,bt as g,dr as _,fr as v,r as y,vt as b,y as x,z as S}from"./three.module-CkazZQtY.js";import{t as C}from"./lil-gui.module.min-aptKH1-N.js";import{t as w}from"./OrbitControls-CSP74OyM.js";var T=e(t(),1),E=`varying vec2 v_uv;\r
+import{a as e,n as t,t as n}from"./jsx-runtime-Bg_NI1en.js";import{t as r}from"./Box-CXy275Mv.js";import{a as i,i as a,r as o,t as s}from"./index-B9KusqQY.js";import{$t as c,Dr as l,Gr as u,Lt as d,Qt as f,Rt as p,Wr as m,_ as h,bt as g,dr as _,fr as v,r as y,vt as b,y as x,z as S}from"./three.module-CkazZQtY.js";import{t as C}from"./lil-gui.module.min-aptKH1-N.js";import{t as w}from"./OrbitControls-CSP74OyM.js";var T=e(t(),1),E=`varying vec2 v_uv;\r
 \r
 void main() {\r
     v_uv = position.xy; \r
