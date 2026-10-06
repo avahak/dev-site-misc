@@ -2,23 +2,36 @@ import React, { useEffect, useRef } from 'react';
 import { Box, Container, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { Link as MUILink } from '@mui/material';
-import { RenderManager } from './manager';
+import { AppController } from './ui';
 
 const SceneComponent: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        console.log("useEffect: ", containerRef.current);
+        if (!containerRef.current) return;
+
         const abortController = new AbortController();
-        const manager = new RenderManager(containerRef.current!);
-        manager.init(abortController.signal);
+        const controller = new AppController(containerRef.current);
+
+        controller.start(abortController.signal);
+
         return () => {
             abortController.abort();
-            manager.dispose();
+            controller.dispose();
         };
     }, []);
 
-    return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
+    return (
+        <div
+            ref={containerRef}
+            style={{
+                position: 'relative',
+                width: '100%',
+                height: '100%',
+                overflow: 'hidden'
+            }}
+        />
+    );
 };
 
 const App: React.FC = () => {

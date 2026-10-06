@@ -1,52 +1,15 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { Complex, Mobius, hyperbolicDist, angleDist, lerpAngle } from './hyperbolicMath';
+import { EdgeClass, GroupElement, MobiusMatrix, Point2D } from './types';
+import { HyperbolicGeometry, MobiusTransform } from './hyperbolic';
+import { TriangleGroup } from './groupAlgebra';
 
-const NUM_ARROWS = 2;
-const ARROW_LENGTH = 0.2;
-const MAX_FAINT_ARROWS = 10000;
-
-class InteractiveArrow {
-    base: Complex;
-    dir: Complex;
-    color: number;
-    baseMesh: THREE.Mesh;
-    tipMesh: THREE.Mesh;
-    arrowHelper: THREE.ArrowHelper;
-
-    constructor(scene: THREE.Scene, base: Complex, dir: Complex, color: number, isTarget: boolean) {
-        this.base = base;
-        this.dir = dir.normalize();
-        this.color = color;
-
-        // Base Hitbox (Source is sphere, Target is a small cube to distinguish visually)
-        const baseGeo = isTarget ? new THREE.BoxGeometry(0.04, 0.04, 0.04) : new THREE.SphereGeometry(0.025);
-        this.baseMesh = new THREE.Mesh(baseGeo, new THREE.MeshBasicMaterial({ color }));
-        this.baseMesh.userData = { type: 'base', arrow: this };
-        scene.add(this.baseMesh);
-
-        // Tip Hitbox (Sphere)
-        this.tipMesh = new THREE.Mesh(new THREE.SphereGeometry(0.02), new THREE.MeshBasicMaterial({ color }));
-        this.tipMesh.userData = { type: 'tip', arrow: this };
-        scene.add(this.tipMesh);
-
-        this.arrowHelper = new THREE.ArrowHelper(
-            new THREE.Vector3(this.dir.re, this.dir.im, 0),
-            new THREE.Vector3(this.base.re, this.base.im, 0),
-            ARROW_LENGTH, color, 0.06, 0.04
-        );
-        scene.add(this.arrowHelper);
-        this.updateVisually();
-    }
-
-    updateVisually() {
-        this.baseMesh.position.set(this.base.re, this.base.im, 0);
-        this.tipMesh.position.set(this.base.re + this.dir.re * ARROW_LENGTH, this.base.im + this.dir.im * ARROW_LENGTH, 0);
-
-        this.arrowHelper.position.copy(this.baseMesh.position);
-        this.arrowHelper.setDirection(new THREE.Vector3(this.dir.re, this.dir.im, 0));
-    }
+export interface RenderParams {
+    preset: string;
+    maxRadius: number;
+    depthL: number;
+    showTestSegment: boolean;
 }
 
 export class RenderManager {
@@ -55,34 +18,51 @@ export class RenderManager {
     cleanUpTasks: (() => void)[] = [];
     gui: any;
     controls!: OrbitControls;
-    isInitialized: boolean = false;
+    timer: THREE.Timer = new THREE.Timer();
+    isInitialized: boolean;
     containerSize: THREE.Vector2 = new THREE.Vector2(0, 0);
 
     scene!: THREE.Scene;
-    camera!: THREE.OrthographicCamera; // Switched to Orthographic for pure 2D
+    camera!: THREE.OrthographicCamera;
+    raycaster: THREE.Raycaster = new THREE.Raycaster();
+    mouse: THREE.Vector2 = new THREE.Vector2(-10, -10);
 
-    // Interaction state
-    raycaster = new THREE.Raycaster();
-    pointer = new THREE.Vector2();
-    draggedObj: THREE.Object3D | null = null;
-    dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    triangleGroup!: TriangleGroup;
+    deltaK: GroupElement[] = [];
+    generators: GroupElement[] = [];
+    exploredSubgroup: GroupElement[] = [];
+    edgeClasses: EdgeClass[] = [];
 
-    // App state
-    sources: InteractiveArrow[] = [];
-    targets: InteractiveArrow[] = [];
-    faintArrowsPool: THREE.ArrowHelper[] = [];
-    generators: Mobius[] = [];
-
-    params = {
-        depth: 4,
-        pathsPerFrame: 30,
-        snap: false,
-        snapDistThresh: 0.15,
-        snapAngleThresh: 0.2
+    params: RenderParams = {
+        preset: '6,4',
+        maxRadius: 0.90,
+        depthL: 3,
+        showTestSegment: true
     };
+
+    testPoint1: Point2D = { x: -0.25, y: 0.15 };
+    testPoint2: Point2D = { x: 0.25, y: -0.15 };
+    private draggingPoint: 1 | 2 | null = null;
+    private isDragging: boolean = false;
+    private dragJustEnded: boolean = false;
+
+    diskBoundaryGroup: THREE.Group = new THREE.Group();
+    tessellationGroup: THREE.Group = new THREE.Group();
+    polygonOrbitGroup: THREE.Group = new THREE.Group();
+    basePolygonGroup: THREE.Group = new THREE.Group();
+    hoverHighlightGroup: THREE.Group = new THREE.Group();
+    testSegmentGroup: THREE.Group = new THREE.Group();
+
+    onElementHover?: (el: GroupElement | null) => void;
+    onElementSelect?: (el: GroupElement) => void;
+    onParamsChange?: (params: RenderParams) => void;
+
+    private interactiveMeshes: { mesh: THREE.Mesh; element: GroupElement }[] = [];
+    private hoveredMesh: THREE.Mesh | null = null;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
+        this.isInitialized = false;
         THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
     }
 
@@ -91,9 +71,11 @@ export class RenderManager {
         this.renderer.setClearColor(0x111111, 1);
         this.container.appendChild(this.renderer.domElement);
 
+        this.triangleGroup = new TriangleGroup(6, 4);
+
         this.setupCamera();
         this.setupScene();
-        this.setupInteraction();
+        this.setupEvents();
         this.createGUI();
 
         this.isInitialized = true;
@@ -108,10 +90,13 @@ export class RenderManager {
     dispose() {
         if (!this.isInitialized) return;
         this.renderer.setAnimationLoop(null);
-        this.container.removeChild(this.renderer.domElement);
+        if (this.renderer.domElement.parentElement === this.container) {
+            this.container.removeChild(this.renderer.domElement);
+        }
         for (const task of this.cleanUpTasks) task();
         this.controls.dispose();
-        this.gui.destroy();
+        this.timer.dispose();
+        if (this.gui) this.gui.destroy();
         this.renderer.dispose();
     }
 
@@ -125,210 +110,542 @@ export class RenderManager {
         this.renderer.setSize(width, height);
 
         const aspect = width / height;
-        const viewSize = 1.2;
-        this.camera.left = -aspect * viewSize;
-        this.camera.right = aspect * viewSize;
-        this.camera.top = viewSize;
-        this.camera.bottom = -viewSize;
+        const frustumSize = 2.4;
+
+        this.camera.left = (-frustumSize * aspect) / 2;
+        this.camera.right = (frustumSize * aspect) / 2;
+        this.camera.top = frustumSize / 2;
+        this.camera.bottom = -frustumSize / 2;
         this.camera.updateProjectionMatrix();
     }
 
     createGUI() {
         this.gui = new GUI();
-        this.gui.add(this.params, 'depth', 1, 20, 1).name("Explore Depth");
-        this.gui.add(this.params, 'pathsPerFrame', 0, 200, 10).name("Paths / Frame");
-        this.gui.add(this.params, 'snap').name("Snap to Relations");
-        this.gui.add(this.params, 'snapDistThresh', 0.01, 0.5).name("Snap Dist");
-        this.gui.add(this.params, 'snapAngleThresh', 0.01, 1.0).name("Snap Angle");
+
+        const presets = ['5,4', '5,5', '6,4', '6,6', '7,3', '8,3', '8,4', '10,3'];
+        this.gui.add(this.params, 'preset', presets).name('Preset {p,q}').onChange(() => {
+            const [p, q] = this.params.preset.split(',').map(Number);
+            this.triangleGroup = new TriangleGroup(p, q);
+            if (this.onParamsChange) this.onParamsChange(this.params);
+        });
+
+        this.gui.add(this.params, 'maxRadius', 0.70, 0.99, 0.005).name('Max Radius').onChange(() => {
+            if (this.onParamsChange) this.onParamsChange(this.params);
+        });
+
+        this.gui.add(this.params, 'depthL', 1, 10, 1).name('H Depth').onChange(() => {
+            if (this.onParamsChange) this.onParamsChange(this.params);
+        });
+
+        this.gui.add(this.params, 'showTestSegment').name('Show Test Segment').onChange(() => {
+            this.rebuildTestSegment();
+        });
     }
 
     setupCamera() {
-        this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
-        this.camera.position.set(0, 0, 5);
+        const aspect = (this.container.clientWidth || 1) / (this.container.clientHeight || 1);
+        const frustumSize = 2.4;
+
+        this.camera = new THREE.OrthographicCamera(
+            (-frustumSize * aspect) / 2,
+            (frustumSize * aspect) / 2,
+            frustumSize / 2,
+            -frustumSize / 2,
+            0.1,
+            100
+        );
+        this.camera.position.set(0, 0, 10);
         this.camera.lookAt(0, 0, 0);
 
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-        this.controls.enableRotate = false; // Keep it 2D
+        this.controls.enableRotate = false;
+        this.controls.enableZoom = true;
     }
 
     setupScene() {
         this.scene = new THREE.Scene();
 
-        // Draw Poincare Disk boundary
-        const circleGeo = new THREE.RingGeometry(0.99, 1.0, 64);
-        const circleMat = new THREE.MeshBasicMaterial({ color: 0x555555, side: THREE.DoubleSide });
-        const disk = new THREE.Mesh(circleGeo, circleMat);
-        this.scene.add(disk);
-        this.cleanUpTasks.push(() => { circleGeo.dispose(); circleMat.dispose(); });
+        this.scene.add(this.diskBoundaryGroup);
+        this.scene.add(this.tessellationGroup);
+        this.scene.add(this.polygonOrbitGroup);
+        this.scene.add(this.basePolygonGroup);
+        this.scene.add(this.hoverHighlightGroup);
+        this.scene.add(this.testSegmentGroup);
 
-        const addPoint = (z: Complex) => {
-            const circleGeo = new THREE.SphereGeometry(0.01);
-            const circleMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
-            const disk = new THREE.Mesh(circleGeo, circleMat);
-            disk.position.set(z.re, z.im);
-            this.scene.add(disk);
-            this.cleanUpTasks.push(() => { circleGeo.dispose(); circleMat.dispose(); });
-        };
-        const [p, q] = [6, 4];
-        const a = Math.acosh(Math.cos(Math.PI / p) / Math.sin(Math.PI / q));
-        const b = Math.acosh(Math.cos(Math.PI / q) / Math.sin(Math.PI / p));
-        const c = Math.acosh(1.0 / (Math.tan(Math.PI / p) * Math.tan(Math.PI / q)));
-        addPoint(Complex.fromPolar(0, 0));
-        addPoint(Complex.fromPolar(Math.tanh(b / 2), 0));
-        addPoint(Complex.fromPolar(Math.tanh(c / 2), Math.PI / p));
+        this.drawDiskBoundary();
+    }
 
-        // Initialize arrow pairs
-        const colors = [0xff4444, 0x44ff44, 0x4444ff];
-        for (let i = 0; i < NUM_ARROWS; i++) {
-            const angleS = Math.PI * 2 * (i / 3);
-            const angleT = Math.PI * 2 * ((i + 0.5) / 3);
-
-            this.sources.push(new InteractiveArrow(
-                this.scene, Complex.fromPolar(0.4, angleS), Complex.fromPolar(1, angleS), colors[i], false
-            ));
-
-            this.targets.push(new InteractiveArrow(
-                this.scene, Complex.fromPolar(0.7, angleT), Complex.fromPolar(1, angleT + 0.5), colors[i], true
-            ));
+    private drawDiskBoundary() {
+        const geom = new THREE.BufferGeometry();
+        const pts: THREE.Vector3[] = [];
+        for (let i = 0; i <= 128; i++) {
+            const a = (i / 128) * Math.PI * 2;
+            pts.push(new THREE.Vector3(Math.cos(a), Math.sin(a), 0));
         }
+        geom.setFromPoints(pts);
+        const mat = new THREE.LineBasicMaterial({ color: 0x555555 });
+        const boundaryLine = new THREE.Line(geom, mat);
+        boundaryLine.renderOrder = 1;
+        this.diskBoundaryGroup.add(boundaryLine);
+        this.cleanUpTasks.push(() => { geom.dispose(); mat.dispose(); });
+    }
 
-        // Initialize faint arrows pool
-        for (let i = 0; i < MAX_FAINT_ARROWS; i++) {
-            const arr = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), ARROW_LENGTH, 0xffffff);
-            // Hack to make ArrowHelper transparent
-            (arr.line.material as THREE.Material).transparent = true;
-            (arr.line.material as THREE.Material).opacity = 0.3;
-            (arr.cone.material as THREE.Material).transparent = true;
-            (arr.cone.material as THREE.Material).opacity = 0.3;
-            arr.visible = false;
-            this.scene.add(arr);
-            this.faintArrowsPool.push(arr);
+    updateDeltaK(elements: GroupElement[], generators: GroupElement[] = []) {
+        this.deltaK = elements;
+        this.generators = generators;
+        this.rebuildTessellation();
+    }
+
+    updateExploredOrbit(explored: GroupElement[], edgeClasses: EdgeClass[]) {
+        this.exploredSubgroup = explored;
+        this.edgeClasses = edgeClasses;
+        this.rebuildTessellation();
+        this.rebuildOrbitAndBasePolygon();
+        this.rebuildTestSegment();
+    }
+
+    private getTransformedTriangle(matrix: MobiusMatrix, zPos: number) {
+        const [v0, v1, v2] = this.triangleGroup.baseTriangleVertices;
+
+        const sampleArc = (p1: { x: number; y: number }, p2: { x: number; y: number }, steps = 16) => {
+            const pts = HyperbolicGeometry.getGeodesicPoints(p1, p2, steps);
+            return pts.map(p => {
+                const c = MobiusTransform.apply(matrix, { re: p.x, im: p.y });
+                return new THREE.Vector3(c.re, c.im, zPos);
+            });
+        };
+
+        const arc0 = sampleArc(v0, v1, 16);
+        const arc1 = sampleArc(v1, v2, 16).slice(1);
+        const arc2 = sampleArc(v2, v0, 16).slice(1);
+
+        return [...arc0, ...arc1, ...arc2];
+    }
+
+    private rebuildTessellation() {
+        while (this.tessellationGroup.children.length > 0) {
+            const obj = this.tessellationGroup.children.pop()!;
+            if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+                obj.geometry.dispose();
+                (obj.material as THREE.Material).dispose();
+            }
+        }
+        this.interactiveMeshes = [];
+
+        for (const el of this.deltaK) {
+            const isGenerator = this.generators.some(g => g.id === el.id || MobiusTransform.distance(g.matrix, el.matrix) < 1e-4);
+            const inExploredH = !isGenerator && this.exploredSubgroup.some(h => MobiusTransform.distance(h.matrix, el.matrix) < 1e-4);
+
+            const zPos = isGenerator ? 0.03 : (inExploredH ? 0.02 : 0.01);
+            const rOrder = isGenerator ? 20 : (inExploredH ? 15 : 10);
+
+            const boundaryPts = this.getTransformedTriangle(el.matrix, zPos);
+
+            const shape = new THREE.Shape();
+            shape.moveTo(boundaryPts[0].x, boundaryPts[0].y);
+            for (let i = 1; i < boundaryPts.length; i++) {
+                shape.lineTo(boundaryPts[i].x, boundaryPts[i].y);
+            }
+
+            let colorHex = 0x1a252f;
+            let opacityVal = 0.30;
+            let lineHex = 0x2c3e50;
+
+            if (isGenerator) {
+                colorHex = 0x27ae60;
+                opacityVal = 0.70;
+                lineHex = 0x2ecc71;
+            } else if (inExploredH) {
+                colorHex = 0x2980b9;
+                opacityVal = 0.60;
+                lineHex = 0x5dade2;
+            }
+
+            const geom = new THREE.ShapeGeometry(shape);
+            const mat = new THREE.MeshBasicMaterial({
+                color: colorHex,
+                transparent: true,
+                opacity: opacityVal,
+                side: THREE.DoubleSide,
+                depthTest: true,
+                depthWrite: false
+            });
+
+            const mesh = new THREE.Mesh(geom, mat);
+            mesh.position.z = zPos;
+            mesh.renderOrder = rOrder;
+            this.tessellationGroup.add(mesh);
+            this.interactiveMeshes.push({ mesh, element: el });
+
+            const outlineGeom = new THREE.BufferGeometry().setFromPoints(boundaryPts);
+            const outlineMat = new THREE.LineBasicMaterial({
+                color: lineHex,
+                transparent: true,
+                opacity: opacityVal + 0.20,
+                depthTest: true,
+                depthWrite: false
+            });
+            const outlineLine = new THREE.Line(outlineGeom, outlineMat);
+            outlineLine.position.z = zPos;
+            outlineLine.renderOrder = rOrder + 1;
+            this.tessellationGroup.add(outlineLine);
         }
     }
 
-    setupInteraction() {
-        const onPointerDown = (event: PointerEvent) => {
-            const rect = this.renderer.domElement.getBoundingClientRect();
-            this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    private rebuildOrbitAndBasePolygon() {
+        while (this.polygonOrbitGroup.children.length > 0) {
+            const obj = this.polygonOrbitGroup.children.pop()!;
+            if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+                obj.geometry.dispose();
+                (obj.material as THREE.Material).dispose();
+            }
+        }
+        while (this.basePolygonGroup.children.length > 0) {
+            const obj = this.basePolygonGroup.children.pop()!;
+            if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+                obj.geometry.dispose();
+                (obj.material as THREE.Material).dispose();
+            }
+        }
 
-            this.raycaster.setFromCamera(this.pointer, this.camera);
-            const hitboxes = [...this.sources, ...this.targets].flatMap(a => [a.baseMesh, a.tipMesh]);
-            const intersects = this.raycaster.intersectObjects(hitboxes);
+        const baseVerts = this.triangleGroup.basePolygonVertices;
 
-            if (intersects.length > 0) {
-                this.draggedObj = intersects[0].object;
+        for (const h of this.exploredSubgroup) {
+            const transformedVerts = baseVerts.map(v => {
+                const c = MobiusTransform.apply(h.matrix, { re: v.x, im: v.y });
+                return { x: c.re, y: c.im };
+            });
+
+            const polyPts: THREE.Vector3[] = [];
+            for (let i = 0; i < transformedVerts.length; i++) {
+                const p1 = transformedVerts[i];
+                const p2 = transformedVerts[(i + 1) % transformedVerts.length];
+                const arc = HyperbolicGeometry.getGeodesicPoints(p1, p2, 12);
+                polyPts.push(...arc.map(p => new THREE.Vector3(p.x, p.y, 0.04)));
+            }
+
+            const lineGeom = new THREE.BufferGeometry().setFromPoints(polyPts);
+            const lineMat = new THREE.LineBasicMaterial({
+                color: 0x4a90e2,
+                transparent: true,
+                opacity: 0.60,
+                depthTest: true,
+                depthWrite: false
+            });
+            const lineMesh = new THREE.Line(lineGeom, lineMat);
+            lineMesh.renderOrder = 30;
+            this.polygonOrbitGroup.add(lineMesh);
+        }
+
+        const ribbonWidth = 0.008;
+        for (let i = 0; i < baseVerts.length; i++) {
+            const p1 = baseVerts[i];
+            const p2 = baseVerts[(i + 1) % baseVerts.length];
+            const edgePts = HyperbolicGeometry.getGeodesicPoints(p1, p2, 16);
+
+            let edgeColor = '#ffffff';
+            for (const cls of this.edgeClasses) {
+                if (cls.edgeIndices.includes(i)) {
+                    edgeColor = cls.color;
+                    break;
+                }
+            }
+
+            const vertices: number[] = [];
+            const indices: number[] = [];
+
+            for (let k = 0; k < edgePts.length - 1; k++) {
+                const q0 = edgePts[k];
+                const q1 = edgePts[k + 1];
+
+                const dx = q1.x - q0.x;
+                const dy = q1.y - q0.y;
+                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                const nx = (-dy / len) * ribbonWidth;
+                const ny = (dx / len) * ribbonWidth;
+
+                const baseIdx = (vertices.length / 3);
+                vertices.push(
+                    q0.x + nx, q0.y + ny, 0.05,
+                    q0.x - nx, q0.y - ny, 0.05,
+                    q1.x + nx, q1.y + ny, 0.05,
+                    q1.x - nx, q1.y - ny, 0.05
+                );
+
+                indices.push(
+                    baseIdx, baseIdx + 1, baseIdx + 2,
+                    baseIdx + 1, baseIdx + 3, baseIdx + 2
+                );
+            }
+
+            const geom = new THREE.BufferGeometry();
+            geom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            geom.setIndex(indices);
+
+            const mat = new THREE.MeshBasicMaterial({
+                color: new THREE.Color(edgeColor),
+                side: THREE.DoubleSide,
+                depthTest: true,
+                depthWrite: false
+            });
+
+            const ribbonMesh = new THREE.Mesh(geom, mat);
+            ribbonMesh.renderOrder = 40;
+            this.basePolygonGroup.add(ribbonMesh);
+        }
+    }
+
+    private rebuildTestSegment() {
+        while (this.testSegmentGroup.children.length > 0) {
+            const obj = this.testSegmentGroup.children.pop()!;
+            if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+                obj.geometry.dispose();
+                (obj.material as THREE.Material).dispose();
+            }
+        }
+
+        if (!this.params.showTestSegment) return;
+
+        // 1. Transformed test segments h(p1 -> p2) for h in H_explored
+        for (const h of this.exploredSubgroup) {
+            if (h.word.canonicalString === '1') continue;
+
+            const c1 = MobiusTransform.apply(h.matrix, { re: this.testPoint1.x, im: this.testPoint1.y });
+            const c2 = MobiusTransform.apply(h.matrix, { re: this.testPoint2.x, im: this.testPoint2.y });
+
+            const p1: Point2D = { x: c1.re, y: c1.im };
+            const p2: Point2D = { x: c2.re, y: c2.im };
+
+            const arc = HyperbolicGeometry.getGeodesicPoints(p1, p2, 16);
+            const lineGeom = new THREE.BufferGeometry().setFromPoints(
+                arc.map(p => new THREE.Vector3(p.x, p.y, 0.07))
+            );
+            const lineMat = new THREE.LineBasicMaterial({
+                color: 0xe67e22,
+                transparent: true,
+                opacity: 0.85,
+                depthTest: true,
+                depthWrite: false
+            });
+            const lineMesh = new THREE.Line(lineGeom, lineMat);
+            lineMesh.renderOrder = 80;
+            this.testSegmentGroup.add(lineMesh);
+
+            const h1Geom = new THREE.CircleGeometry(0.018, 16);
+            const h1Mat = new THREE.MeshBasicMaterial({ color: 0xff3366, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false });
+            const h1Mesh = new THREE.Mesh(h1Geom, h1Mat);
+            h1Mesh.position.set(p1.x, p1.y, 0.075);
+            h1Mesh.renderOrder = 85;
+            this.testSegmentGroup.add(h1Mesh);
+
+            const h2Geom = new THREE.CircleGeometry(0.018, 16);
+            const h2Mat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false });
+            const h2Mesh = new THREE.Mesh(h2Geom, h2Mat);
+            h2Mesh.position.set(p2.x, p2.y, 0.075);
+            h2Mesh.renderOrder = 85;
+            this.testSegmentGroup.add(h2Mesh);
+        }
+
+        // 2. Base Test Segment Line (Identity)
+        const baseArc = HyperbolicGeometry.getGeodesicPoints(this.testPoint1, this.testPoint2, 24);
+        const baseLineGeom = new THREE.BufferGeometry().setFromPoints(
+            baseArc.map(p => new THREE.Vector3(p.x, p.y, 0.08))
+        );
+        const baseLineMat = new THREE.LineBasicMaterial({
+            color: 0xffd700,
+            linewidth: 4,
+            transparent: true,
+            opacity: 1.0,
+            depthTest: false,
+            depthWrite: false
+        });
+        const baseLine = new THREE.Line(baseLineGeom, baseLineMat);
+        baseLine.renderOrder = 1000;
+        this.testSegmentGroup.add(baseLine);
+
+        // Base Point 1 Draggable Handle (Bright Coral Red, Transparent Pass, renderOrder = 1001)
+        const b1Geom = new THREE.CircleGeometry(0.040, 24);
+        const b1Mat = new THREE.MeshBasicMaterial({
+            color: 0xff3366,
+            transparent: true,
+            opacity: 1.0,
+            depthTest: false,
+            depthWrite: false
+        });
+        const b1Mesh = new THREE.Mesh(b1Geom, b1Mat);
+        b1Mesh.position.set(this.testPoint1.x, this.testPoint1.y, 0.09);
+        b1Mesh.renderOrder = 1001;
+        this.testSegmentGroup.add(b1Mesh);
+
+        // Base Point 2 Draggable Handle (Bright Electric Blue, Transparent Pass, renderOrder = 1001)
+        const b2Geom = new THREE.CircleGeometry(0.040, 24);
+        const b2Mat = new THREE.MeshBasicMaterial({
+            color: 0x00e5ff,
+            transparent: true,
+            opacity: 1.0,
+            depthTest: false,
+            depthWrite: false
+        });
+        const b2Mesh = new THREE.Mesh(b2Geom, b2Mat);
+        b2Mesh.position.set(this.testPoint2.x, this.testPoint2.y, 0.09);
+        b2Mesh.renderOrder = 1001;
+        this.testSegmentGroup.add(b2Mesh);
+    }
+
+    highlightElement(el: GroupElement | null, meshGeom?: THREE.BufferGeometry) {
+        while (this.hoverHighlightGroup.children.length > 0) {
+            const obj = this.hoverHighlightGroup.children.pop()!;
+            if (obj instanceof THREE.Mesh) {
+                (obj.material as THREE.Material).dispose();
+            }
+        }
+
+        if (!el) return;
+
+        let geom: THREE.BufferGeometry;
+        if (meshGeom) {
+            geom = meshGeom;
+        } else {
+            const boundaryPts = this.getTransformedTriangle(el.matrix, 0.06);
+            const shape = new THREE.Shape();
+            shape.moveTo(boundaryPts[0].x, boundaryPts[0].y);
+            for (let i = 1; i < boundaryPts.length; i++) {
+                shape.lineTo(boundaryPts[i].x, boundaryPts[i].y);
+            }
+            geom = new THREE.ShapeGeometry(shape);
+        }
+
+        const mat = new THREE.MeshBasicMaterial({
+            color: 0xf1c40f,
+            transparent: true,
+            opacity: 0.80,
+            side: THREE.DoubleSide,
+            depthTest: true,
+            depthWrite: false
+        });
+
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.position.z = 0.06;
+        mesh.renderOrder = 50;
+        this.hoverHighlightGroup.add(mesh);
+    }
+
+    private setupEvents() {
+        const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        const rayWorldPos = new THREE.Vector3();
+
+        const getMouseWorldPos = (): Point2D | null => {
+            this.raycaster.setFromCamera(this.mouse, this.camera);
+            if (this.raycaster.ray.intersectPlane(plane, rayWorldPos)) {
+                return { x: rayWorldPos.x, y: rayWorldPos.y };
+            }
+            return null;
+        };
+
+        window.addEventListener('pointerdown', () => {
+            if (!this.params.showTestSegment) return;
+            const worldPos = getMouseWorldPos();
+            if (!worldPos) return;
+
+            const d1 = Math.hypot(worldPos.x - this.testPoint1.x, worldPos.y - this.testPoint1.y);
+            const d2 = Math.hypot(worldPos.x - this.testPoint2.x, worldPos.y - this.testPoint2.y);
+
+            const hitRadius = 0.09;
+            if (d1 < hitRadius && d1 <= d2) {
+                this.draggingPoint = 1;
+                this.isDragging = false;
+                this.controls.enabled = false;
+            } else if (d2 < hitRadius) {
+                this.draggingPoint = 2;
+                this.isDragging = false;
                 this.controls.enabled = false;
             }
-        };
+        });
 
-        const onPointerMove = (event: PointerEvent) => {
-            if (!this.draggedObj) return;
-
+        window.addEventListener('pointermove', (e) => {
             const rect = this.renderer.domElement.getBoundingClientRect();
-            this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-            this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-            this.raycaster.setFromCamera(this.pointer, this.camera);
-            const intersectPt = new THREE.Vector3();
-            this.raycaster.ray.intersectPlane(this.dragPlane, intersectPt);
+            if (this.draggingPoint !== null) {
+                this.isDragging = true;
+                const worldPos = getMouseWorldPos();
+                if (worldPos) {
+                    const r = Math.hypot(worldPos.x, worldPos.y);
+                    const maxR = 0.98;
+                    const clampedPos = r > maxR ? { x: (worldPos.x / r) * maxR, y: (worldPos.y / r) * maxR } : worldPos;
 
-            const data = this.draggedObj.userData as { type: 'base' | 'tip', arrow: InteractiveArrow };
-            if (data.type === 'base') {
-                let z = new Complex(intersectPt.x, intersectPt.y);
-                if (z.abs() >= 0.99) z = z.normalize().scale(0.99); // Keep strictly inside disk
-                data.arrow.base = z;
-            } else {
-                let d = new Complex(intersectPt.x - data.arrow.base.re, intersectPt.y - data.arrow.base.im);
-                if (d.abs() > 0.001) data.arrow.dir = d.normalize();
+                    if (this.draggingPoint === 1) {
+                        this.testPoint1 = clampedPos;
+                    } else if (this.draggingPoint === 2) {
+                        this.testPoint2 = clampedPos;
+                    }
+                    this.rebuildTestSegment();
+                }
             }
-            data.arrow.updateVisually();
+        });
+
+        const stopDragging = () => {
+            if (this.draggingPoint !== null) {
+                if (this.isDragging) {
+                    this.dragJustEnded = true;
+                    setTimeout(() => {
+                        this.dragJustEnded = false;
+                    }, 50);
+                }
+                this.draggingPoint = null;
+                this.isDragging = false;
+                this.controls.enabled = true;
+            }
         };
 
-        const onPointerUp = () => {
-            this.draggedObj = null;
-            this.controls.enabled = true;
-        };
+        window.addEventListener('pointerup', stopDragging);
+        window.addEventListener('pointercancel', stopDragging);
 
-        this.renderer.domElement.addEventListener('pointerdown', onPointerDown);
-        window.addEventListener('pointermove', onPointerMove);
-        window.addEventListener('pointerup', onPointerUp);
-
-        this.cleanUpTasks.push(() => {
-            this.renderer.domElement.removeEventListener('pointerdown', onPointerDown);
-            window.removeEventListener('pointermove', onPointerMove);
-            window.removeEventListener('pointerup', onPointerUp);
+        window.addEventListener('click', () => {
+            if (this.dragJustEnded) {
+                this.dragJustEnded = false;
+                return;
+            }
+            if (this.hoveredMesh) {
+                const found = this.interactiveMeshes.find(m => m.mesh === this.hoveredMesh);
+                if (found && this.onElementSelect) {
+                    this.onElementSelect(found.element);
+                }
+            }
         });
     }
 
     animate() {
+        this.timer.update();
         this.controls.update();
         this.handleResize();
 
-        // 1. Recompute the 3 generating mappings from the current arrow pairs
-        this.generators = this.sources.map((src, i) => {
-            const tgt = this.targets[i];
-            return Mobius.createMapping(src.base, src.dir, tgt.base, tgt.dir);
-        });
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        const intersects = this.raycaster.intersectObjects(this.interactiveMeshes.map(m => m.mesh));
 
-        // 2. Randomly explore the semigroup and apply snapping
-        let poolIdx = 0;
-
-        for (let path = 0; path < this.params.pathsPerFrame; path++) {
-            let W = Mobius.identity();
-
-            for (let d = 0; d < this.params.depth; d++) {
-                const gIdx = Math.floor(Math.random() * this.generators.length);
-                W = W.compose(this.generators[gIdx]);
-
-                for (let sIdx = 0; sIdx < this.sources.length; sIdx++) {
-                    const src = this.sources[sIdx];
-
-                    const mappedBase = W.apply(src.base);
-                    if (mappedBase.abs() > 0.999) continue; // Out of bounds due to float precision
-
-                    const mappedDirComplex = W.applyDir(src.base, src.dir);
-                    const mappedDir = mappedDirComplex.normalize();
-
-                    // Render Faint Arrow
-                    if (poolIdx < MAX_FAINT_ARROWS) {
-                        const arr = this.faintArrowsPool[poolIdx++];
-                        arr.position.set(mappedBase.re, mappedBase.im, 0);
-                        arr.setDirection(new THREE.Vector3(mappedDir.re, mappedDir.im, 0));
-                        arr.setColor(src.color);
-                        arr.visible = true;
-                    }
-
-                    // Snapping logic
-                    if (this.params.snap) {
-                        for (let k = 0; k < this.sources.length; k++) {
-                            const targetSrc = this.sources[k];
-                            const hDist = hyperbolicDist(mappedBase, targetSrc.base);
-                            const aDist = angleDist(mappedDir.arg(), targetSrc.dir.arg());
-
-                            if (hDist < this.params.snapDistThresh && aDist < this.params.snapAngleThresh) {
-                                // Lerp the base in euclidean space (safe for small snaps per frame)
-                                const lerpFactor = 0.001;
-                                targetSrc.base = new Complex(
-                                    targetSrc.base.re + (mappedBase.re - targetSrc.base.re) * lerpFactor,
-                                    targetSrc.base.im + (mappedBase.im - targetSrc.base.im) * lerpFactor
-                                );
-
-                                const newAngle = lerpAngle(targetSrc.dir.arg(), mappedDir.arg(), lerpFactor);
-                                targetSrc.dir = Complex.fromPolar(1, newAngle);
-                                targetSrc.updateVisually();
-                            }
-                        }
-                    }
+        if (intersects.length > 0) {
+            const hit = intersects[0].object as THREE.Mesh;
+            if (this.hoveredMesh !== hit) {
+                this.hoveredMesh = hit;
+                const found = this.interactiveMeshes.find(m => m.mesh === hit);
+                if (found) {
+                    this.highlightElement(found.element, hit.geometry);
+                    if (this.onElementHover) this.onElementHover(found.element);
                 }
+            }
+        } else {
+            if (this.hoveredMesh !== null) {
+                this.hoveredMesh = null;
+                this.highlightElement(null);
+                if (this.onElementHover) this.onElementHover(null);
             }
         }
 
-        // Hide unused faint arrows
-        for (; poolIdx < MAX_FAINT_ARROWS; poolIdx++) {
-            this.faintArrowsPool[poolIdx].visible = false;
-        }
+        this.render();
+    }
 
+    render() {
         this.renderer.render(this.scene, this.camera);
     }
 }
