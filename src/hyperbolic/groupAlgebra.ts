@@ -1,19 +1,13 @@
-/* 
-The transformations 1,2,3 refer to r_1,r_2,r_3 in 
-\Delta(p,q,2) = \langle r_1, r_2, r_3 \mid r_1^2 = r_2^2 = r_3^2 = (r_1 r_2)^p = (r_2 r_3)^q = (r_3 r_1)^2 = 1 \rangle
-*/
-
-import { Complex, GroupElement, MobiusMatrix, Point2D, EdgeClass } from './types';
+import { Complex, GroupElement, MobiusMatrix, Point2D, EdgeClass, SidePairing } from './types';
 import { ComplexMath, MobiusTransform } from './hyperbolic';
 
 export class TriangleGroup {
     p: number;
     q: number;
 
-    // Full Group Reflections r1, r2, r3 across edges of base right triangle
-    refR1!: MobiusMatrix; // Reflection across v0-v1 (real axis)
-    refR2!: MobiusMatrix; // Reflection across v0-v2 (line at pi/p)
-    refR3!: MobiusMatrix; // Reflection across v1-v2 (outer geodesic arc)
+    refR1!: MobiusMatrix;
+    refR2!: MobiusMatrix;
+    refR3!: MobiusMatrix;
 
     r1!: number;
     rP!: number;
@@ -41,7 +35,6 @@ export class TriangleGroup {
         const sinhR = Math.sqrt(Math.max(0, coshR * coshR - 1));
         this.rP = sinhR / (coshR + 1);
 
-        // r1: Reflection across real axis z -> z_bar
         this.refR1 = {
             a: { re: 1, im: 0 },
             b: { re: 0, im: 0 },
@@ -50,7 +43,6 @@ export class TriangleGroup {
             isReflected: true
         };
 
-        // r2: Reflection across line at angle pi/p: z -> e^(i*2pi/p) * z_bar
         const expP: Complex = { re: Math.cos(Math.PI / this.p), im: Math.sin(Math.PI / this.p) };
         this.refR2 = {
             a: expP,
@@ -60,7 +52,6 @@ export class TriangleGroup {
             isReflected: true
         };
 
-        // r3: Reflection across geodesic arc v1-v2 = a * r1
         const genA: MobiusMatrix = {
             a: { re: 0, im: coshS },
             b: { re: 0, im: -sinhS },
@@ -78,7 +69,7 @@ export class TriangleGroup {
 
         this.basePolygonVertices = [];
         for (let i = 0; i < this.p; i++) {
-            const angle = ((2 * i + 1) * Math.PI) / this.p;
+            const angle = ((2 * i - 1) * Math.PI) / this.p;
             this.basePolygonVertices.push({
                 x: this.rP * Math.cos(angle),
                 y: this.rP * Math.sin(angle)
@@ -120,7 +111,7 @@ export class TriangleGroup {
                 const lastLetter = item.word.letters.length > 0 ? item.word.letters[item.word.letters.length - 1] : null;
 
                 for (const ref of reflections) {
-                    if (ref.letter === lastLetter) continue; // r_i^2 = 1 identity reduction
+                    if (ref.letter === lastLetter) continue;
 
                     const newLetters = [...item.word.letters, ref.letter];
                     const canonicalString = newLetters.join('');
@@ -164,7 +155,9 @@ export class TriangleGroup {
     }
 
     exploreSubgroup(generators: GroupElement[], depthL: number): GroupElement[] {
-        if (generators.length === 0) {
+        const nonIdentityGenerators = generators.filter(g => g.word.canonicalString !== '1');
+
+        if (nonIdentityGenerators.length === 0) {
             return [{
                 id: '1',
                 word: { letters: [], canonicalString: '1' },
@@ -183,7 +176,7 @@ export class TriangleGroup {
         explored.push(identity);
 
         const genPool: { label: string; matrix: MobiusMatrix }[] = [];
-        generators.forEach((g, idx) => {
+        nonIdentityGenerators.forEach((g, idx) => {
             genPool.push({ label: `h${idx + 1}`, matrix: g.matrix });
             const invMat = MobiusTransform.inverse(g.matrix);
             if (MobiusTransform.distance(g.matrix, invMat) > 1e-4) {
@@ -276,5 +269,74 @@ export class TriangleGroup {
         });
 
         return edgeClasses;
+    }
+
+    computeGeneratorFromPairing(edgeIndex: number, targetEdgeIndex: number, sign: 1 | -1): GroupElement {
+        const i = edgeIndex + 1;
+        const k = targetEdgeIndex + 1;
+
+        if (i === k && sign === 1) {
+            return {
+                id: `h_${i}_${k}_pos`,
+                word: {
+                    letters: [],
+                    canonicalString: '1'
+                },
+                matrix: MobiusTransform.identity(),
+                length: 0
+            };
+        }
+
+        const letters: string[] = [];
+
+        for (let idx = 0; idx < i - 1; idx++) {
+            letters.push('2', '1');
+        }
+
+        if (sign === -1) {
+            letters.push('3');
+        } else {
+            letters.push('3', '1');
+        }
+
+        for (let idx = 0; idx < k - 1; idx++) {
+            letters.push('1', '2');
+        }
+
+        const simplifiedLetters: string[] = [];
+        for (const l of letters) {
+            if (simplifiedLetters.length > 0 && simplifiedLetters[simplifiedLetters.length - 1] === l) {
+                simplifiedLetters.pop();
+            } else {
+                simplifiedLetters.push(l);
+            }
+        }
+
+        const reflectionMap: Record<string, MobiusMatrix> = {
+            '1': this.refR1,
+            '2': this.refR2,
+            '3': this.refR3
+        };
+
+        let matrix = MobiusTransform.identity();
+        for (const l of simplifiedLetters) {
+            matrix = MobiusTransform.multiply(matrix, reflectionMap[l]);
+        }
+
+        const canonicalString = simplifiedLetters.length > 0 ? simplifiedLetters.join('') : '1';
+
+        return {
+            id: `h_${i}_${k}_${sign > 0 ? 'pos' : 'neg'}`,
+            word: {
+                letters: simplifiedLetters,
+                canonicalString
+            },
+            matrix,
+            length: simplifiedLetters.length
+        };
+    }
+
+    computeSidePairingGenerators(pairings: SidePairing[]): GroupElement[] {
+        return pairings.map(p => this.computeGeneratorFromPairing(p.edgeIndex, p.targetEdgeIndex, p.sign));
     }
 }

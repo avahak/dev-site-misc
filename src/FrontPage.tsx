@@ -57,9 +57,24 @@ const FrontPage = () => {
                             </MUILink>
                         </li>
                         <li>
-                            <MUILink component={RouterLink} to="/hyperbolic" variant="body1" color="primary">
-                                Hyperbolic space
-                            </MUILink>
+                            <Typography>Hyperbolic space</Typography>
+                            <ul>
+                                <li>
+                                    <MUILink component={RouterLink} to="/hyperbolic_pick" variant="body1" color="primary">
+                                        Subgroup picker
+                                    </MUILink>
+                                </li>
+                                <li>
+                                    <MUILink component={RouterLink} to="/hyperbolic_shuffle" variant="body1" color="primary">
+                                        Subgroup from edge shuffle
+                                    </MUILink>
+                                </li>
+                                <li>
+                                    <MUILink component={RouterLink} to="/hyperbolic_shader" variant="body1" color="primary">
+                                        Subgroup shader
+                                    </MUILink>
+                                </li>
+                            </ul>
                         </li>
                     </ul>
                 </Box>

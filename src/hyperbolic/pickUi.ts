@@ -1,6 +1,6 @@
 import { GroupElement, SubgroupState } from './types';
 import { TriangleGroup } from './groupAlgebra';
-import { RenderManager } from './manager';
+import { RenderManager } from './pickManager';
 import { ComplexMath, MobiusTransform } from './hyperbolic';
 
 export class AppController {

@@ -18,7 +18,9 @@ const CollisionDetectionApp = React.lazy(() => import('./collision_detection/App
 const CollisionDetectionLazyApp = React.lazy(() => import('./collision_detection/LazyApp.tsx'));
 const CollisionDetectionChurnApp = React.lazy(() => import('./collision_detection/ChurnApp.tsx'));
 const DocumentsApp = React.lazy(() => import('./documents/App.tsx'));
-const HyperbolicApp = React.lazy(() => import('./hyperbolic/App.tsx'));
+const HyperbolicPickApp = React.lazy(() => import('./hyperbolic/PickApp.tsx'));
+const HyperbolicShuffleApp = React.lazy(() => import('./hyperbolic/ShuffleApp.tsx'));
+const HyperbolicShaderApp = React.lazy(() => import('./hyperbolic/ShaderApp.tsx'));
 import { FrontPage } from './FrontPage.tsx';
 
 
@@ -61,7 +63,9 @@ const AppRouter = () => {
                     <Route path="/collision_detection_lazy" element={<CollisionDetectionLazyApp />} />
                     <Route path="/collision_detection_churn" element={<CollisionDetectionChurnApp />} />
                     <Route path="/documents" element={<DocumentsApp />} />
-                    <Route path="/hyperbolic" element={<HyperbolicApp />} />
+                    <Route path="/hyperbolic_pick" element={<HyperbolicPickApp />} />
+                    <Route path="/hyperbolic_shuffle" element={<HyperbolicShuffleApp />} />
+                    <Route path="/hyperbolic_shader" element={<HyperbolicShaderApp />} />
                     <Route path="/" element={<FrontPage />} />
                 </Routes>
             </Suspense>

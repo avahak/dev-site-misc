@@ -41,3 +41,9 @@ export interface SubgroupState {
     stabilizerElements: GroupElement[];
     edgeClasses: EdgeClass[];
 }
+
+export interface SidePairing {
+    edgeIndex: number;       // 0 to p-1 (representing e_1 to e_p)
+    targetEdgeIndex: number; // 0 to p-1 (representing e_1 to e_p)
+    sign: 1 | -1;            // +1 = orientation-preserving, -1 = orientation-reversing
+}
