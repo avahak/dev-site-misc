@@ -1,4 +1,4 @@
-import { Complex, MobiusMatrix, PolygonMetrics, FundamentalPolygon, SidePairing } from '../types';
+import { Complex, FundamentalPolygon, MobiusMatrix, PolygonMetrics, SidePairing } from '../types';
 import { ComplexMath } from './complex';
 import { MobiusTransform } from './mobius';
 
@@ -74,7 +74,7 @@ export class FundamentalPolygonBuilder {
             const Ri = MobiusTransform.rotation(rotAngle);
             sideTests.push(MobiusTransform.multiply(Ri, Ai));
 
-            // Edge reflection \sigma_i = R(\phi_i) o r3 o R(-\phi_i)
+            // Standalone edge reflection \sigma_i = R(\phi_i) o r3 o R(-\phi_i)
             const rotPhi = MobiusTransform.rotation(phi_i);
             const rotPhiInv = MobiusTransform.rotation(-phi_i);
             const sigma_i = MobiusTransform.multiply(rotPhi, MobiusTransform.multiply(r3, rotPhiInv));
@@ -98,10 +98,9 @@ export class FundamentalPolygonBuilder {
         const gs: MobiusMatrix[] = [];
 
         for (let i = 0; i < p; i++) {
-            // Compute folding isometry g_i on the spot from side pairing
-            const pairing = pairings.find(p => p.edgeIndex === i);
+            const pairing = pairings.find(item => item.edgeIndex === i);
             if (!pairing)
-                throw new Error(`Missing side pairing for edge e_${i + 1}`);
+                throw new Error(`Missing side pairing for edge e_${i}`);
 
             const phi_i = (2 * Math.PI * i) / p;
             const phi_k = (2 * Math.PI * pairing.targetEdgeIndex) / p;
@@ -109,6 +108,9 @@ export class FundamentalPolygonBuilder {
             const rotK = MobiusTransform.rotation(phi_k);
             const rotI_inv = MobiusTransform.rotation(-phi_i);
 
+            // Corrected Sign Assignment:
+            // sign === -1 -> Reverses edge boundary direction (e_i ~ -e_k) via 2D Conformal map (r1 * r3)
+            // sign === +1 -> Preserves edge boundary direction (e_i ~ +e_k) via 2D Reflection map (r3)
             const mid = pairing.sign === -1
                 ? MobiusTransform.multiply(r1, MobiusTransform.multiply(r3, rotI_inv))
                 : MobiusTransform.multiply(r3, rotI_inv);

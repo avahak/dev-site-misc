@@ -109,16 +109,16 @@ export class RenderManager {
     setupScene() {
         this.scene = new THREE.Scene();
 
-        // 1. Example Configuration: (p, q) = (6, 4) with e1~-e4, e2~-e6, e3~-e5
+        // 1. Example Configuration: (p, q) = (6, 4) with e0~-e3, e1~-e5, e2~-e4
         const p = 6;
         const q = 4;
         const pairings: SidePairing[] = [
-            { edgeIndex: 0, targetEdgeIndex: 3, sign: -1 }, // e1 ~ -e4
-            { edgeIndex: 1, targetEdgeIndex: 5, sign: -1 }, // e2 ~ -e6
-            { edgeIndex: 2, targetEdgeIndex: 4, sign: -1 }, // e3 ~ -e5
-            { edgeIndex: 3, targetEdgeIndex: 0, sign: -1 }, // e4 ~ -e1
-            { edgeIndex: 4, targetEdgeIndex: 2, sign: -1 }, // e5 ~ -e3
-            { edgeIndex: 5, targetEdgeIndex: 1, sign: -1 }, // e6 ~ -e2
+            { edgeIndex: 0, targetEdgeIndex: 3, sign: -1 }, // e0 ~ -e3
+            { edgeIndex: 1, targetEdgeIndex: 5, sign: -1 }, // e1 ~ -e5
+            { edgeIndex: 2, targetEdgeIndex: 4, sign: -1 }, // e2 ~ -e4
+            { edgeIndex: 3, targetEdgeIndex: 0, sign: -1 }, // e3 ~ -e0
+            { edgeIndex: 4, targetEdgeIndex: 2, sign: -1 }, // e4 ~ -e2
+            { edgeIndex: 5, targetEdgeIndex: 1, sign: -1 }, // e5 ~ -e1
         ];
 
         // 2. Preprocessing pipeline

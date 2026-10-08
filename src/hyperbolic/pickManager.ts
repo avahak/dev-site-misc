@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { Complex, EdgeClass, GroupElement, MobiusMatrix } from './types';
-import { TriangleGroup } from './groupAlgebra';
+import { Complex, EdgeClass, FundamentalPolygon, GroupElement, MobiusMatrix } from './types';
+import { TriangleGroup } from './math/group';
+import { FundamentalPolygonBuilder } from './math/polygon';
+import { ComplexMath } from './math/complex';
 import { MobiusTransform } from './math/mobius';
 import { PoincareGeometry } from './math/poincare';
 
@@ -28,7 +30,7 @@ export class RenderManager {
     raycaster: THREE.Raycaster = new THREE.Raycaster();
     mouse: THREE.Vector2 = new THREE.Vector2(-10, -10);
 
-    triangleGroup!: TriangleGroup;
+    polygon!: FundamentalPolygon;
     deltaK: GroupElement[] = [];
     generators: GroupElement[] = [];
     exploredSubgroup: GroupElement[] = [];
@@ -72,7 +74,8 @@ export class RenderManager {
         this.renderer.setClearColor(0x111111, 1);
         this.container.appendChild(this.renderer.domElement);
 
-        this.triangleGroup = new TriangleGroup(6, 4);
+        const [p, q] = this.params.preset.split(',').map(Number);
+        this.polygon = FundamentalPolygonBuilder.build(p, q);
 
         this.setupCamera();
         this.setupScene();
@@ -126,7 +129,7 @@ export class RenderManager {
         const presets = ['5,4', '5,5', '6,4', '6,6', '7,3', '8,3', '8,4', '10,3'];
         this.gui.add(this.params, 'preset', presets).name('Preset {p,q}').onChange(() => {
             const [p, q] = this.params.preset.split(',').map(Number);
-            this.triangleGroup = new TriangleGroup(p, q);
+            this.polygon = FundamentalPolygonBuilder.build(p, q);
             if (this.onParamsChange) this.onParamsChange(this.params);
         });
 
@@ -205,13 +208,18 @@ export class RenderManager {
         this.rebuildTestSegment();
     }
 
-    private getTransformedTriangle(matrix: MobiusMatrix, zPos: number) {
-        const [v0, v1, v2] = this.triangleGroup.baseTriangleVertices;
+    private getTransformedTriangle(matrix: MobiusMatrix, zPos: number): THREE.Vector3[] {
+        const { inradiusE, circumradiusE } = this.polygon.metrics;
+        const p = this.polygon.vertices.length;
+
+        const v0: Complex = { re: 0, im: 0 };
+        const v1: Complex = { re: inradiusE, im: 0 };
+        const v2: Complex = ComplexMath.fromPolar(circumradiusE, Math.PI / p);
 
         const sampleArc = (p1: Complex, p2: Complex, steps = 16) => {
             const pts = PoincareGeometry.getGeodesicPoints(p1, p2, steps);
             return pts.map(p => {
-                const c = MobiusTransform.apply(matrix, { re: p.re, im: p.im });
+                const c = MobiusTransform.apply(matrix, p);
                 return new THREE.Vector3(c.re, c.im, zPos);
             });
         };
@@ -309,12 +317,10 @@ export class RenderManager {
             }
         }
 
-        const baseVerts = this.triangleGroup.basePolygonVertices;
+        const baseVerts = this.polygon.vertices;
 
         for (const h of this.exploredSubgroup) {
-            const transformedVerts = baseVerts.map(v => {
-                return MobiusTransform.apply(h.matrix, { re: v.re, im: v.im });
-            });
+            const transformedVerts = baseVerts.map(v => MobiusTransform.apply(h.matrix, v));
 
             const polyPts: THREE.Vector3[] = [];
             for (let i = 0; i < transformedVerts.length; i++) {
@@ -338,15 +344,17 @@ export class RenderManager {
         }
 
         const ribbonWidth = 0.008;
+        const edgeColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#e84393'];
+
         for (let i = 0; i < baseVerts.length; i++) {
             const p1 = baseVerts[i];
             const p2 = baseVerts[(i + 1) % baseVerts.length];
             const edgePts = PoincareGeometry.getGeodesicPoints(p1, p2, 16);
 
             let edgeColor = '#ffffff';
-            for (const cls of this.edgeClasses) {
-                if (cls.edgeIndices.includes(i)) {
-                    edgeColor = cls.color;
+            for (let cIdx = 0; cIdx < this.edgeClasses.length; cIdx++) {
+                if (this.edgeClasses[cIdx].edgeIndices.includes(i)) {
+                    edgeColor = edgeColors[cIdx % edgeColors.length];
                     break;
                 }
             }
@@ -360,11 +368,11 @@ export class RenderManager {
 
                 const dx = q1.re - q0.re;
                 const dy = q1.im - q0.im;
-                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                const len = Math.hypot(dx, dy) || 1;
                 const nx = (-dy / len) * ribbonWidth;
                 const ny = (dx / len) * ribbonWidth;
 
-                const baseIdx = (vertices.length / 3);
+                const baseIdx = vertices.length / 3;
                 vertices.push(
                     q0.re + nx, q0.im + ny, 0.05,
                     q0.re - nx, q0.im - ny, 0.05,
@@ -408,7 +416,7 @@ export class RenderManager {
 
         // 1. Transformed test segments h(p1 -> p2) for h in H_explored
         for (const h of this.exploredSubgroup) {
-            if (h.word.canonicalString === '1') continue;
+            if (h.id === '1') continue;
 
             const c1 = MobiusTransform.apply(h.matrix, this.testPoint1);
             const c2 = MobiusTransform.apply(h.matrix, this.testPoint2);
@@ -460,7 +468,7 @@ export class RenderManager {
         baseLine.renderOrder = 1000;
         this.testSegmentGroup.add(baseLine);
 
-        // Base Point 1 Draggable Handle (Bright Coral Red, Transparent Pass, renderOrder = 1001)
+        // Base Point 1 Draggable Handle
         const b1Geom = new THREE.CircleGeometry(0.040, 24);
         const b1Mat = new THREE.MeshBasicMaterial({
             color: 0xff3366,
@@ -474,7 +482,7 @@ export class RenderManager {
         b1Mesh.renderOrder = 1001;
         this.testSegmentGroup.add(b1Mesh);
 
-        // Base Point 2 Draggable Handle (Bright Electric Blue, Transparent Pass, renderOrder = 1001)
+        // Base Point 2 Draggable Handle
         const b2Geom = new THREE.CircleGeometry(0.040, 24);
         const b2Mat = new THREE.MeshBasicMaterial({
             color: 0x00e5ff,

@@ -170,7 +170,7 @@ const App: React.FC = () => {
                             const current = pairings[i] || { edgeIndex: i, targetEdgeIndex: i, sign: 1 };
                             return (
                                 <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#222', padding: '6px 10px', borderRadius: '4px' }}>
-                                    <span style={{ fontWeight: 'bold' }}>e_{i + 1} &sim;</span>
+                                    <span style={{ fontWeight: 'bold' }}>e_{i} &sim;</span>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                         <button
                                             onClick={() => handlePairingSignToggle(i)}
@@ -191,7 +191,7 @@ const App: React.FC = () => {
                                             style={{ padding: '4px', background: '#333', color: '#fff', border: '1px solid #555', borderRadius: '3px' }}
                                         >
                                             {Array.from({ length: pCount }, (_, k) => (
-                                                <option key={k} value={k}>e_{k + 1}</option>
+                                                <option key={k} value={k}>e_{k}</option>
                                             ))}
                                         </select>
                                     </div>
@@ -206,7 +206,7 @@ const App: React.FC = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', fontFamily: 'monospace' }}>
                         {generators.map((g, idx) => (
                             <div key={idx} style={{ background: '#222', padding: '6px', borderRadius: '4px' }}>
-                                <span style={{ color: '#2ecc71', fontWeight: 'bold' }}>h_{idx + 1}:</span> {g.word.canonicalString}
+                                <span style={{ color: '#2ecc71', fontWeight: 'bold' }}>h_{idx}:</span> {g.word?.canonicalString ?? g.id}
                             </div>
                         ))}
                     </div>

@@ -32,9 +32,15 @@ export interface GroupWord {
 
 export interface GroupElement {
     id: string;
-    word: GroupWord;
     matrix: MobiusMatrix;
-    length: number;
+    distanceFromOrigin: number; // Euclidean radius |h(0)| in Poincare disk
+    word?: GroupWord;           // Optional word representation
+    length?: number;
+}
+
+export interface EdgeClass {
+    id: string;
+    edgeIndices: number[];
 }
 
 export interface SideData {
@@ -49,12 +55,6 @@ export interface FundamentalPolygon {
     sideTests: MobiusMatrix[];       // T_i
     edgeReflections: MobiusMatrix[]; // \sigma_i
     reflections: TriangleReflections; // r1, r2, r3
-}
-
-export interface EdgeClass {
-    id: string;
-    edgeIndices: number[];
-    color: string;
 }
 
 export interface SubgroupState {

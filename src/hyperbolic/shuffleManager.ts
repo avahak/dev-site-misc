@@ -1,6 +1,8 @@
 import * as THREE from 'three';
-import { Complex, EdgeClass, GroupElement, MobiusMatrix, SidePairing } from './types';
-import { TriangleGroup } from './groupAlgebra';
+import { Complex, EdgeClass, FundamentalPolygon, GroupElement, MobiusMatrix, SidePairing } from './types';
+import { TriangleGroup } from './math/group';
+import { FundamentalPolygonBuilder } from './math/polygon';
+import { ComplexMath } from './math/complex';
 import { MobiusTransform } from './math/mobius';
 import { PoincareGeometry } from './math/poincare';
 
@@ -22,12 +24,7 @@ export class ShuffleRenderManager {
     scene!: THREE.Scene;
     camera!: THREE.OrthographicCamera;
 
-    private plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-    private raycaster = new THREE.Raycaster();
-    private mouseVec = new THREE.Vector2();
-    private intersectPoint = new THREE.Vector3();
-
-    triangleGroup!: TriangleGroup;
+    polygon!: FundamentalPolygon;
     sidePairings: SidePairing[] = [];
     deltaK: GroupElement[] = [];
     generators: GroupElement[] = [];
@@ -64,7 +61,6 @@ export class ShuffleRenderManager {
 
     constructor(container: HTMLDivElement) {
         this.container = container;
-        // Keep standard Y-up for 2D XY-plane view
         THREE.Object3D.DEFAULT_UP.set(0, 1, 0);
     }
 
@@ -74,7 +70,7 @@ export class ShuffleRenderManager {
         this.container.appendChild(this.renderer.domElement);
 
         const [p, q] = this.params.preset.split(',').map(Number);
-        this.triangleGroup = new TriangleGroup(p, q);
+        this.polygon = FundamentalPolygonBuilder.build(p, q);
         this.initDefaultPairings();
 
         this.setupCamera();
@@ -105,7 +101,7 @@ export class ShuffleRenderManager {
     }
 
     initDefaultPairings() {
-        const pCount = this.triangleGroup.p;
+        const pCount = this.polygon.vertices.length;
         this.sidePairings = [];
         for (let i = 0; i < pCount; i++) {
             this.sidePairings.push({
@@ -119,7 +115,7 @@ export class ShuffleRenderManager {
     setPreset(presetStr: string) {
         this.params.preset = presetStr;
         const [p, q] = presetStr.split(',').map(Number);
-        this.triangleGroup = new TriangleGroup(p, q);
+        this.polygon = FundamentalPolygonBuilder.build(p, q);
         this.initDefaultPairings();
         this.rebuildAll();
     }
@@ -158,16 +154,25 @@ export class ShuffleRenderManager {
     }
 
     rebuildAll() {
-        this.deltaK = this.triangleGroup.generateDeltaK(this.params.maxRadius);
+        const [p, q] = this.params.preset.split(',').map(Number);
+        this.deltaK = TriangleGroup.generateDeltaK(this.polygon, {
+            maxRadius: this.params.maxRadius,
+            trackWords: true
+        });
         this.updateSubgroupComputation();
     }
 
     updateSubgroupComputation() {
-        this.generators = this.triangleGroup.computeSidePairingGenerators(this.sidePairings);
-        this.exploredSubgroup = this.triangleGroup.exploreSubgroup(this.generators, this.params.depthL);
+        this.generators = TriangleGroup.computeSidePairingGenerators(this.polygon, this.sidePairings, true);
+        this.exploredSubgroup = TriangleGroup.exploreSubgroupBounded(
+            this.generators,
+            this.params.maxRadius,
+            this.params.depthL,
+            true
+        );
 
-        const stabilizer = this.triangleGroup.findBasePolygonStabilizer(this.exploredSubgroup);
-        this.edgeClasses = this.triangleGroup.computeEdgeClasses(this.triangleGroup.p, stabilizer);
+        const stabilizer = TriangleGroup.findBasePolygonStabilizer(this.exploredSubgroup);
+        this.edgeClasses = TriangleGroup.computeEdgeClasses(this.polygon.vertices.length, stabilizer);
 
         if (this.onStateChange) {
             this.onStateChange({
@@ -365,12 +370,17 @@ export class ShuffleRenderManager {
     private rebuildTessellation() {
         this.clearGroup(this.tessellationGroup);
 
-        const [v0, v1, v2] = this.triangleGroup.baseTriangleVertices;
+        const { inradiusE, circumradiusE } = this.polygon.metrics;
+        const p = this.polygon.vertices.length;
+
+        const v0: Complex = { re: 0, im: 0 };
+        const v1: Complex = { re: inradiusE, im: 0 };
+        const v2: Complex = ComplexMath.fromPolar(circumradiusE, Math.PI / p);
 
         const sampleArc = (m: MobiusMatrix, p1: Complex, p2: Complex) => {
             const pts = PoincareGeometry.getGeodesicPoints(p1, p2, 12);
-            return pts.map(p => {
-                const c = MobiusTransform.apply(m, { re: p.re, im: p.im });
+            return pts.map(pt => {
+                const c = MobiusTransform.apply(m, pt);
                 return new THREE.Vector3(c.re, c.im, 0.01);
             });
         };
@@ -396,18 +406,21 @@ export class ShuffleRenderManager {
     private rebuildBasePolygon() {
         this.clearGroup(this.basePolygonGroup);
 
-        const baseVerts = this.triangleGroup.basePolygonVertices;
+        const baseVerts = this.polygon.vertices;
+        const p = baseVerts.length;
         const ribbonWidth = 0.008;
+        const edgeColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#e84393'];
 
-        for (let i = 0; i < baseVerts.length; i++) {
-            const p1 = baseVerts[i];
-            const p2 = baseVerts[(i + 1) % baseVerts.length];
+        // Edge i connects v_{i-1} to v_i
+        for (let i = 0; i < p; i++) {
+            const p1 = baseVerts[(i - 1 + p) % p];
+            const p2 = baseVerts[i];
             const edgePts = PoincareGeometry.getGeodesicPoints(p1, p2, 16);
 
             let edgeColor = '#ffffff';
-            for (const cls of this.edgeClasses) {
-                if (cls.edgeIndices.includes(i)) {
-                    edgeColor = cls.color;
+            for (let cIdx = 0; cIdx < this.edgeClasses.length; cIdx++) {
+                if (this.edgeClasses[cIdx].edgeIndices.includes(i)) {
+                    edgeColor = edgeColors[cIdx % edgeColors.length];
                     break;
                 }
             }
@@ -421,11 +434,11 @@ export class ShuffleRenderManager {
 
                 const dx = q1.re - q0.re;
                 const dy = q1.im - q0.im;
-                const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                const len = Math.hypot(dx, dy) || 1;
                 const nx = (-dy / len) * ribbonWidth;
                 const ny = (dx / len) * ribbonWidth;
 
-                const baseIdx = (vertices.length / 3);
+                const baseIdx = vertices.length / 3;
                 vertices.push(
                     q0.re + nx, q0.im + ny, 0.05,
                     q0.re - nx, q0.im - ny, 0.05,
@@ -457,18 +470,11 @@ export class ShuffleRenderManager {
     private rebuildPairingLinks() {
         this.clearGroup(this.pairingLinksGroup);
 
-        const baseVerts = this.triangleGroup.basePolygonVertices;
-        const getMid = (i: number) => {
-            const p1 = baseVerts[i];
-            const p2 = baseVerts[(i + 1) % baseVerts.length];
-            return { re: (p1.re + p2.re) / 2, im: (p1.im + p2.im) / 2 };
-        };
-
         for (const pairing of this.sidePairings) {
             if (pairing.edgeIndex >= pairing.targetEdgeIndex) continue;
 
-            const m1 = getMid(pairing.edgeIndex);
-            const m2 = getMid(pairing.targetEdgeIndex);
+            const m1 = this.polygon.midpoints[pairing.edgeIndex];
+            const m2 = this.polygon.midpoints[pairing.targetEdgeIndex];
 
             const curvePts: THREE.Vector3[] = [];
             for (let t = 0; t <= 20; t++) {
@@ -494,19 +500,18 @@ export class ShuffleRenderManager {
     private rebuildOrbit() {
         this.clearGroup(this.polygonOrbitGroup);
 
-        const baseVerts = this.triangleGroup.basePolygonVertices;
+        const baseVerts = this.polygon.vertices;
+        const p = baseVerts.length;
 
         for (const h of this.exploredSubgroup) {
-            const transformedVerts = baseVerts.map(v => {
-                return MobiusTransform.apply(h.matrix, { re: v.re, im: v.im });
-            });
+            const transformedVerts = baseVerts.map(v => MobiusTransform.apply(h.matrix, v));
 
             const polyPts: THREE.Vector3[] = [];
-            for (let i = 0; i < transformedVerts.length; i++) {
-                const p1 = transformedVerts[i];
-                const p2 = transformedVerts[(i + 1) % transformedVerts.length];
+            for (let i = 0; i < p; i++) {
+                const p1 = transformedVerts[(i - 1 + p) % p];
+                const p2 = transformedVerts[i];
                 const arc = PoincareGeometry.getGeodesicPoints(p1, p2, 10);
-                polyPts.push(...arc.map(p => new THREE.Vector3(p.re, p.im, 0.03)));
+                polyPts.push(...arc.map(pt => new THREE.Vector3(pt.re, pt.im, 0.03)));
             }
 
             const lineGeom = new THREE.BufferGeometry().setFromPoints(polyPts);
@@ -537,14 +542,14 @@ export class ShuffleRenderManager {
         const matP2Orbit = new THREE.MeshBasicMaterial({ color: 0xbb86fc, transparent: true, opacity: 0.85 });
 
         for (const h of this.exploredSubgroup) {
-            const isIdentity = h.word.canonicalString === '1';
+            const isIdentity = h.id === '1' || h.word?.canonicalString === '1';
 
-            const c1 = MobiusTransform.apply(h.matrix, { re: this.testPoint1.re, im: this.testPoint1.im });
-            const c2 = MobiusTransform.apply(h.matrix, { re: this.testPoint2.re, im: this.testPoint2.im });
+            const c1 = MobiusTransform.apply(h.matrix, this.testPoint1);
+            const c2 = MobiusTransform.apply(h.matrix, this.testPoint2);
 
             const arc = PoincareGeometry.getGeodesicPoints(c1, c2, 16);
             const lineGeom = new THREE.BufferGeometry().setFromPoints(
-                arc.map(p => new THREE.Vector3(p.re, p.im, isIdentity ? 0.075 : 0.07))
+                arc.map(pt => new THREE.Vector3(pt.re, pt.im, isIdentity ? 0.075 : 0.07))
             );
             const lineMat = new THREE.LineBasicMaterial({
                 color: isIdentity ? 0xf39c12 : 0xe67e22,

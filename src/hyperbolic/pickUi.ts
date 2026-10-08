@@ -1,12 +1,13 @@
-import { GroupElement, SubgroupState } from './types';
-import { TriangleGroup } from './groupAlgebra';
+import { FundamentalPolygon, GroupElement, SubgroupState } from './types';
+import { TriangleGroup } from './math/group';
+import { FundamentalPolygonBuilder } from './math/polygon';
 import { RenderManager } from './pickManager';
 import { MobiusTransform } from './math/mobius';
 import { ComplexMath } from './math/complex';
 
 export class AppController {
     renderManager: RenderManager;
-    triangleGroup: TriangleGroup;
+    polygon!: FundamentalPolygon;
     subgroupState: SubgroupState;
     deltaK: GroupElement[] = [];
     overlayEl: HTMLDivElement | null = null;
@@ -19,7 +20,7 @@ export class AppController {
 
     constructor(container: HTMLDivElement) {
         this.renderManager = new RenderManager(container);
-        this.triangleGroup = new TriangleGroup(6, 4);
+        this.polygon = FundamentalPolygonBuilder.build(6, 4);
 
         this.subgroupState = {
             generators: [],
@@ -41,10 +42,19 @@ export class AppController {
             return;
         }
 
+        const [p, q] = this.renderManager.params.preset.split(',').map(Number);
+        this.polygon = FundamentalPolygonBuilder.build(p, q);
+
         this.buildUIOverlay();
         this.bindEvents();
 
-        this.deltaK = this.triangleGroup.generateDeltaK(this.renderManager.params.maxRadius);
+        this.deltaK = TriangleGroup.generateDeltaK(
+            this.polygon,
+            {
+                maxRadius: this.renderManager.params.maxRadius,
+                trackWords: true
+            }
+        );
         this.renderManager.updateDeltaK(this.deltaK, this.subgroupState.generators);
 
         this.recomputeSubgroup();
@@ -171,12 +181,14 @@ export class AppController {
     private bindEvents() {
         this.renderManager.onParamsChange = (params) => {
             const [p, q] = params.preset.split(',').map(Number);
-            if (this.triangleGroup.p !== p || this.triangleGroup.q !== q) {
-                this.triangleGroup = new TriangleGroup(p, q);
-                this.subgroupState.generators = [];
-            }
+            this.polygon = FundamentalPolygonBuilder.build(p, q);
+            this.subgroupState.generators = [];
             this.subgroupState.explorationDepth = params.depthL;
-            this.deltaK = this.triangleGroup.generateDeltaK(params.maxRadius);
+
+            this.deltaK = TriangleGroup.generateDeltaK(this.polygon, {
+                maxRadius: params.maxRadius,
+                trackWords: true
+            });
             this.renderManager.updateDeltaK(this.deltaK, this.subgroupState.generators);
             this.recomputeSubgroup();
         };
@@ -209,13 +221,17 @@ export class AppController {
 
     private recomputeSubgroup() {
         const { generators, explorationDepth } = this.subgroupState;
+        const [p] = this.renderManager.params.preset.split(',').map(Number);
 
-        this.subgroupState.exploredElements = this.triangleGroup.exploreSubgroup(generators, explorationDepth);
-        this.subgroupState.stabilizerElements = this.triangleGroup.findBasePolygonStabilizer(this.subgroupState.exploredElements);
-        this.subgroupState.edgeClasses = this.triangleGroup.computeEdgeClasses(
-            this.triangleGroup.p,
-            this.subgroupState.stabilizerElements
+        this.subgroupState.exploredElements = TriangleGroup.exploreSubgroupBounded(
+            generators,
+            this.renderManager.params.maxRadius,
+            explorationDepth,
+            true
         );
+
+        this.subgroupState.stabilizerElements = TriangleGroup.findBasePolygonStabilizer(this.subgroupState.exploredElements);
+        this.subgroupState.edgeClasses = TriangleGroup.computeEdgeClasses(p, this.subgroupState.stabilizerElements);
 
         this.renderManager.updateDeltaK(this.deltaK, this.subgroupState.generators);
         this.renderManager.updateExploredOrbit(
@@ -229,12 +245,12 @@ export class AppController {
     private updateUI() {
         if (!this.overlayEl) return;
 
-        const genNames = this.subgroupState.generators.map(g => g.word.canonicalString);
+        const genNames = this.subgroupState.generators.map(g => g.word?.canonicalString ?? g.id);
         (document.querySelector('#gen-text') as HTMLElement).innerText = genNames.length > 0 ? genNames.join(', ') : '1';
 
         this.generatorListEl.innerHTML = this.subgroupState.generators.map((g, idx) => `
             <div class="gen-item">
-                <span>h<sub>${idx + 1}</sub> = <b>${g.word.canonicalString}</b></span>
+                <span>h<sub>${idx + 1}</sub> = <b>${g.word?.canonicalString ?? g.id}</b></span>
                 <button class="remove-gen-btn" data-id="${g.id}">&times;</button>
             </div>
         `).join('') || '<div style="color:#777;">None</div>';
@@ -258,11 +274,12 @@ export class AppController {
             if (isGen) itemClass += ' generator';
             else if (inExplored) itemClass += ' explored';
 
-            const rVal = ComplexMath.abs(MobiusTransform.apply(el.matrix, { re: 0, im: 0 })).toFixed(2);
+            const rVal = ComplexMath.abs(MobiusTransform.apply(el.matrix, ComplexMath.zero())).toFixed(2);
+            const label = el.word?.canonicalString ?? el.id;
 
             return `
                 <div class="${itemClass}" data-id="${el.id}">
-                    <span>${el.word.canonicalString}</span>
+                    <span>${label}</span>
                     <span class="word-dist">r=${rVal}</span>
                 </div>
             `;
@@ -286,15 +303,20 @@ export class AppController {
 
         this.stabilizerEl.innerHTML = `
             <div>Size: <b>${this.subgroupState.stabilizerElements.length}</b></div>
-            <div>Elements: ${this.subgroupState.stabilizerElements.map(s => s.word.canonicalString).join(', ')}</div>
+            <div>Elements: ${this.subgroupState.stabilizerElements.map(s => s.word?.canonicalString ?? s.id).join(', ')}</div>
         `;
 
-        this.edgeClassEl.innerHTML = this.subgroupState.edgeClasses.map(cls => `
-            <div class="edge-class-row">
-                <b>${cls.id}:</b>
-                ${cls.edgeIndices.map(i => `<span class="edge-badge" style="background:${cls.color}">e<sub>${i}</sub></span>`).join('')}
-            </div>
-        `).join('');
+        const edgeColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#e84393'];
+
+        this.edgeClassEl.innerHTML = this.subgroupState.edgeClasses.map((cls, cIdx) => {
+            const color = edgeColors[cIdx % edgeColors.length];
+            return `
+                <div class="edge-class-row">
+                    <b>${cls.id}:</b>
+                    ${cls.edgeIndices.map(i => `<span class="edge-badge" style="background:${color}">e<sub>${i}</sub></span>`).join('')}
+                </div>
+            `;
+        }).join('');
 
         this.statsEl.innerHTML = `
             <div>Explored subgroup elements: <b>${this.subgroupState.exploredElements.length}</b></div>
