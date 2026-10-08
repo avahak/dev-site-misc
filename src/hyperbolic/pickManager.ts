@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { EdgeClass, GroupElement, MobiusMatrix, Point2D } from './types';
-import { HyperbolicGeometry, MobiusTransform } from './hyperbolic';
+import { Complex, EdgeClass, GroupElement, MobiusMatrix } from './types';
 import { TriangleGroup } from './groupAlgebra';
+import { MobiusTransform } from './math/mobius';
+import { PoincareGeometry } from './math/poincare';
 
 export interface RenderParams {
     preset: string;
@@ -40,8 +41,8 @@ export class RenderManager {
         showTestSegment: true
     };
 
-    testPoint1: Point2D = { x: -0.25, y: 0.15 };
-    testPoint2: Point2D = { x: 0.25, y: -0.15 };
+    testPoint1: Complex = { re: -0.25, im: 0.15 };
+    testPoint2: Complex = { re: 0.25, im: -0.15 };
     private draggingPoint: 1 | 2 | null = null;
     private isDragging: boolean = false;
     private dragJustEnded: boolean = false;
@@ -207,10 +208,10 @@ export class RenderManager {
     private getTransformedTriangle(matrix: MobiusMatrix, zPos: number) {
         const [v0, v1, v2] = this.triangleGroup.baseTriangleVertices;
 
-        const sampleArc = (p1: { x: number; y: number }, p2: { x: number; y: number }, steps = 16) => {
-            const pts = HyperbolicGeometry.getGeodesicPoints(p1, p2, steps);
+        const sampleArc = (p1: Complex, p2: Complex, steps = 16) => {
+            const pts = PoincareGeometry.getGeodesicPoints(p1, p2, steps);
             return pts.map(p => {
-                const c = MobiusTransform.apply(matrix, { re: p.x, im: p.y });
+                const c = MobiusTransform.apply(matrix, { re: p.re, im: p.im });
                 return new THREE.Vector3(c.re, c.im, zPos);
             });
         };
@@ -233,8 +234,8 @@ export class RenderManager {
         this.interactiveMeshes = [];
 
         for (const el of this.deltaK) {
-            const isGenerator = this.generators.some(g => g.id === el.id || MobiusTransform.distance(g.matrix, el.matrix) < 1e-4);
-            const inExploredH = !isGenerator && this.exploredSubgroup.some(h => MobiusTransform.distance(h.matrix, el.matrix) < 1e-4);
+            const isGenerator = this.generators.some(g => g.id === el.id || MobiusTransform.areTransformsEqual(g.matrix, el.matrix));
+            const inExploredH = !isGenerator && this.exploredSubgroup.some(h => MobiusTransform.areTransformsEqual(h.matrix, el.matrix));
 
             const zPos = isGenerator ? 0.03 : (inExploredH ? 0.02 : 0.01);
             const rOrder = isGenerator ? 20 : (inExploredH ? 15 : 10);
@@ -312,16 +313,15 @@ export class RenderManager {
 
         for (const h of this.exploredSubgroup) {
             const transformedVerts = baseVerts.map(v => {
-                const c = MobiusTransform.apply(h.matrix, { re: v.x, im: v.y });
-                return { x: c.re, y: c.im };
+                return MobiusTransform.apply(h.matrix, { re: v.re, im: v.im });
             });
 
             const polyPts: THREE.Vector3[] = [];
             for (let i = 0; i < transformedVerts.length; i++) {
                 const p1 = transformedVerts[i];
                 const p2 = transformedVerts[(i + 1) % transformedVerts.length];
-                const arc = HyperbolicGeometry.getGeodesicPoints(p1, p2, 12);
-                polyPts.push(...arc.map(p => new THREE.Vector3(p.x, p.y, 0.04)));
+                const arc = PoincareGeometry.getGeodesicPoints(p1, p2, 12);
+                polyPts.push(...arc.map(p => new THREE.Vector3(p.re, p.im, 0.04)));
             }
 
             const lineGeom = new THREE.BufferGeometry().setFromPoints(polyPts);
@@ -341,7 +341,7 @@ export class RenderManager {
         for (let i = 0; i < baseVerts.length; i++) {
             const p1 = baseVerts[i];
             const p2 = baseVerts[(i + 1) % baseVerts.length];
-            const edgePts = HyperbolicGeometry.getGeodesicPoints(p1, p2, 16);
+            const edgePts = PoincareGeometry.getGeodesicPoints(p1, p2, 16);
 
             let edgeColor = '#ffffff';
             for (const cls of this.edgeClasses) {
@@ -358,18 +358,18 @@ export class RenderManager {
                 const q0 = edgePts[k];
                 const q1 = edgePts[k + 1];
 
-                const dx = q1.x - q0.x;
-                const dy = q1.y - q0.y;
+                const dx = q1.re - q0.re;
+                const dy = q1.im - q0.im;
                 const len = Math.sqrt(dx * dx + dy * dy) || 1;
                 const nx = (-dy / len) * ribbonWidth;
                 const ny = (dx / len) * ribbonWidth;
 
                 const baseIdx = (vertices.length / 3);
                 vertices.push(
-                    q0.x + nx, q0.y + ny, 0.05,
-                    q0.x - nx, q0.y - ny, 0.05,
-                    q1.x + nx, q1.y + ny, 0.05,
-                    q1.x - nx, q1.y - ny, 0.05
+                    q0.re + nx, q0.im + ny, 0.05,
+                    q0.re - nx, q0.im - ny, 0.05,
+                    q1.re + nx, q1.im + ny, 0.05,
+                    q1.re - nx, q1.im - ny, 0.05
                 );
 
                 indices.push(
@@ -410,15 +410,12 @@ export class RenderManager {
         for (const h of this.exploredSubgroup) {
             if (h.word.canonicalString === '1') continue;
 
-            const c1 = MobiusTransform.apply(h.matrix, { re: this.testPoint1.x, im: this.testPoint1.y });
-            const c2 = MobiusTransform.apply(h.matrix, { re: this.testPoint2.x, im: this.testPoint2.y });
+            const c1 = MobiusTransform.apply(h.matrix, this.testPoint1);
+            const c2 = MobiusTransform.apply(h.matrix, this.testPoint2);
 
-            const p1: Point2D = { x: c1.re, y: c1.im };
-            const p2: Point2D = { x: c2.re, y: c2.im };
-
-            const arc = HyperbolicGeometry.getGeodesicPoints(p1, p2, 16);
+            const arc = PoincareGeometry.getGeodesicPoints(c1, c2, 16);
             const lineGeom = new THREE.BufferGeometry().setFromPoints(
-                arc.map(p => new THREE.Vector3(p.x, p.y, 0.07))
+                arc.map(p => new THREE.Vector3(p.re, p.im, 0.07))
             );
             const lineMat = new THREE.LineBasicMaterial({
                 color: 0xe67e22,
@@ -434,22 +431,22 @@ export class RenderManager {
             const h1Geom = new THREE.CircleGeometry(0.018, 16);
             const h1Mat = new THREE.MeshBasicMaterial({ color: 0xff3366, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false });
             const h1Mesh = new THREE.Mesh(h1Geom, h1Mat);
-            h1Mesh.position.set(p1.x, p1.y, 0.075);
+            h1Mesh.position.set(c1.re, c1.im, 0.075);
             h1Mesh.renderOrder = 85;
             this.testSegmentGroup.add(h1Mesh);
 
             const h2Geom = new THREE.CircleGeometry(0.018, 16);
             const h2Mat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.85, depthTest: true, depthWrite: false });
             const h2Mesh = new THREE.Mesh(h2Geom, h2Mat);
-            h2Mesh.position.set(p2.x, p2.y, 0.075);
+            h2Mesh.position.set(c2.re, c2.im, 0.075);
             h2Mesh.renderOrder = 85;
             this.testSegmentGroup.add(h2Mesh);
         }
 
         // 2. Base Test Segment Line (Identity)
-        const baseArc = HyperbolicGeometry.getGeodesicPoints(this.testPoint1, this.testPoint2, 24);
+        const baseArc = PoincareGeometry.getGeodesicPoints(this.testPoint1, this.testPoint2, 24);
         const baseLineGeom = new THREE.BufferGeometry().setFromPoints(
-            baseArc.map(p => new THREE.Vector3(p.x, p.y, 0.08))
+            baseArc.map(p => new THREE.Vector3(p.re, p.im, 0.08))
         );
         const baseLineMat = new THREE.LineBasicMaterial({
             color: 0xffd700,
@@ -473,7 +470,7 @@ export class RenderManager {
             depthWrite: false
         });
         const b1Mesh = new THREE.Mesh(b1Geom, b1Mat);
-        b1Mesh.position.set(this.testPoint1.x, this.testPoint1.y, 0.09);
+        b1Mesh.position.set(this.testPoint1.re, this.testPoint1.im, 0.09);
         b1Mesh.renderOrder = 1001;
         this.testSegmentGroup.add(b1Mesh);
 
@@ -487,7 +484,7 @@ export class RenderManager {
             depthWrite: false
         });
         const b2Mesh = new THREE.Mesh(b2Geom, b2Mat);
-        b2Mesh.position.set(this.testPoint2.x, this.testPoint2.y, 0.09);
+        b2Mesh.position.set(this.testPoint2.re, this.testPoint2.im, 0.09);
         b2Mesh.renderOrder = 1001;
         this.testSegmentGroup.add(b2Mesh);
     }
@@ -534,10 +531,10 @@ export class RenderManager {
         const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
         const rayWorldPos = new THREE.Vector3();
 
-        const getMouseWorldPos = (): Point2D | null => {
+        const getMouseWorldPos = (): Complex | null => {
             this.raycaster.setFromCamera(this.mouse, this.camera);
             if (this.raycaster.ray.intersectPlane(plane, rayWorldPos)) {
-                return { x: rayWorldPos.x, y: rayWorldPos.y };
+                return { re: rayWorldPos.x, im: rayWorldPos.y };
             }
             return null;
         };
@@ -547,8 +544,8 @@ export class RenderManager {
             const worldPos = getMouseWorldPos();
             if (!worldPos) return;
 
-            const d1 = Math.hypot(worldPos.x - this.testPoint1.x, worldPos.y - this.testPoint1.y);
-            const d2 = Math.hypot(worldPos.x - this.testPoint2.x, worldPos.y - this.testPoint2.y);
+            const d1 = Math.hypot(worldPos.re - this.testPoint1.re, worldPos.im - this.testPoint1.im);
+            const d2 = Math.hypot(worldPos.re - this.testPoint2.re, worldPos.im - this.testPoint2.im);
 
             const hitRadius = 0.09;
             if (d1 < hitRadius && d1 <= d2) {
@@ -571,9 +568,9 @@ export class RenderManager {
                 this.isDragging = true;
                 const worldPos = getMouseWorldPos();
                 if (worldPos) {
-                    const r = Math.hypot(worldPos.x, worldPos.y);
+                    const r = Math.hypot(worldPos.re, worldPos.im);
                     const maxR = 0.98;
-                    const clampedPos = r > maxR ? { x: (worldPos.x / r) * maxR, y: (worldPos.y / r) * maxR } : worldPos;
+                    const clampedPos = r > maxR ? { re: (worldPos.re / r) * maxR, im: (worldPos.im / r) * maxR } : worldPos;
 
                     if (this.draggingPoint === 1) {
                         this.testPoint1 = clampedPos;

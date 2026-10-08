@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { EdgeClass, GroupElement, MobiusMatrix, Point2D, SidePairing } from './types';
-import { HyperbolicGeometry, MobiusTransform } from './hyperbolic';
+import { Complex, EdgeClass, GroupElement, MobiusMatrix, SidePairing } from './types';
 import { TriangleGroup } from './groupAlgebra';
+import { MobiusTransform } from './math/mobius';
+import { PoincareGeometry } from './math/poincare';
 
 export interface RenderParams {
     preset: string;
@@ -41,8 +42,8 @@ export class ShuffleRenderManager {
         autoSymmetrize: true
     };
 
-    testPoint1: Point2D = { x: -0.25, y: 0.15 };
-    testPoint2: Point2D = { x: 0.25, y: -0.15 };
+    testPoint1: Complex = { re: -0.25, im: 0.15 };
+    testPoint2: Complex = { re: 0.25, im: -0.15 };
     private draggingPoint: 1 | 2 | null = null;
     private isDragging: boolean = false;
 
@@ -251,7 +252,7 @@ export class ShuffleRenderManager {
         this.cleanUpTasks.push(() => { geom.dispose(); mat.dispose(); });
     }
 
-    private getDiskCoord(e: PointerEvent): Point2D | null {
+    private getDiskCoord(e: PointerEvent): Complex | null {
         const dom = this.renderer.domElement;
         const rect = dom.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return null;
@@ -263,8 +264,8 @@ export class ShuffleRenderManager {
         const frustumSize = 2.4;
 
         return {
-            x: (nx * frustumSize * aspect) / 2,
-            y: (ny * frustumSize) / 2
+            re: (nx * frustumSize * aspect) / 2,
+            im: (ny * frustumSize) / 2
         };
     }
 
@@ -282,8 +283,8 @@ export class ShuffleRenderManager {
             const pos = this.getDiskCoord(e);
             if (!pos) return;
 
-            const d1 = Math.hypot(pos.x - this.testPoint1.x, pos.y - this.testPoint1.y);
-            const d2 = Math.hypot(pos.x - this.testPoint2.x, pos.y - this.testPoint2.y);
+            const d1 = Math.hypot(pos.re - this.testPoint1.re, pos.im - this.testPoint1.im);
+            const d2 = Math.hypot(pos.re - this.testPoint2.re, pos.im - this.testPoint2.im);
 
             const hitRadius = 0.15;
             if (d1 < hitRadius && d1 <= d2) {
@@ -302,9 +303,9 @@ export class ShuffleRenderManager {
             const pos = this.getDiskCoord(e);
             if (!pos) return;
 
-            const r = Math.hypot(pos.x, pos.y);
+            const r = Math.hypot(pos.re, pos.im);
             const maxR = 0.98;
-            const clampedPos = r > maxR ? { x: (pos.x / r) * maxR, y: (pos.y / r) * maxR } : pos;
+            const clampedPos = r > maxR ? { re: (pos.re / r) * maxR, im: (pos.im / r) * maxR } : pos;
 
             if (this.draggingPoint === 1) {
                 this.testPoint1 = clampedPos;
@@ -366,10 +367,10 @@ export class ShuffleRenderManager {
 
         const [v0, v1, v2] = this.triangleGroup.baseTriangleVertices;
 
-        const sampleArc = (m: MobiusMatrix, p1: Point2D, p2: Point2D) => {
-            const pts = HyperbolicGeometry.getGeodesicPoints(p1, p2, 12);
+        const sampleArc = (m: MobiusMatrix, p1: Complex, p2: Complex) => {
+            const pts = PoincareGeometry.getGeodesicPoints(p1, p2, 12);
             return pts.map(p => {
-                const c = MobiusTransform.apply(m, { re: p.x, im: p.y });
+                const c = MobiusTransform.apply(m, { re: p.re, im: p.im });
                 return new THREE.Vector3(c.re, c.im, 0.01);
             });
         };
@@ -401,7 +402,7 @@ export class ShuffleRenderManager {
         for (let i = 0; i < baseVerts.length; i++) {
             const p1 = baseVerts[i];
             const p2 = baseVerts[(i + 1) % baseVerts.length];
-            const edgePts = HyperbolicGeometry.getGeodesicPoints(p1, p2, 16);
+            const edgePts = PoincareGeometry.getGeodesicPoints(p1, p2, 16);
 
             let edgeColor = '#ffffff';
             for (const cls of this.edgeClasses) {
@@ -418,18 +419,18 @@ export class ShuffleRenderManager {
                 const q0 = edgePts[k];
                 const q1 = edgePts[k + 1];
 
-                const dx = q1.x - q0.x;
-                const dy = q1.y - q0.y;
+                const dx = q1.re - q0.re;
+                const dy = q1.im - q0.im;
                 const len = Math.sqrt(dx * dx + dy * dy) || 1;
                 const nx = (-dy / len) * ribbonWidth;
                 const ny = (dx / len) * ribbonWidth;
 
                 const baseIdx = (vertices.length / 3);
                 vertices.push(
-                    q0.x + nx, q0.y + ny, 0.05,
-                    q0.x - nx, q0.y - ny, 0.05,
-                    q1.x + nx, q1.y + ny, 0.05,
-                    q1.x - nx, q1.y - ny, 0.05
+                    q0.re + nx, q0.im + ny, 0.05,
+                    q0.re - nx, q0.im - ny, 0.05,
+                    q1.re + nx, q1.im + ny, 0.05,
+                    q1.re - nx, q1.im - ny, 0.05
                 );
 
                 indices.push(
@@ -460,7 +461,7 @@ export class ShuffleRenderManager {
         const getMid = (i: number) => {
             const p1 = baseVerts[i];
             const p2 = baseVerts[(i + 1) % baseVerts.length];
-            return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+            return { re: (p1.re + p2.re) / 2, im: (p1.im + p2.im) / 2 };
         };
 
         for (const pairing of this.sidePairings) {
@@ -472,8 +473,8 @@ export class ShuffleRenderManager {
             const curvePts: THREE.Vector3[] = [];
             for (let t = 0; t <= 20; t++) {
                 const s = t / 20;
-                const bx = (1 - s) * m1.x + s * m2.x;
-                const by = (1 - s) * m1.y + s * m2.y;
+                const bx = (1 - s) * m1.re + s * m2.re;
+                const by = (1 - s) * m1.im + s * m2.im;
                 const lift = Math.sin(s * Math.PI) * 0.08;
                 curvePts.push(new THREE.Vector3(bx * (1 - lift), by * (1 - lift), 0.06));
             }
@@ -497,16 +498,15 @@ export class ShuffleRenderManager {
 
         for (const h of this.exploredSubgroup) {
             const transformedVerts = baseVerts.map(v => {
-                const c = MobiusTransform.apply(h.matrix, { re: v.x, im: v.y });
-                return { x: c.re, y: c.im };
+                return MobiusTransform.apply(h.matrix, { re: v.re, im: v.im });
             });
 
             const polyPts: THREE.Vector3[] = [];
             for (let i = 0; i < transformedVerts.length; i++) {
                 const p1 = transformedVerts[i];
                 const p2 = transformedVerts[(i + 1) % transformedVerts.length];
-                const arc = HyperbolicGeometry.getGeodesicPoints(p1, p2, 10);
-                polyPts.push(...arc.map(p => new THREE.Vector3(p.x, p.y, 0.03)));
+                const arc = PoincareGeometry.getGeodesicPoints(p1, p2, 10);
+                polyPts.push(...arc.map(p => new THREE.Vector3(p.re, p.im, 0.03)));
             }
 
             const lineGeom = new THREE.BufferGeometry().setFromPoints(polyPts);
@@ -539,15 +539,12 @@ export class ShuffleRenderManager {
         for (const h of this.exploredSubgroup) {
             const isIdentity = h.word.canonicalString === '1';
 
-            const c1 = MobiusTransform.apply(h.matrix, { re: this.testPoint1.x, im: this.testPoint1.y });
-            const c2 = MobiusTransform.apply(h.matrix, { re: this.testPoint2.x, im: this.testPoint2.y });
+            const c1 = MobiusTransform.apply(h.matrix, { re: this.testPoint1.re, im: this.testPoint1.im });
+            const c2 = MobiusTransform.apply(h.matrix, { re: this.testPoint2.re, im: this.testPoint2.im });
 
-            const p1: Point2D = { x: c1.re, y: c1.im };
-            const p2: Point2D = { x: c2.re, y: c2.im };
-
-            const arc = HyperbolicGeometry.getGeodesicPoints(p1, p2, 16);
+            const arc = PoincareGeometry.getGeodesicPoints(c1, c2, 16);
             const lineGeom = new THREE.BufferGeometry().setFromPoints(
-                arc.map(p => new THREE.Vector3(p.x, p.y, isIdentity ? 0.075 : 0.07))
+                arc.map(p => new THREE.Vector3(p.re, p.im, isIdentity ? 0.075 : 0.07))
             );
             const lineMat = new THREE.LineBasicMaterial({
                 color: isIdentity ? 0xf39c12 : 0xe67e22,
@@ -560,23 +557,23 @@ export class ShuffleRenderManager {
 
             if (!isIdentity) {
                 const ball1 = new THREE.Mesh(orbitHandleGeom, matP1Orbit);
-                ball1.position.set(p1.x, p1.y, 0.075);
+                ball1.position.set(c1.re, c1.im, 0.075);
                 ball1.renderOrder = 55;
                 this.testSegmentGroup.add(ball1);
 
                 const ball2 = new THREE.Mesh(orbitHandleGeom, matP2Orbit);
-                ball2.position.set(p2.x, p2.y, 0.075);
+                ball2.position.set(c2.re, c2.im, 0.075);
                 ball2.renderOrder = 55;
                 this.testSegmentGroup.add(ball2);
             }
         }
 
         const h1 = new THREE.Mesh(baseHandleGeom, matP1Base);
-        h1.position.set(this.testPoint1.x, this.testPoint1.y, 0.09);
+        h1.position.set(this.testPoint1.re, this.testPoint1.im, 0.09);
         h1.renderOrder = 60;
 
         const h2 = new THREE.Mesh(baseHandleGeom, matP2Base);
-        h2.position.set(this.testPoint2.x, this.testPoint2.y, 0.09);
+        h2.position.set(this.testPoint2.re, this.testPoint2.im, 0.09);
         h2.renderOrder = 60;
 
         this.controlHandlesGroup.add(h1);

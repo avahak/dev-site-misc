@@ -4,7 +4,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import vs from './shaders/vs.glsl?raw';
 import fs from './shaders/fs.glsl?raw';
 import { SidePairing } from './types';
-import { computeSubgroupPreprocessing } from './hyperbolicPreprocessing';
+import { FundamentalPolygonBuilder } from './math/polygon';
+import { runTests } from './math/test';
 
 const MAX_SIDES = 12;
 
@@ -32,6 +33,8 @@ export class RenderManager {
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         this.renderer.setClearColor(0x111111, 1);
         this.container.appendChild(this.renderer.domElement);
+
+        runTests();
 
         this.setupCamera();
         this.setupScene();
@@ -119,7 +122,8 @@ export class RenderManager {
         ];
 
         // 2. Preprocessing pipeline
-        const result = computeSubgroupPreprocessing(p, q, pairings);
+        const polygon = FundamentalPolygonBuilder.build(p, q);
+        const folds = FundamentalPolygonBuilder.getTilingFolds(polygon, pairings);
 
         // 3. Prepare Uniform Arrays
         const u_T_re = Array.from({ length: MAX_SIDES }, () => new THREE.Vector4());
@@ -128,11 +132,11 @@ export class RenderManager {
         const u_g_im = Array.from({ length: MAX_SIDES }, () => new THREE.Vector4());
 
         for (let i = 0; i < p; i++) {
-            const T = result.sideData[i].test;
+            const T = polygon.sideTests[i];
             u_T_re[i].set(T.a.re, T.b.re, T.c.re, T.d.re);
             u_T_im[i].set(T.a.im, T.b.im, T.c.im, T.d.im);
 
-            const g = result.sideData[i].fold;
+            const g = folds[i];
             u_g_re[i].set(g.a.re, g.b.re, g.c.re, g.d.re);
             u_g_im[i].set(g.a.im, g.b.im, g.c.im, g.d.im);
         }

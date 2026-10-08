@@ -93,6 +93,11 @@ const FrontPage = () => {
                                 WebGPU mesh-particle interaction
                             </MUILink>
                         </li>
+                        <li>
+                            <MUILink component={RouterLink} to="/webgpu_slime_mold" variant="body1" color="primary">
+                                WebGPU slime mold
+                            </MUILink>
+                        </li>
                     </ul>
                 </Box>
                 <Box sx={{ p: 2 }}>

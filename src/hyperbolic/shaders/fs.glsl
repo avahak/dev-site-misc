@@ -14,6 +14,8 @@ uniform vec4 u_g_im[MAX_SIDES];
 
 varying vec2 vUv;
 
+const int MAX_ITER = 128;
+
 vec2 c_mul(vec2 u, vec2 v) {
     return vec2(u.x * v.x - u.y * v.y, u.x * v.y + u.y * v.x);
 }
@@ -52,7 +54,6 @@ void main() {
 
     vec2 z = st;
     int steps = 0;
-    const int MAX_ITER = 256;
     bool inFundamentalPolygon = false;
 
     // Iterative domain folding loop

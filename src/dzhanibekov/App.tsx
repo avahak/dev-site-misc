@@ -5,7 +5,6 @@ import { Link as MUILink } from '@mui/material';
 import { InlineMath, BlockMath } from "react-katex";
 const ThreeScene = React.lazy(() => import('./ThreeScene'));
 
-
 const App: React.FC = () => {
     return (
         <Container maxWidth="xl">
@@ -26,7 +25,7 @@ const App: React.FC = () => {
                 </Typography>
             </Box>
             <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
-                <Typography>
+                <Typography component="div">
                     <Box display="flex" justifyContent="center" sx={{ py: 2 }}>
                         <Typography component="div">
                             The rotation is represented by the unit quaternion{" "}

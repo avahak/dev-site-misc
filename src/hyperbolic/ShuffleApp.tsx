@@ -88,9 +88,16 @@ const App: React.FC = () => {
                             onChange={(e) => handlePresetChange(e.target.value)}
                             style={{ width: '100%', padding: '8px', background: '#222', color: '#fff', border: '1px solid #444', borderRadius: '4px' }}
                         >
-                            {['5,4', '5,5', '6,4', '6,6', '7,3', '8,3', '8,4', '10,3'].map(p => (
-                                <option key={p} value={p}>{p}</option>
-                            ))}
+                            {['3,7', '3,8', '3,9', '3,10',
+                                '4,5', '4,6', '4,7', '4,8', '4,9', '4,10',
+                                '5,4', '5,5', '5,6', '5,7', '5,8', '5,9',
+                                '6,4', '6,5', '6,6', '6,7', '6,8',
+                                '7,3', '7,4', '7,5', '7,6', '7,7',
+                                '8,3', '8,4', '8,5', '8,6',
+                                '9,3', '9,4', '9,5',
+                                '10,3', '10,4'].map(p => (
+                                    <option key={p} value={p}>{p}</option>
+                                ))}
                         </select>
                     </div>
 

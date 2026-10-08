@@ -1,7 +1,8 @@
 import { GroupElement, SubgroupState } from './types';
 import { TriangleGroup } from './groupAlgebra';
 import { RenderManager } from './pickManager';
-import { ComplexMath, MobiusTransform } from './hyperbolic';
+import { MobiusTransform } from './math/mobius';
+import { ComplexMath } from './math/complex';
 
 export class AppController {
     renderManager: RenderManager;
@@ -250,7 +251,7 @@ export class AppController {
         this.wordListEl.innerHTML = this.deltaK.map(el => {
             const isGen = this.subgroupState.generators.some(g => g.id === el.id);
             const inExplored = !isGen && this.subgroupState.exploredElements.some(
-                e => MobiusTransform.distance(e.matrix, el.matrix) < 1e-4
+                e => MobiusTransform.areTransformsEqual(e.matrix, el.matrix)
             );
 
             let itemClass = 'word-item';

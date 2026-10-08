@@ -1,5 +1,6 @@
-import { Complex, GroupElement, MobiusMatrix, Point2D, EdgeClass, SidePairing } from './types';
-import { ComplexMath, MobiusTransform } from './hyperbolic';
+import { ComplexMath } from './math/complex';
+import { MobiusTransform } from './math/mobius';
+import { Complex, GroupElement, MobiusMatrix, EdgeClass, SidePairing } from './types';
 
 export class TriangleGroup {
     p: number;
@@ -12,8 +13,8 @@ export class TriangleGroup {
     r1!: number;
     rP!: number;
 
-    baseTriangleVertices!: Point2D[];
-    basePolygonVertices!: Point2D[];
+    baseTriangleVertices!: Complex[];
+    basePolygonVertices!: Complex[];
 
     constructor(p: number = 6, q: number = 4) {
         this.p = p;
@@ -61,18 +62,18 @@ export class TriangleGroup {
         };
         this.refR3 = MobiusTransform.multiply(genA, this.refR1);
 
-        const v0: Point2D = { x: 0, y: 0 };
-        const v1: Point2D = { x: this.r1, y: 0 };
+        const v0: Complex = { re: 0, im: 0 };
+        const v1: Complex = { re: this.r1, im: 0 };
         const angleP = Math.PI / this.p;
-        const v2: Point2D = { x: this.rP * Math.cos(angleP), y: this.rP * Math.sin(angleP) };
+        const v2: Complex = { re: this.rP * Math.cos(angleP), im: this.rP * Math.sin(angleP) };
         this.baseTriangleVertices = [v0, v1, v2];
 
         this.basePolygonVertices = [];
         for (let i = 0; i < this.p; i++) {
             const angle = ((2 * i - 1) * Math.PI) / this.p;
             this.basePolygonVertices.push({
-                x: this.rP * Math.cos(angle),
-                y: this.rP * Math.sin(angle)
+                re: this.rP * Math.cos(angle),
+                im: this.rP * Math.sin(angle)
             });
         }
     }
@@ -123,7 +124,7 @@ export class TriangleGroup {
                     if (radius <= maxRadius) {
                         const key = getGridKey(newMatrix);
                         const candidates = gridMap.get(key) || [];
-                        const duplicate = candidates.some(e => MobiusTransform.distance(e.matrix, newMatrix) < 1e-4);
+                        const duplicate = candidates.some(e => MobiusTransform.areTransformsEqual(e.matrix, newMatrix));
 
                         if (!duplicate) {
                             const newEl: GroupElement = {
@@ -179,7 +180,7 @@ export class TriangleGroup {
         nonIdentityGenerators.forEach((g, idx) => {
             genPool.push({ label: `h${idx + 1}`, matrix: g.matrix });
             const invMat = MobiusTransform.inverse(g.matrix);
-            if (MobiusTransform.distance(g.matrix, invMat) > 1e-4) {
+            if (!MobiusTransform.areTransformsEqual(g.matrix, invMat)) {
                 genPool.push({ label: `h${idx + 1}⁻¹`, matrix: invMat });
             }
         });
@@ -191,7 +192,7 @@ export class TriangleGroup {
             for (const parent of currentLevel) {
                 for (const gen of genPool) {
                     const newMatrix = MobiusTransform.multiply(parent.matrix, gen.matrix);
-                    const isDup = explored.some(e => MobiusTransform.distance(e.matrix, newMatrix) < 1e-4);
+                    const isDup = explored.some(e => MobiusTransform.areTransformsEqual(e.matrix, newMatrix));
                     if (!isDup) {
                         const newStr = parent.word.canonicalString === '1' ? gen.label : `${parent.word.canonicalString}${gen.label}`;
                         const newEl: GroupElement = {
