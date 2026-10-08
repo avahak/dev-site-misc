@@ -1,4 +1,4 @@
-import{a as e,n as t,t as n}from"./jsx-runtime-Bg_NI1en.js";import{a as r,i,o as a,r as o,t as s}from"./index-7Sg9j-SA.js";import{$t as c,Gr as l,It as u,Q as d,Qt as f,Vt as p,W as m,Yr as h,Zt as g,a as _,k as v,lr as y,m as b,mn as x,nn as S,p as C,qt as w,r as T,rn as E,tn as D,ur as O}from"./three.module-Onzd2s9x.js";import{t as k}from"./lil-gui.module.min-aptKH1-N.js";import{t as A}from"./OrbitControls-5yccE-z1.js";var j=e(t(),1),M=`// From three.js: position, uv, normal, time, etc.\r
+import{a as e,n as t,t as n}from"./jsx-runtime-Bg_NI1en.js";import{a as r,i,o as a,r as o,t as s}from"./index-DT92iq_W.js";import{$t as c,Gr as l,It as u,Q as d,Qt as f,Vt as p,W as m,Yr as h,Zt as g,a as _,k as v,lr as y,m as b,mn as x,nn as S,p as C,qt as w,r as T,rn as E,tn as D,ur as O}from"./three.module-Onzd2s9x.js";import{t as k}from"./lil-gui.module.min-aptKH1-N.js";import{t as A}from"./OrbitControls-5yccE-z1.js";var j=e(t(),1),M=`// From three.js: position, uv, normal, time, etc.\r
 \r
 out vec2 vUv;\r
 \r
