@@ -1,12 +1,11 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { Complex, EdgeClass, FundamentalPolygon, GroupElement, MobiusMatrix } from './types';
-import { TriangleGroup } from './math/group';
-import { FundamentalPolygonBuilder } from './math/polygon';
-import { ComplexMath } from './math/complex';
-import { MobiusTransform } from './math/mobius';
-import { PoincareGeometry } from './math/poincare';
+import { Complex, EdgeClass, FundamentalPolygon, GroupElement, MobiusMatrix } from '../types';
+import { FundamentalPolygonBuilder } from '../math/polygon';
+import { ComplexMath } from '../math/complex';
+import { MobiusTransform } from '../math/mobius';
+import { PoincareGeometry } from '../math/poincare';
 
 export interface RenderParams {
     preset: string;
@@ -38,8 +37,8 @@ export class RenderManager {
 
     params: RenderParams = {
         preset: '6,4',
-        maxRadius: 0.90,
-        depthL: 3,
+        maxRadius: 0.98,
+        depthL: 4,
         showTestSegment: true
     };
 
@@ -114,7 +113,7 @@ export class RenderManager {
         this.renderer.setSize(width, height);
 
         const aspect = width / height;
-        const frustumSize = 2.4;
+        const frustumSize = 2.05;
 
         this.camera.left = (-frustumSize * aspect) / 2;
         this.camera.right = (frustumSize * aspect) / 2;

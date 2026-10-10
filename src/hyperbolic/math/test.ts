@@ -5,9 +5,8 @@ import { MinkowskiGeometry } from './minkowski';
 import { FundamentalPolygonBuilder } from './polygon';
 
 function assert(condition: boolean, message: string): void {
-    if (!condition) {
+    if (!condition)
         throw new Error(`Assertion failed: ${message}`);
-    }
 }
 
 export function testPolygonRelations(): void {

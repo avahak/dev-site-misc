@@ -12,6 +12,10 @@ export interface GroupGeneratorOptions {
 }
 
 export class TriangleGroup {
+    /** 
+     * Radius-bounded BFS generator for full triangle group $\Delta(p,q,2)$ elements 
+     * satisfying $d_{\mathbb{H}}(0, h(0)) \le R_{\max}$. 
+     */
     static generateDeltaK(
         polygon: FundamentalPolygon,
         options: GroupGeneratorOptions = {}
@@ -58,7 +62,8 @@ export class TriangleGroup {
                     : null;
 
                 for (const ref of reflections) {
-                    if (trackWords && ref.letter === lastLetter) continue;
+                    if (trackWords && ref.letter === lastLetter)
+                        continue;
 
                     const newMatrix = MobiusTransform.multiply(item.matrix, ref.matrix);
                     const originImg = MobiusTransform.apply(newMatrix, ComplexMath.zero());
@@ -84,7 +89,8 @@ export class TriangleGroup {
                             elements.push(newEl);
                             nextQueue.push(newEl);
 
-                            if (!gridMap.has(key)) gridMap.set(key, []);
+                            if (!gridMap.has(key))
+                                gridMap.set(key, []);
                             gridMap.get(key)!.push(newEl);
                         }
                     }
@@ -99,6 +105,7 @@ export class TriangleGroup {
         return elements;
     }
 
+    /** Converts side pairings into subgroup generators $h_i$. */
     static computeSidePairingGenerators(
         polygon: FundamentalPolygon,
         pairings: SidePairing[],
@@ -123,6 +130,10 @@ export class TriangleGroup {
         });
     }
 
+    /** 
+     * Radius-bounded BFS exploration of subgroup $H = \langle h_i \rangle \le \Delta(p,q,2)$ 
+     * with duplicate pruning and optional word tracking. 
+     */
     static exploreSubgroupBounded(
         generators: GroupElement[],
         maxRadius: number = 0.95,
@@ -140,17 +151,15 @@ export class TriangleGroup {
             length: 0
         };
 
-        if (nonIdentityGenerators.length === 0) {
+        if (nonIdentityGenerators.length === 0)
             return [identity];
-        }
 
         const genPool: { label: string; matrix: MobiusMatrix }[] = [];
         nonIdentityGenerators.forEach((g, idx) => {
             genPool.push({ label: `h${idx}`, matrix: g.matrix });
             const invMat = MobiusTransform.inverse(g.matrix);
-            if (!MobiusTransform.areTransformsEqual(g.matrix, invMat)) {
-                genPool.push({ label: `h${idx}⁻¹`, matrix: invMat });
-            }
+            if (!MobiusTransform.areTransformsEqual(g.matrix, invMat))
+                genPool.push({ label: `h${idx}i`, matrix: invMat });
         });
 
         const explored: GroupElement[] = [identity];
@@ -164,30 +173,30 @@ export class TriangleGroup {
                     const newMatrix = MobiusTransform.multiply(parent.matrix, gen.matrix);
                     const radius = ComplexMath.abs(MobiusTransform.apply(newMatrix, ComplexMath.zero()));
 
-                    if (radius <= maxRadius) {
-                        const isDup = explored.some(e => MobiusTransform.areTransformsEqual(e.matrix, newMatrix));
+                    if (radius > maxRadius)
+                        continue;
+                    if (explored.some(e => MobiusTransform.areTransformsEqual(e.matrix, newMatrix)))
+                        continue;
 
-                        if (!isDup) {
-                            const newLabel = trackWords
-                                ? (parent.id === '1' ? gen.label : `${parent.id}${gen.label}`)
-                                : `${explored.length + 1}`;
+                    const newLabel = trackWords
+                        ? (parent.id === '1' ? gen.label : `${parent.id}${gen.label}`)
+                        : `${explored.length + 1}`;
 
-                            const newEl: GroupElement = {
-                                id: newLabel,
-                                matrix: newMatrix,
-                                distanceFromOrigin: radius,
-                                word: trackWords ? { letters: [newLabel], canonicalString: newLabel } : undefined,
-                                length: d
-                            };
+                    const newEl: GroupElement = {
+                        id: newLabel,
+                        matrix: newMatrix,
+                        distanceFromOrigin: radius,
+                        word: trackWords ? { letters: [newLabel], canonicalString: newLabel } : undefined,
+                        length: d
+                    };
 
-                            explored.push(newEl);
-                            nextLevel.push(newEl);
-                        }
-                    }
+                    explored.push(newEl);
+                    nextLevel.push(newEl);
                 }
             }
 
-            if (nextLevel.length === 0) break;
+            if (nextLevel.length === 0)
+                break;
             currentLevel = nextLevel;
         }
 
@@ -195,6 +204,7 @@ export class TriangleGroup {
         return explored;
     }
 
+    /** Filters subgroup elements $h \in H$ fixing origin ($h(0) = 0$). */
     static findBasePolygonStabilizer(exploredSubgroup: GroupElement[], tol: number = 1e-4): GroupElement[] {
         const origin = ComplexMath.zero();
         return exploredSubgroup.filter(h => {
@@ -203,11 +213,16 @@ export class TriangleGroup {
         });
     }
 
+    /** 
+     * Union-Find computation partitioning edge indices $\{0, \dots, p-1\}$ into 
+     * equivalence classes under stabilizer action. 
+     */
     static computeEdgeClasses(pCount: number, stabilizer: GroupElement[]): EdgeClass[] {
         const parent = Array.from({ length: pCount }, (_, i) => i);
 
         const find = (i: number): number => {
-            if (parent[i] === i) return i;
+            if (parent[i] === i)
+                return i;
             parent[i] = find(parent[i]);
             return parent[i];
         };
@@ -215,7 +230,8 @@ export class TriangleGroup {
         const union = (i: number, j: number) => {
             const rootI = find(i);
             const rootJ = find(j);
-            if (rootI !== rootJ) parent[rootI] = rootJ;
+            if (rootI !== rootJ)
+                parent[rootI] = rootJ;
         };
 
         const testPoint: Complex = { re: 0.2, im: 0.1 };
@@ -224,18 +240,19 @@ export class TriangleGroup {
             const angle0 = Math.atan2(testPoint.im, testPoint.re);
             const angle1 = Math.atan2(transformed.im, transformed.re);
             let dAngle = angle1 - angle0;
-            while (dAngle < 0) dAngle += 2 * Math.PI;
+            while (dAngle < 0)
+                dAngle += 2 * Math.PI;
 
             const shift = Math.round((dAngle / (2 * Math.PI)) * pCount) % pCount;
-            for (let e = 0; e < pCount; e++) {
+            for (let e = 0; e < pCount; e++)
                 union(e, (e + shift) % pCount);
-            }
         }
 
         const classMap = new Map<number, number[]>();
         for (let e = 0; e < pCount; e++) {
             const root = find(e);
-            if (!classMap.has(root)) classMap.set(root, []);
+            if (!classMap.has(root))
+                classMap.set(root, []);
             classMap.get(root)!.push(e);
         }
 

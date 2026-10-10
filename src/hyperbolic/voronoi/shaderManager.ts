@@ -1,11 +1,15 @@
 import * as THREE from 'three';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FundamentalPolygon, MobiusMatrix, SidePairing } from '../types';
+import { FundamentalPolygonBuilder } from '../math/polygon';
+import { runTests } from '../math/test';
+import { VoronoiPipeline } from './voronoi';
+import { TriangleGroup } from '../math/group';
+import { MobiusTransform } from '../math/mobius';
+import { ComplexMath } from '../math/complex';
+import { panGView } from './view';
 import vs from './shaders/vs.glsl?raw';
 import fs from './shaders/fs.glsl?raw';
-import { SidePairing } from './types';
-import { FundamentalPolygonBuilder } from './math/polygon';
-import { runTests } from './math/test';
 
 const MAX_SIDES = 12;
 
@@ -14,7 +18,6 @@ export class RenderManager {
     renderer!: THREE.WebGLRenderer;
     cleanUpTasks: (() => void)[] = [];
     gui: any;
-    controls!: OrbitControls;
     timer: THREE.Timer = new THREE.Timer();
     isInitialized: boolean;
     containerSize: THREE.Vector2 = new THREE.Vector2(0, 0);
@@ -22,6 +25,13 @@ export class RenderManager {
     scene!: THREE.Scene;
     camera!: THREE.Camera;
     shaderMaterial!: THREE.ShaderMaterial;
+
+    polygon!: FundamentalPolygon;
+    folds!: MobiusMatrix[];
+
+    gView: MobiusMatrix = MobiusTransform.identity();
+    resolution: THREE.Vector2 = new THREE.Vector2();
+    scale: number = 2;
 
     constructor(container: HTMLDivElement) {
         this.container = container;
@@ -56,7 +66,6 @@ export class RenderManager {
         this.container.removeChild(this.renderer.domElement);
         for (const task of this.cleanUpTasks)
             task();
-        this.controls.dispose();
         this.shaderMaterial?.dispose();
         this.timer.dispose();
         this.gui.destroy();
@@ -82,10 +91,9 @@ export class RenderManager {
             this.camera.updateProjectionMatrix();
         }
 
-        const resolution = new THREE.Vector2();
-        this.renderer.getDrawingBufferSize(resolution);
+        this.renderer.getDrawingBufferSize(this.resolution);
 
-        this.shaderMaterial.uniforms.resolution.value = resolution;
+        this.shaderMaterial.uniforms.resolution.value = this.resolution;
     }
 
     createGUI() {
@@ -102,14 +110,12 @@ export class RenderManager {
     setupCamera() {
         this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
         this.camera.position.set(0, 0, 1);
-        this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-        this.controls.enableRotate = false;
     }
 
     setupScene() {
         this.scene = new THREE.Scene();
 
-        // 1. Example Configuration: (p, q) = (6, 4) with e0~-e3, e1~-e5, e2~-e4
+        // Example Configuration: (p, q) = (6, 4) with e0~-e3, e1~-e5, e2~-e4
         const p = 6;
         const q = 4;
         const pairings: SidePairing[] = [
@@ -121,27 +127,52 @@ export class RenderManager {
             { edgeIndex: 5, targetEdgeIndex: 1, sign: -1 }, // e5 ~ -e1
         ];
 
-        // 2. Preprocessing pipeline
-        const polygon = FundamentalPolygonBuilder.build(p, q);
-        const folds = FundamentalPolygonBuilder.getTilingFolds(polygon, pairings);
+        // Example Configuration: (p, q) = (4, 6) with e0~-e2, e1~-e3
+        // const p = 4;
+        // const q = 6;
+        // const pairings: SidePairing[] = [
+        //     { edgeIndex: 0, targetEdgeIndex: 2, sign: -1 }, // e0 ~ -e2
+        //     { edgeIndex: 1, targetEdgeIndex: 3, sign: -1 }, // e1 ~ -e3
+        //     { edgeIndex: 2, targetEdgeIndex: 0, sign: -1 }, // e2 ~ -e0
+        //     { edgeIndex: 3, targetEdgeIndex: 1, sign: -1 }, // e3 ~ -e1
+        // ];
 
-        // 3. Prepare Uniform Arrays
+        // Preprocessing pipeline
+        this.polygon = FundamentalPolygonBuilder.build(p, q);
+        this.folds = FundamentalPolygonBuilder.getTilingFolds(this.polygon, pairings);
+
+        // Prepare Uniform Arrays
         const u_T_re = Array.from({ length: MAX_SIDES }, () => new THREE.Vector4());
         const u_T_im = Array.from({ length: MAX_SIDES }, () => new THREE.Vector4());
         const u_g_re = Array.from({ length: MAX_SIDES }, () => new THREE.Vector4());
         const u_g_im = Array.from({ length: MAX_SIDES }, () => new THREE.Vector4());
 
         for (let i = 0; i < p; i++) {
-            const T = polygon.sideTests[i];
+            const T = this.polygon.sideTests[i];
             u_T_re[i].set(T.a.re, T.b.re, T.c.re, T.d.re);
             u_T_im[i].set(T.a.im, T.b.im, T.c.im, T.d.im);
 
-            const g = folds[i];
+            const g = this.folds[i];
             u_g_re[i].set(g.a.re, g.b.re, g.c.re, g.d.re);
             u_g_im[i].set(g.a.im, g.b.im, g.c.im, g.d.im);
         }
 
-        // 4. Construct Material and Screen Plane
+        // Explore subgroup H
+        const generators = TriangleGroup.computeSidePairingGenerators(this.polygon, pairings, false);
+        const subgroup = TriangleGroup.exploreSubgroupBounded(generators, 0.98, 10, false);
+
+        // Bake Voronoi base texture
+        const voronoiPipeline = new VoronoiPipeline(1024);
+        const { texture: baseTexture, R_tex } = voronoiPipeline.updateBaseTexture(
+            this.renderer,
+            this.polygon,
+            subgroup,
+            10,  // base seeds
+            0.1  // boundary margin r_0
+        );
+        this.cleanUpTasks.push(() => voronoiPipeline.dispose());
+
+        // Shader uniforms configuration
         this.shaderMaterial = new THREE.ShaderMaterial({
             uniforms: {
                 resolution: { value: new THREE.Vector2() },
@@ -151,10 +182,14 @@ export class RenderManager {
                 u_T_im: { value: u_T_im },
                 u_g_re: { value: u_g_re },
                 u_g_im: { value: u_g_im },
+                u_baseTexture: { value: baseTexture },
+                u_R_tex: { value: R_tex },
+                u_gView_re: { value: null },
+                u_gView_im: { value: null },
+                scale: { value: this.scale },
             },
             vertexShader: vs,
             fragmentShader: fs,
-            side: THREE.DoubleSide,
         });
 
         const geometry = new THREE.PlaneGeometry(2, 2);
@@ -163,9 +198,17 @@ export class RenderManager {
         this.cleanUpTasks.push(() => this.shaderMaterial.dispose());
     }
 
+    inputTransform(x: number, y: number, dx: number, dy: number) {
+        const w = this.container.clientWidth;
+        const h = this.container.clientHeight;
+        const s = this.scale / Math.min(w, h);
+        const z = { re: s * (x - w / 2), im: -s * (y - h / 2) };
+        const dz = { re: s * dx, im: -s * dy };
+        this.gView = panGView(this.gView, z, ComplexMath.add(z, dz), this.polygon, this.folds);
+    }
+
     animate() {
         this.timer.update();
-        this.controls.update();
         this.handleResize();
         this.render();
     }
@@ -173,6 +216,9 @@ export class RenderManager {
     render() {
         const t = this.timer.getElapsed();
         this.shaderMaterial.uniforms.time.value = t;
+        this.shaderMaterial.uniforms.u_gView_re.value = new THREE.Vector4(this.gView.a.re, this.gView.b.re, this.gView.c.re, this.gView.d.re);
+        this.shaderMaterial.uniforms.u_gView_im.value = new THREE.Vector4(this.gView.a.im, this.gView.b.im, this.gView.c.im, this.gView.d.im);
+        this.shaderMaterial.uniforms.scale.value = this.scale;
         this.renderer.render(this.scene, this.camera);
     }
 }

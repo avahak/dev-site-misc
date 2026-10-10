@@ -1,9 +1,9 @@
-import { FundamentalPolygon, GroupElement, SubgroupState } from './types';
-import { TriangleGroup } from './math/group';
-import { FundamentalPolygonBuilder } from './math/polygon';
+import { FundamentalPolygon, GroupElement, SubgroupState } from '../types';
+import { TriangleGroup } from '../math/group';
+import { FundamentalPolygonBuilder } from '../math/polygon';
 import { RenderManager } from './pickManager';
-import { MobiusTransform } from './math/mobius';
-import { ComplexMath } from './math/complex';
+import { MobiusTransform } from '../math/mobius';
+import { ComplexMath } from '../math/complex';
 
 export class AppController {
     renderManager: RenderManager;

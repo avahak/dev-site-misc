@@ -88,14 +88,31 @@ export class MobiusTransform {
         });
     }
 
-    static mapToOrigin(z0: Complex): MobiusMatrix {
-        const gamma = 1 / Math.sqrt(Math.max(1e-10, 1 - ComplexMath.absSq(z0)));
+    /**
+     * Constructs a conformal hyperbolic translation sending origin 0 to point a in D^2.
+     * T_a(z) = (z + a) / (1 + conj(a) * z)
+     */
+    static mapOriginTo(a: Complex): MobiusMatrix {
         return MobiusTransform.normalize({
-            a: { re: gamma, im: 0 },
-            b: ComplexMath.scale(z0, -gamma),
-            c: ComplexMath.scale(ComplexMath.conj(z0), -gamma),
-            d: { re: gamma, im: 0 },
-            isReflected: false
+            a: { re: 1, im: 0 },
+            b: a,
+            c: { re: a.re, im: -a.im }, // conj(a)
+            d: { re: 1, im: 0 },
+            isReflected: false,
+        });
+    }
+
+    /**
+     * Constructs a conformal hyperbolic translation sending point a in D^2 to origin 0.
+     * T_{-a}(z) = (z - a) / (1 - conj(a) * z)
+     */
+    static mapToOrigin(a: Complex): MobiusMatrix {
+        return MobiusTransform.normalize({
+            a: { re: 1, im: 0 },
+            b: { re: -a.re, im: -a.im }, // -a
+            c: { re: -a.re, im: a.im },  // -conj(a)
+            d: { re: 1, im: 0 },
+            isReflected: false,
         });
     }
 

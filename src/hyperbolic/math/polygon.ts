@@ -3,6 +3,7 @@ import { ComplexMath } from './complex';
 import { MobiusTransform } from './mobius';
 
 export class FundamentalPolygonBuilder {
+    /** Derives inradii, circumradii, and circle centers for regular $\{p,q\}$ tiling. */
     static computePolygonMetrics(p: number, q: number): PolygonMetrics {
         const coshA = Math.cos(Math.PI / q) / Math.sin(Math.PI / p);
         const sinhA = Math.sqrt(Math.max(0, coshA * coshA - 1));
@@ -17,6 +18,12 @@ export class FundamentalPolygonBuilder {
         return { inradiusH, circumradiusH, inradiusE, circumradiusE, cothA };
     }
 
+    /** 
+     * Generates intrinsic polygon metrics, midpoints $m_i$, vertices $v_i$, 
+     * half-plane side tests $T_i$, standalone geodesic edge reflections 
+     * $\sigma_i = R(\phi_i) \circ r_3 \circ R(-\phi_i)$, and fundamental 
+     * triangle reflections $(r_1, r_2, r_3)$. 
+     */
     static build(p: number, q: number): FundamentalPolygon {
         const metrics = FundamentalPolygonBuilder.computePolygonMetrics(p, q);
         const { inradiusE, circumradiusE, cothA } = metrics;
@@ -91,6 +98,10 @@ export class FundamentalPolygonBuilder {
         };
     }
 
+    /** 
+     * Computes folding isometries $g_i$ for side pairings $e_i \sim s_i e_{k_i}$ 
+     * mapped using edge angles and reflection generators. 
+     */
     static getTilingFolds(polygon: FundamentalPolygon, pairings: SidePairing[]): MobiusMatrix[] {
         const p = pairings.length;
         const { r1, r3 } = polygon.reflections;

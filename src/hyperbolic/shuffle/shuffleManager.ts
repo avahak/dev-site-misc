@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { Complex, EdgeClass, FundamentalPolygon, GroupElement, MobiusMatrix, SidePairing } from './types';
-import { TriangleGroup } from './math/group';
-import { FundamentalPolygonBuilder } from './math/polygon';
-import { ComplexMath } from './math/complex';
-import { MobiusTransform } from './math/mobius';
-import { PoincareGeometry } from './math/poincare';
+import { Complex, EdgeClass, FundamentalPolygon, GroupElement, MobiusMatrix, SidePairing } from '../types';
+import { TriangleGroup } from '../math/group';
+import { FundamentalPolygonBuilder } from '../math/polygon';
+import { ComplexMath } from '../math/complex';
+import { MobiusTransform } from '../math/mobius';
+import { PoincareGeometry } from '../math/poincare';
 
 export interface RenderParams {
     preset: string;
@@ -33,8 +33,8 @@ export class ShuffleRenderManager {
 
     params: RenderParams = {
         preset: '6,4',
-        maxRadius: 0.90,
-        depthL: 3,
+        maxRadius: 0.98,
+        depthL: 4,
         showTestSegment: true,
         autoSymmetrize: true
     };
@@ -304,19 +304,20 @@ export class ShuffleRenderManager {
         };
 
         const onPointerMove = (e: PointerEvent) => {
-            if (!this.isDragging || !this.draggingPoint) return;
+            if (!this.isDragging || !this.draggingPoint)
+                return;
             const pos = this.getDiskCoord(e);
-            if (!pos) return;
+            if (!pos)
+                return;
 
             const r = Math.hypot(pos.re, pos.im);
             const maxR = 0.98;
             const clampedPos = r > maxR ? { re: (pos.re / r) * maxR, im: (pos.im / r) * maxR } : pos;
 
-            if (this.draggingPoint === 1) {
+            if (this.draggingPoint === 1)
                 this.testPoint1 = clampedPos;
-            } else {
+            else
                 this.testPoint2 = clampedPos;
-            }
             this.rebuildTestSegment();
         };
 
@@ -352,13 +353,13 @@ export class ShuffleRenderManager {
         while (group.children.length > 0) {
             const obj = group.children.pop()!;
             if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
-                if (obj.geometry) geometries.add(obj.geometry);
+                if (obj.geometry)
+                    geometries.add(obj.geometry);
                 if (obj.material) {
-                    if (Array.isArray(obj.material)) {
+                    if (Array.isArray(obj.material))
                         obj.material.forEach(m => materials.add(m));
-                    } else {
+                    else
                         materials.add(obj.material);
-                    }
                 }
             }
         }

@@ -19,9 +19,9 @@ const CollisionDetectionApp = React.lazy(() => import('./collision_detection/App
 const CollisionDetectionLazyApp = React.lazy(() => import('./collision_detection/LazyApp.tsx'));
 const CollisionDetectionChurnApp = React.lazy(() => import('./collision_detection/ChurnApp.tsx'));
 const DocumentsApp = React.lazy(() => import('./documents/App.tsx'));
-const HyperbolicPickApp = React.lazy(() => import('./hyperbolic/PickApp.tsx'));
-const HyperbolicShuffleApp = React.lazy(() => import('./hyperbolic/ShuffleApp.tsx'));
-const HyperbolicShaderApp = React.lazy(() => import('./hyperbolic/ShaderApp.tsx'));
+const HyperbolicPickApp = React.lazy(() => import('./hyperbolic/pick/PickApp.tsx'));
+const HyperbolicShuffleApp = React.lazy(() => import('./hyperbolic/shuffle/ShuffleApp.tsx'));
+const HyperbolicShaderApp = React.lazy(() => import('./hyperbolic/voronoi/ShaderApp.tsx'));
 import { FrontPage } from './FrontPage.tsx';
 
 

@@ -12,6 +12,15 @@ uniform vec4 u_T_im[MAX_SIDES];
 uniform vec4 u_g_re[MAX_SIDES];
 uniform vec4 u_g_im[MAX_SIDES];
 
+// Base texture uniforms
+uniform sampler2D u_baseTexture;
+uniform float u_R_tex;
+
+// Panning / rotation
+uniform vec4 u_gView_re;
+uniform vec4 u_gView_im;
+uniform float scale;
+
 varying vec2 vUv;
 
 const int MAX_ITER = 128;
@@ -37,39 +46,35 @@ vec2 applyMobius(vec4 mRe, vec4 mIm, vec2 z) {
 }
 
 void main() {
-    // Map screen UV to Poincaré disk coordinates centered at origin
-    vec2 st = (gl_FragCoord.xy - 0.5 * resolution) / min(resolution.x, resolution.y) * 1.1;
-
+    vec2 st = (gl_FragCoord.xy - 0.5 * resolution) / min(resolution.x, resolution.y) * scale;
     float r = length(st);
 
-    // Render boundary ring outside disk
     if (r >= 1.0) {
         if (r < 1.01) {
             gl_FragColor = vec4(0.8, 0.8, 0.85, 1.0);
         } else {
-            gl_FragColor = vec4(0.05, 0.05, 0.07, 1.0);
+            // gl_FragColor = vec4(0.05, 0.05, 0.07, 1.0);
+            gl_FragColor = texture2D(u_baseTexture, gl_FragCoord.xy/resolution);
         }
         return;
     }
 
-    vec2 z = st;
+    vec2 z = applyMobius(u_gView_re, u_gView_im, st);
     int steps = 0;
     bool inFundamentalPolygon = false;
 
-    // Iterative domain folding loop
+    // Fold screen point z back into fundamental polygon P_0
     for (int iter = 0; iter < MAX_ITER; iter++) {
         bool moved = false;
         for (int i = 0; i < MAX_SIDES; i++) {
             if (i >= u_sideCount) break;
 
-            // Check if point lies inside edge i: Im(T_i(z)) > 0
             vec2 Tz = applyMobius(u_T_re[i], u_T_im[i], z);
             if (Tz.y <= 0.0) {
-                // Point is outside edge i -> fold back using g_i
                 z = applyMobius(u_g_re[i], u_g_im[i], z);
                 moved = true;
                 steps++;
-                break; // Restart side tests from edge 0
+                break;
             }
         }
         if (!moved) {
@@ -79,21 +84,15 @@ void main() {
     }
 
     if (inFundamentalPolygon) {
-        // Hyperbolic distance from disk center
-        float distHyp = log((1.0 + length(z)) / max(1.0 - length(z), 1e-5));
+        // Map folded point w in P_0 to base texture UV space [0, 1]^2
+        vec2 texUv = (z / u_R_tex) * 0.5 + 0.5;
 
-        // Base tile color tinted by iteration count
-        float fSteps = float(steps);
-        vec3 col = vec3(0.2, 0.45, 0.7);
-        col += 0.62 * vec3(sin(fSteps * 0.8), cos(fSteps * 0.5), sin(fSteps * 0.3 + 1.0));
+        // Sample baked hyperbolic Voronoi base texture
+        vec4 texColor = texture2D(u_baseTexture, texUv);
 
-        col += vec3(sin(28.0*z.x), 0.5*cos(28.0*z.y), sin(24.0*z.x*z.y)) - 0.5;
-
-        // Hyperbolic distance ring grid
-        float grid = smoothstep(0.02, 0.25, abs(fract(distHyp * 8.0 - 0.1) - 0.1));
-        col *= 0.75 + 0.25 * grid;
-
-        gl_FragColor = vec4(col, 1.0);
+        // Subtle tile edge highlight based on folding iteration steps
+        float edgeDim = 1.0;// - min(float(steps) * 0.25, 0.9);
+        gl_FragColor = vec4(texColor.rgb * edgeDim, 1.0);
     } else {
         gl_FragColor = vec4(0.1, 0.1, 0.15, 1.0);
     }

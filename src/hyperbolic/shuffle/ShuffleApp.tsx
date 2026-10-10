@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ShuffleRenderManager } from './shuffleManager';
-import { EdgeClass, GroupElement, SidePairing } from './types';
+import { EdgeClass, GroupElement, SidePairing } from '../types';
 import { Link as MUILink } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -9,8 +9,8 @@ const App: React.FC = () => {
     const managerRef = useRef<ShuffleRenderManager | null>(null);
 
     const [preset, setPreset] = useState<string>('6,4');
-    const [maxRadius, setMaxRadius] = useState<number>(0.90);
-    const [depthL, setDepthL] = useState<number>(3);
+    const [maxRadius, setMaxRadius] = useState<number>(0.98);
+    const [depthL, setDepthL] = useState<number>(4);
     const [autoSymmetrize, setAutoSymmetrize] = useState<boolean>(true);
     const [showTestSegment, setShowTestSegment] = useState<boolean>(true);
 
