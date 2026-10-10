@@ -34,6 +34,18 @@ vec2 applyMobius(vec4 mRe, vec4 mIm, vec2 z) {
     return c_div(num, den);
 }
 
+vec2 applyMobiusReflected(vec4 mRe, vec4 mIm, vec2 z, float reflected) {
+    vec2 z_in = (reflected > 0.5) ? vec2(z.x, -z.y) : z;
+    vec2 a = vec2(mRe.x, mIm.x);
+    vec2 b = vec2(mRe.y, mIm.y);
+    vec2 c = vec2(mRe.z, mIm.z);
+    vec2 d = vec2(mRe.w, mIm.w);
+
+    vec2 num = c_mul(a, z_in) + b;
+    vec2 den = c_mul(c, z_in) + d;
+    return c_div(num, den);
+}
+
 float hypDistToSegment(vec2 z, float a, float b) {
     float u = z.x;
     float v = z.y;
@@ -68,13 +80,16 @@ void main() {
         if (i >= u_subgroupCount) break;
 
         float u_coord = (float(i) + 0.5) / float(u_subgroupCount);
-        vec4 row0 = texture2D(u_subgroupTexture, vec2(u_coord, 0.25));
-        vec4 row1 = texture2D(u_subgroupTexture, vec2(u_coord, 0.75));
+        
+        // Sample rows 0, 1, and 2 from the single 3-row subgroup texture
+        vec4 row0 = texture2D(u_subgroupTexture, vec2(u_coord, 1.0 / 6.0));
+        vec4 row1 = texture2D(u_subgroupTexture, vec2(u_coord, 3.0 / 6.0));
+        float isReflected = texture2D(u_subgroupTexture, vec2(u_coord, 5.0 / 6.0)).r;
 
         vec4 mRe = vec4(row0.x, row0.z, row1.x, row1.z);
         vec4 mIm = vec4(row0.y, row0.w, row1.y, row1.w);
 
-        vec2 z_inv = applyMobius(mRe, mIm, w);
+        vec2 z_inv = applyMobiusReflected(mRe, mIm, w, isReflected);
         vec2 z_canon = applyMobius(u_mapRe, u_mapIm, z_inv);
 
         float dist = hypDistToSegment(z_canon, u_segA, u_segB);

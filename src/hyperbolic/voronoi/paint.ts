@@ -62,23 +62,33 @@ export class PaintPipeline {
 
     public setSubgroup(subgroup: GroupElement[]): void {
         this.subgroupCount = subgroup.length;
-        const data = new Float32Array(this.subgroupCount * 2 * 4);
+        // 3 rows of RGBA floats per element packed into a single texture
+        const data = new Float32Array(this.subgroupCount * 3 * 4);
 
         for (let i = 0; i < this.subgroupCount; i++) {
             const m = subgroup[i].matrix;
             const inv = MobiusTransform.inverse(m);
 
+            // Row 0: a and b coefficients
             const idx0 = i * 4;
             data[idx0 + 0] = inv.a.re;
             data[idx0 + 1] = inv.a.im;
             data[idx0 + 2] = inv.b.re;
             data[idx0 + 3] = inv.b.im;
 
+            // Row 1: c and d coefficients
             const idx1 = (this.subgroupCount + i) * 4;
             data[idx1 + 0] = inv.c.re;
             data[idx1 + 1] = inv.c.im;
             data[idx1 + 2] = inv.d.re;
             data[idx1 + 3] = inv.d.im;
+
+            // Row 2: isReflected flag in the red channel
+            const idx2 = (this.subgroupCount * 2 + i) * 4;
+            data[idx2 + 0] = inv.isReflected ? 1.0 : 0.0;
+            data[idx2 + 1] = 0.0;
+            data[idx2 + 2] = 0.0;
+            data[idx2 + 3] = 0.0;
         }
 
         if (this.subgroupTexture) {
@@ -88,7 +98,7 @@ export class PaintPipeline {
         this.subgroupTexture = new THREE.DataTexture(
             data,
             this.subgroupCount,
-            2,
+            3, // Height = 3 rows
             THREE.RGBAFormat,
             THREE.FloatType
         );
@@ -181,7 +191,7 @@ export class PaintPipeline {
 
         const imageData = ctx.createImageData(width, height);
         for (let y = 0; y < height; y++) {
-            const srcRow = height - 1 - y; // Flip vertically for WebGL pixel buffer
+            const srcRow = height - 1 - y;
             for (let x = 0; x < width; x++) {
                 const srcIdx = (srcRow * width + x) * 4;
                 const dstIdx = (y * width + x) * 4;
