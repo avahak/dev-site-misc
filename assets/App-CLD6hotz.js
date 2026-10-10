@@ -1,4 +1,4 @@
-import{a as e,n as t,t as n}from"./jsx-runtime-BaSZ_JNh.js";import{n as r,o as i,s as a}from"./chunk-OB3PAWPO-BISt63PO.js";import{n as o,t as s}from"./index-DTzw7fYA.js";import{$t as c,Ft as l,I as u,Kr as d,Qt as f,Vt as p,Zt as m,dr as h,fr as g,kr as _,l as v,qr as y,tn as b}from"./three.core-BlnPZLIB.js";import{r as x}from"./three.module-DmTPPf6k.js";import{t as S}from"./lil-gui.module.min-F6ktE2kk.js";import{t as C}from"./OrbitControls-Q21aKHVu.js";var w=e(t(),1),T=`precision highp float;\r
+import{a as e,n as t,t as n}from"./jsx-runtime-BaSZ_JNh.js";import{n as r,o as i,s as a}from"./chunk-OB3PAWPO-BISt63PO.js";import{n as o,t as s}from"./index-DwNauQAf.js";import{$t as c,Ft as l,I as u,Kr as d,Qt as f,Vt as p,Zt as m,dr as h,fr as g,kr as _,l as v,qr as y,tn as b}from"./three.core-BlnPZLIB.js";import{r as x}from"./three.module-DmTPPf6k.js";import{t as S}from"./lil-gui.module.min-F6ktE2kk.js";import{t as C}from"./OrbitControls-Q21aKHVu.js";var w=e(t(),1),T=`precision highp float;\r
 \r
 out vec3 vPos;\r
 out vec2 vUv;\r
