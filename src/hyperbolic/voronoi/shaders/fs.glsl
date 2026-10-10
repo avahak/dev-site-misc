@@ -13,7 +13,7 @@ uniform vec4 u_g_re[MAX_SIDES];
 uniform vec4 u_g_im[MAX_SIDES];
 
 // Base texture uniforms
-uniform sampler2D u_baseTexture;
+uniform sampler2D u_paintTexture;
 uniform float u_R_tex;
 
 // Panning / rotation
@@ -54,7 +54,7 @@ void main() {
             gl_FragColor = vec4(0.8, 0.8, 0.85, 1.0);
         } else {
             // gl_FragColor = vec4(0.05, 0.05, 0.07, 1.0);
-            gl_FragColor = texture2D(u_baseTexture, gl_FragCoord.xy/resolution);
+            gl_FragColor = texture2D(u_paintTexture, gl_FragCoord.xy/resolution);
         }
         return;
     }
@@ -84,15 +84,11 @@ void main() {
     }
 
     if (inFundamentalPolygon) {
-        // Map folded point w in P_0 to base texture UV space [0, 1]^2
         vec2 texUv = (z / u_R_tex) * 0.5 + 0.5;
+        vec4 paintColor = texture2D(u_paintTexture, texUv);
 
-        // Sample baked hyperbolic Voronoi base texture
-        vec4 texColor = texture2D(u_baseTexture, texUv);
-
-        // Subtle tile edge highlight based on folding iteration steps
-        float edgeDim = 1.0;// - min(float(steps) * 0.25, 0.9);
-        gl_FragColor = vec4(texColor.rgb * edgeDim, 1.0);
+        float edgeDim = 1.0 - min(float(steps) * 0.015, 0.4);
+        gl_FragColor = vec4(paintColor.rgb * edgeDim, 1.0);
     } else {
         gl_FragColor = vec4(0.1, 0.1, 0.15, 1.0);
     }

@@ -21,11 +21,18 @@ const SceneComponent: React.FC = () => {
                 drag: (args) => {
                     // if ((buttons & 2) !== 0 || (buttons & 4) !== 0)
                     if ((args.buttons & 1) !== 0)
+                        manager.inputStroke(args.x, args.y, args.dx, args.dy);
+                    if ((args.buttons & 2) !== 0)
                         manager.inputTransform(args.x, args.y, args.dx, args.dy);
                     // if ((buttons & 1) !== 0)
                     //     manager.inputAction(x, y);
                 },
-                // down: (args) => (args.button === 2) && manager.inputAction(args.x, args.y),
+                down: (args) => {
+                    console.log(args.button);
+                    if (args.button === 0) {
+                        manager.inputStroke(args.x, args.y, 0, 0);
+                    }
+                }
                 // move: (args) => manager.inputMove(args.x, args.y),
             },
             wheel: {

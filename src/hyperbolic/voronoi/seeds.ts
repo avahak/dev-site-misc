@@ -25,7 +25,11 @@ export interface SeedDataResult {
  * Samples N points uniformly with respect to hyperbolic area inside B(0, a),
  * rejecting candidate points that fall outside fundamental polygon P_0.
  */
-export function generateBaseSeeds(polygon: FundamentalPolygon, count: number): BaseSeed[] {
+export function generateBaseSeeds(
+    polygon: FundamentalPolygon,
+    count: number,
+    prominence: number = 0.7
+): BaseSeed[] {
     const seeds: BaseSeed[] = [];
     const a = polygon.metrics.circumradiusH;
     const coshA = Math.cosh(a);
@@ -33,10 +37,15 @@ export function generateBaseSeeds(polygon: FundamentalPolygon, count: number): B
     let attempts = 0;
     const maxAttempts = count * 1000;
 
+    // Map prominence (0.0 to 1.0) to saturation and lightness
+    // Prominence 0.0 -> Grayscale (sat 0.0) & Dark (lightness 0.15)
+    // Prominence 1.0 -> Colorful (sat 0.85) & Light/Vibrant (lightness 0.6)
+    const saturation = prominence * 0.85;
+    const lightness = 0.15 + prominence * 0.45;
+
     while (seeds.length < count && attempts < maxAttempts) {
         attempts++;
 
-        // 1. Inverse transform sampling for uniform hyperbolic area density
         const u = Math.random();
         const v = Math.random();
         const rho = Math.acosh(1 + u * (coshA - 1));
@@ -48,7 +57,6 @@ export function generateBaseSeeds(polygon: FundamentalPolygon, count: number): B
             im: r * Math.sin(theta),
         };
 
-        // 2. Rejection test using sideTests: Im(T_i(z)) > 0 for all edges
         let inside = true;
         for (let i = 0; i < polygon.sideTests.length; i++) {
             const Tz = MobiusTransform.apply(polygon.sideTests[i], candidate);
@@ -59,9 +67,8 @@ export function generateBaseSeeds(polygon: FundamentalPolygon, count: number): B
         }
 
         if (inside) {
-            // Assign distinct vibrant colors via HSL
             const hue = seeds.length / count;
-            const color = new THREE.Color().setHSL(hue, 0.7, 0.55);
+            const color = new THREE.Color().setHSL(hue, saturation, lightness);
             seeds.push({
                 id: seeds.length,
                 point: candidate,

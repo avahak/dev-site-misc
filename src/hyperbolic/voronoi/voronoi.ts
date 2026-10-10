@@ -48,21 +48,19 @@ export class VoronoiPipeline {
         polygon: FundamentalPolygon,
         subgroup: GroupElement[],
         seedCount = 100,
-        margin = 0.25
+        margin = 0.25,
+        prominence = 0.7
     ): { texture: THREE.Texture; R_tex: number } {
-        // Generate CPU seed points & filter candidate orbits S
-        const baseSeeds = generateBaseSeeds(polygon, seedCount);
+        const baseSeeds = generateBaseSeeds(polygon, seedCount, prominence);
         const { expandedSeeds, R_tex } = filterAndExpandSeeds(baseSeeds, subgroup, polygon, margin);
         const seedResult: SeedDataResult = createSeedDataTexture(expandedSeeds, R_tex, margin);
 
         this.R_tex = R_tex;
 
-        // Update offscreen shader uniforms
         this.offscreenMaterial.uniforms.u_seedData.value = seedResult.dataTexture;
         this.offscreenMaterial.uniforms.u_seedCount.value = seedResult.seedCount;
         this.offscreenMaterial.uniforms.u_R_tex.value = R_tex;
 
-        // Render offscreen pass for Voronoi base texture
         const currentRenderTarget = renderer.getRenderTarget();
         renderer.setRenderTarget(this.renderTarget);
         renderer.clear();
