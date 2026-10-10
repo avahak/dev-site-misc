@@ -9,6 +9,7 @@ export class PaintPipeline {
     private renderTargetA: THREE.WebGLRenderTarget;
     private renderTargetB: THREE.WebGLRenderTarget;
     private isTargetAActive: boolean = true;
+    private resolution: number;
 
     private scene: THREE.Scene;
     private camera: THREE.OrthographicCamera;
@@ -19,6 +20,7 @@ export class PaintPipeline {
 
     constructor(renderer: THREE.WebGLRenderer, resolution: number = 2048) {
         this.renderer = renderer;
+        this.resolution = resolution;
 
         const rtOptions: THREE.RenderTargetOptions = {
             minFilter: THREE.LinearFilter,
@@ -66,14 +68,12 @@ export class PaintPipeline {
             const m = subgroup[i].matrix;
             const inv = MobiusTransform.inverse(m);
 
-            // Row 0: inv.a and inv.b
             const idx0 = i * 4;
             data[idx0 + 0] = inv.a.re;
             data[idx0 + 1] = inv.a.im;
             data[idx0 + 2] = inv.b.re;
             data[idx0 + 3] = inv.b.im;
 
-            // Row 1: inv.c and inv.d
             const idx1 = (this.subgroupCount + i) * 4;
             data[idx1 + 0] = inv.c.re;
             data[idx1 + 1] = inv.c.im;
@@ -126,6 +126,7 @@ export class PaintPipeline {
         if (z1.re * z1.re + z1.im * z1.im >= 0.99 || z2.re * z2.re + z2.im * z2.im >= 0.99) {
             return;
         }
+
         const T1 = MobiusTransform.mapToOrigin(z1);
         const z2Prime = MobiusTransform.apply(T1, z2);
         const theta = Math.atan2(z2Prime.im, z2Prime.re);
@@ -157,6 +158,45 @@ export class PaintPipeline {
         this.renderer.setRenderTarget(currentTarget);
 
         this.isTargetAActive = !this.isTargetAActive;
+    }
+
+    public saveTextureAsPNG(filename: string = 'poincare_paint.png'): void {
+        const width = this.resolution;
+        const height = this.resolution;
+        const buffer = new Uint8Array(width * height * 4);
+
+        const currentTarget = this.renderer.getRenderTarget();
+        const activeTarget = this.isTargetAActive ? this.renderTargetA : this.renderTargetB;
+
+        this.renderer.setRenderTarget(activeTarget);
+        this.renderer.readRenderTargetPixels(activeTarget, 0, 0, width, height, buffer);
+        this.renderer.setRenderTarget(currentTarget);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx)
+            return;
+
+        const imageData = ctx.createImageData(width, height);
+        for (let y = 0; y < height; y++) {
+            const srcRow = height - 1 - y; // Flip vertically for WebGL pixel buffer
+            for (let x = 0; x < width; x++) {
+                const srcIdx = (srcRow * width + x) * 4;
+                const dstIdx = (y * width + x) * 4;
+                imageData.data[dstIdx + 0] = buffer[srcIdx + 0];
+                imageData.data[dstIdx + 1] = buffer[srcIdx + 1];
+                imageData.data[dstIdx + 2] = buffer[srcIdx + 2];
+                imageData.data[dstIdx + 3] = buffer[srcIdx + 3];
+            }
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
     }
 
     public getCurrentTexture(): THREE.Texture {

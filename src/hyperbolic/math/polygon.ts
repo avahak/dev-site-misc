@@ -15,7 +15,7 @@ export class FundamentalPolygonBuilder {
         const circumradiusH = Math.acosh(coshR);
         const circumradiusE = Math.tanh(circumradiusH / 2);
 
-        return { inradiusH, circumradiusH, inradiusE, circumradiusE, cothA };
+        return { p, q, inradiusH, circumradiusH, inradiusE, circumradiusE, cothA };
     }
 
     /** 

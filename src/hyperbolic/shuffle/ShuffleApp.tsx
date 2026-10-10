@@ -3,6 +3,7 @@ import { ShuffleRenderManager } from './shuffleManager';
 import { EdgeClass, GroupElement, SidePairing } from '../types';
 import { Link as MUILink } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
+import { copyTilingToClipboard } from '../tilingSerialization';
 
 const App: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -70,6 +71,18 @@ const App: React.FC = () => {
         }
     };
 
+    // Called when the user clicks an "Export Tiling" button in the UI
+    async function handleExportClick() {
+        if (managerRef.current) {
+            const p = managerRef.current.polygon.metrics.p;
+            const q = managerRef.current.polygon.metrics.q;
+            const sidePairings = managerRef.current.sidePairings;
+            const success = await copyTilingToClipboard(p, q, sidePairings);
+            if (success)
+                alert('Tiling copied to clipboard as JSON!');
+        }
+    }
+
     return (
         <>
             <MUILink component={RouterLink} to="/" variant="body1" color="primary">
@@ -80,6 +93,10 @@ const App: React.FC = () => {
 
                 <div style={{ width: '380px', background: '#1a1a1a', borderLeft: '1px solid #333', padding: '16px', overflowY: 'auto' }}>
                     <h2>Side-Pairing Subgroup Tool</h2>
+
+                    <div>
+                        <button onClick={() => handleExportClick()}>Export tiling</button>
+                    </div>
 
                     <div style={{ marginBottom: '16px' }}>
                         <label style={{ display: 'block', marginBottom: '6px' }}>Preset &#123;p,q&#125;:</label>

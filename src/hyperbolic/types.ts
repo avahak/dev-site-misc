@@ -18,6 +18,8 @@ export interface Vector3D {
 }
 
 export interface PolygonMetrics {
+    p: number;
+    q: number;
     inradiusH: number;     // Hyperbolic distance to edge midpoint
     circumradiusH: number; // Hyperbolic distance to vertex
     inradiusE: number;     // Euclidean disk radius for edge midpoint

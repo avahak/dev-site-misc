@@ -28,7 +28,6 @@ const SceneComponent: React.FC = () => {
                     //     manager.inputAction(x, y);
                 },
                 down: (args) => {
-                    console.log(args.button);
                     if (args.button === 0) {
                         manager.inputStroke(args.x, args.y, 0, 0);
                     }
