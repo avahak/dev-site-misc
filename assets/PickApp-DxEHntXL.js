@@ -1,0 +1,112 @@
+import{a as e,n as t,t as n}from"./jsx-runtime-BaSZ_JNh.js";import{n as r,o as i,s as a}from"./chunk-OB3PAWPO-BISt63PO.js";import{n as o,t as s}from"./index-RVDFwAiE.js";import{Ft as c,It as l,Kr as u,Qt as d,V as f,Xn as p,Zt as m,d as h,dr as g,en as _,gt as v,h as y,hr as b,kr as x,mr as S,mt as C,p as w,q as T,qr as E}from"./three.core-BlnPZLIB.js";import{r as D}from"./three.module-DmTPPf6k.js";import{t as O}from"./lil-gui.module.min-F6ktE2kk.js";import{t as k}from"./OrbitControls-Q21aKHVu.js";import{a as A,i as j,n as M,r as N,t as P}from"./poincare-DNJHXbsR.js";var F=e(t(),1),I=class{constructor(e){this.cleanUpTasks=[],this.timer=new x,this.containerSize=new u(0,0),this.raycaster=new p,this.mouse=new u(-10,-10),this.deltaK=[],this.generators=[],this.exploredSubgroup=[],this.edgeClasses=[],this.params={preset:`6,4`,maxRadius:.98,depthL:4,showTestSegment:!0},this.testPoint1={re:-.25,im:.15},this.testPoint2={re:.25,im:-.15},this.draggingPoint=null,this.isDragging=!1,this.dragJustEnded=!1,this.diskBoundaryGroup=new T,this.tessellationGroup=new T,this.polygonOrbitGroup=new T,this.basePolygonGroup=new T,this.hoverHighlightGroup=new T,this.testSegmentGroup=new T,this.interactiveMeshes=[],this.hoveredMesh=null,this.container=e,this.isInitialized=!1,m.DEFAULT_UP.set(0,0,1)}async init(e){this.renderer=new D({antialias:!0,alpha:!0}),this.renderer.setClearColor(1118481,1),this.container.appendChild(this.renderer.domElement);let[t,n]=this.params.preset.split(`,`).map(Number);this.polygon=N.build(t,n),this.setupCamera(),this.setupScene(),this.setupEvents(),this.createGUI(),this.isInitialized=!0,e.aborted?this.dispose():(this.animate=this.animate.bind(this),this.renderer.setAnimationLoop(this.animate))}dispose(){if(this.isInitialized){this.renderer.setAnimationLoop(null),this.renderer.domElement.parentElement===this.container&&this.container.removeChild(this.renderer.domElement);for(let e of this.cleanUpTasks)e();this.controls.dispose(),this.timer.dispose(),this.gui&&this.gui.destroy(),this.renderer.dispose()}}handleResize(){let e=this.container.clientWidth,t=this.container.clientHeight;if(e<=0||t<=0||this.containerSize.x===e&&this.containerSize.y===t)return;this.renderer.setPixelRatio(Math.min(window.devicePixelRatio,2)),this.containerSize.set(e,t),this.renderer.setSize(e,t);let n=e/t,r=2.05;this.camera.left=-2.05*n/2,this.camera.right=r*n/2,this.camera.top=r/2,this.camera.bottom=-2.05/2,this.camera.updateProjectionMatrix()}createGUI(){this.gui=new O,this.gui.add(this.params,`preset`,[`5,4`,`5,5`,`6,4`,`6,6`,`7,3`,`8,3`,`8,4`,`10,3`]).name(`Preset {p,q}`).onChange(()=>{let[e,t]=this.params.preset.split(`,`).map(Number);this.polygon=N.build(e,t),this.onParamsChange&&this.onParamsChange(this.params)}),this.gui.add(this.params,`maxRadius`,.7,.99,.005).name(`Max Radius`).onChange(()=>{this.onParamsChange&&this.onParamsChange(this.params)}),this.gui.add(this.params,`depthL`,1,10,1).name(`H Depth`).onChange(()=>{this.onParamsChange&&this.onParamsChange(this.params)}),this.gui.add(this.params,`showTestSegment`).name(`Show Test Segment`).onChange(()=>{this.rebuildTestSegment()})}setupCamera(){let e=(this.container.clientWidth||1)/(this.container.clientHeight||1),t=2.4;this.camera=new d(-2.4*e/2,t*e/2,t/2,-2.4/2,.1,100),this.camera.position.set(0,0,10),this.camera.lookAt(0,0,0),this.controls=new k(this.camera,this.renderer.domElement),this.controls.enableRotate=!1,this.controls.enableZoom=!0}setupScene(){this.scene=new g,this.scene.add(this.diskBoundaryGroup),this.scene.add(this.tessellationGroup),this.scene.add(this.polygonOrbitGroup),this.scene.add(this.basePolygonGroup),this.scene.add(this.hoverHighlightGroup),this.scene.add(this.testSegmentGroup),this.drawDiskBoundary()}drawDiskBoundary(){let e=new h,t=[];for(let e=0;e<=128;e++){let n=e/128*Math.PI*2;t.push(new E(Math.cos(n),Math.sin(n),0))}e.setFromPoints(t);let n=new v({color:5592405}),r=new C(e,n);r.renderOrder=1,this.diskBoundaryGroup.add(r),this.cleanUpTasks.push(()=>{e.dispose(),n.dispose()})}updateDeltaK(e,t=[]){this.deltaK=e,this.generators=t,this.rebuildTessellation()}updateExploredOrbit(e,t){this.exploredSubgroup=e,this.edgeClasses=t,this.rebuildTessellation(),this.rebuildOrbitAndBasePolygon(),this.rebuildTestSegment()}getTransformedTriangle(e,t){let{inradiusE:n,circumradiusE:r}=this.polygon.metrics,i=this.polygon.vertices.length,a={re:0,im:0},o={re:n,im:0},s=A.fromPolar(r,Math.PI/i),c=(n,r,i=16)=>P.getGeodesicPoints(n,r,i).map(n=>{let r=j.apply(e,n);return new E(r.re,r.im,t)}),l=c(a,o,16),u=c(o,s,16).slice(1),d=c(s,a,16).slice(1);return[...l,...u,...d]}rebuildTessellation(){for(;this.tessellationGroup.children.length>0;){let e=this.tessellationGroup.children.pop();(e instanceof c||e instanceof C)&&(e.geometry.dispose(),e.material.dispose())}this.interactiveMeshes=[];for(let e of this.deltaK){let t=this.generators.some(t=>t.id===e.id||j.areTransformsEqual(t.matrix,e.matrix)),n=!t&&this.exploredSubgroup.some(t=>j.areTransformsEqual(t.matrix,e.matrix)),r=t?.03:n?.02:.01,i=t?20:n?15:10,a=this.getTransformedTriangle(e.matrix,r),o=new S;o.moveTo(a[0].x,a[0].y);for(let e=1;e<a.length;e++)o.lineTo(a[e].x,a[e].y);let s=1713455,u=.3,d=2899536;t?(s=2600544,u=.7,d=3066993):n&&(s=2719929,u=.6,d=6139362);let f=new b(o),p=new l({color:s,transparent:!0,opacity:u,side:2,depthTest:!0,depthWrite:!1}),m=new c(f,p);m.position.z=r,m.renderOrder=i,this.tessellationGroup.add(m),this.interactiveMeshes.push({mesh:m,element:e});let g=new h().setFromPoints(a),_=new v({color:d,transparent:!0,opacity:u+.2,depthTest:!0,depthWrite:!1}),y=new C(g,_);y.position.z=r,y.renderOrder=i+1,this.tessellationGroup.add(y)}}rebuildOrbitAndBasePolygon(){for(;this.polygonOrbitGroup.children.length>0;){let e=this.polygonOrbitGroup.children.pop();(e instanceof c||e instanceof C)&&(e.geometry.dispose(),e.material.dispose())}for(;this.basePolygonGroup.children.length>0;){let e=this.basePolygonGroup.children.pop();(e instanceof c||e instanceof C)&&(e.geometry.dispose(),e.material.dispose())}let e=this.polygon.vertices;for(let t of this.exploredSubgroup){let n=e.map(e=>j.apply(t.matrix,e)),r=[];for(let e=0;e<n.length;e++){let t=n[e],i=n[(e+1)%n.length],a=P.getGeodesicPoints(t,i,12);r.push(...a.map(e=>new E(e.re,e.im,.04)))}let i=new h().setFromPoints(r),a=new v({color:4886754,transparent:!0,opacity:.6,depthTest:!0,depthWrite:!1}),o=new C(i,a);o.renderOrder=30,this.polygonOrbitGroup.add(o)}let t=.008,n=[`#e74c3c`,`#3498db`,`#2ecc71`,`#f1c40f`,`#9b59b6`,`#e67e22`,`#1abc9c`,`#e84393`];for(let r=0;r<e.length;r++){let i=e[r],a=e[(r+1)%e.length],o=P.getGeodesicPoints(i,a,16),s=`#ffffff`;for(let e=0;e<this.edgeClasses.length;e++)if(this.edgeClasses[e].edgeIndices.includes(r)){s=n[e%n.length];break}let u=[],d=[];for(let e=0;e<o.length-1;e++){let n=o[e],r=o[e+1],i=r.re-n.re,a=r.im-n.im,s=Math.hypot(i,a)||1,c=-a/s*t,l=i/s*t,f=u.length/3;u.push(n.re+c,n.im+l,.05,n.re-c,n.im-l,.05,r.re+c,r.im+l,.05,r.re-c,r.im-l,.05),d.push(f,f+1,f+2,f+1,f+3,f+2)}let p=new h;p.setAttribute(`position`,new f(u,3)),p.setIndex(d);let m=new l({color:new y(s),side:2,depthTest:!0,depthWrite:!1}),g=new c(p,m);g.renderOrder=40,this.basePolygonGroup.add(g)}}rebuildTestSegment(){for(;this.testSegmentGroup.children.length>0;){let e=this.testSegmentGroup.children.pop();(e instanceof c||e instanceof C)&&(e.geometry.dispose(),e.material.dispose())}if(!this.params.showTestSegment)return;for(let e of this.exploredSubgroup){if(e.id===`1`)continue;let t=j.apply(e.matrix,this.testPoint1),n=j.apply(e.matrix,this.testPoint2),r=P.getGeodesicPoints(t,n,16),i=new h().setFromPoints(r.map(e=>new E(e.re,e.im,.07))),a=new v({color:15105570,transparent:!0,opacity:.85,depthTest:!0,depthWrite:!1}),o=new C(i,a);o.renderOrder=80,this.testSegmentGroup.add(o);let s=new w(.018,16),u=new l({color:16724838,transparent:!0,opacity:.85,depthTest:!0,depthWrite:!1}),d=new c(s,u);d.position.set(t.re,t.im,.075),d.renderOrder=85,this.testSegmentGroup.add(d);let f=new w(.018,16),p=new l({color:58879,transparent:!0,opacity:.85,depthTest:!0,depthWrite:!1}),m=new c(f,p);m.position.set(n.re,n.im,.075),m.renderOrder=85,this.testSegmentGroup.add(m)}let e=P.getGeodesicPoints(this.testPoint1,this.testPoint2,24),t=new h().setFromPoints(e.map(e=>new E(e.re,e.im,.08))),n=new v({color:16766720,linewidth:4,transparent:!0,opacity:1,depthTest:!1,depthWrite:!1}),r=new C(t,n);r.renderOrder=1e3,this.testSegmentGroup.add(r);let i=new w(.04,24),a=new l({color:16724838,transparent:!0,opacity:1,depthTest:!1,depthWrite:!1}),o=new c(i,a);o.position.set(this.testPoint1.re,this.testPoint1.im,.09),o.renderOrder=1001,this.testSegmentGroup.add(o);let s=new w(.04,24),u=new l({color:58879,transparent:!0,opacity:1,depthTest:!1,depthWrite:!1}),d=new c(s,u);d.position.set(this.testPoint2.re,this.testPoint2.im,.09),d.renderOrder=1001,this.testSegmentGroup.add(d)}highlightElement(e,t){for(;this.hoverHighlightGroup.children.length>0;){let e=this.hoverHighlightGroup.children.pop();e instanceof c&&e.material.dispose()}if(!e)return;let n;if(t)n=t;else{let t=this.getTransformedTriangle(e.matrix,.06),r=new S;r.moveTo(t[0].x,t[0].y);for(let e=1;e<t.length;e++)r.lineTo(t[e].x,t[e].y);n=new b(r)}let r=new l({color:15844367,transparent:!0,opacity:.8,side:2,depthTest:!0,depthWrite:!1}),i=new c(n,r);i.position.z=.06,i.renderOrder=50,this.hoverHighlightGroup.add(i)}setupEvents(){let e=new _(new E(0,0,1),0),t=new E,n=()=>(this.raycaster.setFromCamera(this.mouse,this.camera),this.raycaster.ray.intersectPlane(e,t)?{re:t.x,im:t.y}:null);window.addEventListener(`pointerdown`,()=>{if(!this.params.showTestSegment)return;let e=n();if(!e)return;let t=Math.hypot(e.re-this.testPoint1.re,e.im-this.testPoint1.im),r=Math.hypot(e.re-this.testPoint2.re,e.im-this.testPoint2.im),i=.09;t<i&&t<=r?(this.draggingPoint=1,this.isDragging=!1,this.controls.enabled=!1):r<i&&(this.draggingPoint=2,this.isDragging=!1,this.controls.enabled=!1)}),window.addEventListener(`pointermove`,e=>{let t=this.renderer.domElement.getBoundingClientRect();if(this.mouse.x=(e.clientX-t.left)/t.width*2-1,this.mouse.y=-((e.clientY-t.top)/t.height)*2+1,this.draggingPoint!==null){this.isDragging=!0;let e=n();if(e){let t=Math.hypot(e.re,e.im),n=.98,r=t>n?{re:e.re/t*n,im:e.im/t*n}:e;this.draggingPoint===1?this.testPoint1=r:this.draggingPoint===2&&(this.testPoint2=r),this.rebuildTestSegment()}}});let r=()=>{this.draggingPoint!==null&&(this.isDragging&&(this.dragJustEnded=!0,setTimeout(()=>{this.dragJustEnded=!1},50)),this.draggingPoint=null,this.isDragging=!1,this.controls.enabled=!0)};window.addEventListener(`pointerup`,r),window.addEventListener(`pointercancel`,r),window.addEventListener(`click`,()=>{if(this.dragJustEnded)this.dragJustEnded=!1;else if(this.hoveredMesh){let e=this.interactiveMeshes.find(e=>e.mesh===this.hoveredMesh);e&&this.onElementSelect&&this.onElementSelect(e.element)}})}animate(){this.timer.update(),this.controls.update(),this.handleResize(),this.raycaster.setFromCamera(this.mouse,this.camera);let e=this.raycaster.intersectObjects(this.interactiveMeshes.map(e=>e.mesh));if(e.length>0){let t=e[0].object;if(this.hoveredMesh!==t){this.hoveredMesh=t;let e=this.interactiveMeshes.find(e=>e.mesh===t);e&&(this.highlightElement(e.element,t.geometry),this.onElementHover&&this.onElementHover(e.element))}}else this.hoveredMesh!==null&&(this.hoveredMesh=null,this.highlightElement(null),this.onElementHover&&this.onElementHover(null));this.render()}render(){this.renderer.render(this.scene,this.camera)}},L=class{constructor(e){this.deltaK=[],this.overlayEl=null,this.renderManager=new I(e),this.polygon=N.build(6,4),this.subgroupState={generators:[],explorationDepth:3,exploredElements:[],stabilizerElements:[],edgeClasses:[]}}async start(e){let t=new AbortController,n=e||t.signal;if(await this.renderManager.init(n),n.aborted){this.dispose();return}let[r,i]=this.renderManager.params.preset.split(`,`).map(Number);this.polygon=N.build(r,i),this.buildUIOverlay(),this.bindEvents(),this.deltaK=M.generateDeltaK(this.polygon,{maxRadius:this.renderManager.params.maxRadius,trackWords:!0}),this.renderManager.updateDeltaK(this.deltaK,this.subgroupState.generators),this.recomputeSubgroup()}dispose(){this.overlayEl&&this.overlayEl.parentElement&&(this.overlayEl.parentElement.removeChild(this.overlayEl),this.overlayEl=null),this.renderManager.dispose()}buildUIOverlay(){let e=document.createElement(`div`);e.className=`app-overlay`,e.innerHTML=`
+            <style>
+                .app-overlay {
+                    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                    pointer-events: none; display: flex; justify-content: space-between;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+                    color: #eaeaea; box-sizing: border-box; padding: 12px; gap: 12px;
+                }
+                .panel {
+                    width: 280px; height: calc(100% - 24px); max-height: 100%;
+                    background: rgba(20, 20, 28, 0.88); backdrop-filter: blur(8px);
+                    border: 1px solid #333; border-radius: 8px; padding: 12px;
+                    pointer-events: auto; display: flex; flex-direction: column; gap: 8px;
+                    box-sizing: border-box; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+                }
+                .panel h3 { margin: 0; font-size: 15px; color: #fff; border-bottom: 1px solid #333; padding-bottom: 6px; }
+                .panel h4 { margin: 6px 0 2px 0; font-size: 12px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; }
+                
+                .scroll-area {
+                    flex: 1; min-height: 60px; overflow-y: auto;
+                    border: 1px solid #2a2a35; border-radius: 4px; padding: 6px;
+                    background: rgba(10, 10, 15, 0.5);
+                }
+                .scroll-area::-webkit-scrollbar { width: 6px; }
+                .scroll-area::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+                .scroll-area::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+                .scroll-area::-webkit-scrollbar-thumb:hover { background: #666; }
+
+                .word-item {
+                    cursor: pointer; padding: 4px 6px; margin: 2px 0; border-radius: 4px;
+                    font-size: 12px; font-family: monospace; transition: all 0.15s;
+                    display: flex; justify-content: space-between; align-items: center;
+                }
+                .word-item:hover { background: #2c3e50; }
+                .word-item.generator { background: #27ae60; font-weight: bold; color: #fff; }
+                .word-item.explored { background: rgba(41, 128, 185, 0.25); border-left: 3px solid #5dade2; color: #aed6f1; }
+                .word-dist { font-size: 10px; color: #888; margin-left: 6px; }
+
+                .gen-item {
+                    display: flex; justify-content: space-between; align-items: center;
+                    padding: 3px 6px; margin: 2px 0; background: rgba(39, 174, 96, 0.2);
+                    border: 1px solid #27ae60; border-radius: 4px; font-size: 12px;
+                }
+                .remove-gen-btn {
+                    background: none; border: none; color: #e74c3c; cursor: pointer;
+                    font-weight: bold; font-size: 14px; padding: 0 4px; border-radius: 3px;
+                }
+                .remove-gen-btn:hover { background: rgba(231, 76, 60, 0.3); }
+
+                .btn {
+                    background: #e74c3c; color: white; border: none; padding: 6px 12px;
+                    border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px;
+                    transition: background 0.2s; text-align: center; margin-top: 4px;
+                }
+                .btn:hover { background: #c0392b; }
+
+                .edge-badge {
+                    display: inline-block; padding: 2px 6px; margin: 2px;
+                    border-radius: 3px; color: #fff; font-weight: bold; font-size: 11px;
+                }
+                .edge-class-row {
+                    margin-bottom: 6px; padding: 4px 6px; background: rgba(255,255,255,0.03);
+                    border-radius: 4px; border: 1px solid rgba(255,255,255,0.05);
+                }
+            </style>
+            
+            <!-- Left Panel -->
+            <div class="panel">
+                <h3>Subgroup H</h3>
+                <div>H = &langle; <span id="gen-text">1</span> &rangle;</div>
+                <button id="reset-btn" class="btn">Reset H</button>
+                
+                <h4>Generators</h4>
+                <div id="generator-list">None</div>
+
+                <h4>&Delta;<sub>k</sub> Word Window</h4>
+                <div class="scroll-area" id="word-list"></div>
+            </div>
+
+            <!-- Right Panel -->
+            <div class="panel">
+                <h3>Edge Partition & Stats</h3>
+                <div id="stats-info"></div>
+
+                <h4>Polygon Stabilizer H<sub>P</sub></h4>
+                <div id="stabilizer-info">None</div>
+
+                <h4>Oriented Edge Classes</h4>
+                <div class="scroll-area" id="edge-classes"></div>
+            </div>
+        `,this.overlayEl=e,this.renderManager.container.appendChild(e),this.generatorListEl=e.querySelector(`#generator-list`),this.wordListEl=e.querySelector(`#word-list`),this.edgeClassEl=e.querySelector(`#edge-classes`),this.stabilizerEl=e.querySelector(`#stabilizer-info`),this.statsEl=e.querySelector(`#stats-info`),e.querySelector(`#reset-btn`).addEventListener(`click`,()=>{this.subgroupState.generators=[],this.recomputeSubgroup()})}bindEvents(){this.renderManager.onParamsChange=e=>{let[t,n]=e.preset.split(`,`).map(Number);this.polygon=N.build(t,n),this.subgroupState.generators=[],this.subgroupState.explorationDepth=e.depthL,this.deltaK=M.generateDeltaK(this.polygon,{maxRadius:e.maxRadius,trackWords:!0}),this.renderManager.updateDeltaK(this.deltaK,this.subgroupState.generators),this.recomputeSubgroup()},this.renderManager.onElementHover=e=>{this.wordListEl.querySelectorAll(`.word-item`).forEach(t=>{e&&t.getAttribute(`data-id`)===e.id?t.style.outline=`1px solid #f1c40f`:t.style.outline=`none`})},this.renderManager.onElementSelect=e=>{this.toggleGenerator(e)}}toggleGenerator(e){let t=this.subgroupState.generators.findIndex(t=>t.id===e.id);t>=0?this.subgroupState.generators.splice(t,1):this.subgroupState.generators.push(e),this.recomputeSubgroup()}recomputeSubgroup(){let{generators:e,explorationDepth:t}=this.subgroupState,[n]=this.renderManager.params.preset.split(`,`).map(Number);this.subgroupState.exploredElements=M.exploreSubgroupBounded(e,this.renderManager.params.maxRadius,t,!0),this.subgroupState.stabilizerElements=M.findBasePolygonStabilizer(this.subgroupState.exploredElements),this.subgroupState.edgeClasses=M.computeEdgeClasses(n,this.subgroupState.stabilizerElements),this.renderManager.updateDeltaK(this.deltaK,this.subgroupState.generators),this.renderManager.updateExploredOrbit(this.subgroupState.exploredElements,this.subgroupState.edgeClasses),this.updateUI()}updateUI(){if(!this.overlayEl)return;let e=this.subgroupState.generators.map(e=>e.word?.canonicalString??e.id);document.querySelector(`#gen-text`).innerText=e.length>0?e.join(`, `):`1`,this.generatorListEl.innerHTML=this.subgroupState.generators.map((e,t)=>`
+            <div class="gen-item">
+                <span>h<sub>${t+1}</sub> = <b>${e.word?.canonicalString??e.id}</b></span>
+                <button class="remove-gen-btn" data-id="${e.id}">&times;</button>
+            </div>
+        `).join(``)||`<div style="color:#777;">None</div>`,this.generatorListEl.querySelectorAll(`.remove-gen-btn`).forEach(e=>{e.addEventListener(`click`,e=>{e.stopPropagation();let t=e.currentTarget.getAttribute(`data-id`),n=this.subgroupState.generators.find(e=>e.id===t);n&&this.toggleGenerator(n)})}),this.wordListEl.innerHTML=this.deltaK.map(e=>{let t=this.subgroupState.generators.some(t=>t.id===e.id),n=!t&&this.subgroupState.exploredElements.some(t=>j.areTransformsEqual(t.matrix,e.matrix)),r=`word-item`;t?r+=` generator`:n&&(r+=` explored`);let i=A.abs(j.apply(e.matrix,A.zero())).toFixed(2),a=e.word?.canonicalString??e.id;return`
+                <div class="${r}" data-id="${e.id}">
+                    <span>${a}</span>
+                    <span class="word-dist">r=${i}</span>
+                </div>
+            `}).join(``),this.wordListEl.querySelectorAll(`.word-item`).forEach(e=>{e.addEventListener(`mouseenter`,()=>{let t=e.getAttribute(`data-id`),n=this.deltaK.find(e=>e.id===t);n&&this.renderManager.highlightElement(n)}),e.addEventListener(`mouseleave`,()=>{this.renderManager.highlightElement(null)}),e.addEventListener(`click`,()=>{let t=e.getAttribute(`data-id`),n=this.deltaK.find(e=>e.id===t);n&&this.toggleGenerator(n)})}),this.stabilizerEl.innerHTML=`
+            <div>Size: <b>${this.subgroupState.stabilizerElements.length}</b></div>
+            <div>Elements: ${this.subgroupState.stabilizerElements.map(e=>e.word?.canonicalString??e.id).join(`, `)}</div>
+        `;let t=[`#e74c3c`,`#3498db`,`#2ecc71`,`#f1c40f`,`#9b59b6`,`#e67e22`,`#1abc9c`,`#e84393`];this.edgeClassEl.innerHTML=this.subgroupState.edgeClasses.map((e,n)=>{let r=t[n%t.length];return`
+                <div class="edge-class-row">
+                    <b>${e.id}:</b>
+                    ${e.edgeIndices.map(e=>`<span class="edge-badge" style="background:${r}">e<sub>${e}</sub></span>`).join(``)}
+                </div>
+            `}).join(``),this.statsEl.innerHTML=`
+            <div>Explored subgroup elements: <b>${this.subgroupState.exploredElements.length}</b></div>
+            <div>Edge equivalence classes: <b>${this.subgroupState.edgeClasses.length}</b></div>
+        `}},R=n(),z=()=>{let e=(0,F.useRef)(null);return(0,F.useEffect)(()=>{if(!e.current)return;let t=new AbortController,n=new L(e.current);return n.start(t.signal),()=>{t.abort(),n.dispose()}},[]),(0,R.jsx)(`div`,{ref:e,style:{position:`relative`,width:`100%`,height:`100%`,overflow:`hidden`}})},B=()=>(0,R.jsxs)(s,{maxWidth:`xl`,children:[(0,R.jsx)(o,{display:`flex`,justifyContent:`center`,sx:{py:2},children:(0,R.jsx)(a,{variant:`h2`,children:`Hyperbolic space`})}),(0,R.jsx)(o,{sx:{position:`relative`,width:`100%`,height:`600px`},children:(0,R.jsx)(z,{})}),(0,R.jsx)(i,{component:r,to:`/`,variant:`body1`,color:`primary`,children:`Back`})]});export{B as default};
